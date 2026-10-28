@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="nikan-light">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="نیکان؛ سامانه مدیریت ارتباط با مشتری" />
+    <title>نیکان | مدیریت ارتباط با مشتری</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a light/dark flash.
+      try {
+        var saved = JSON.parse(localStorage.getItem('nikan-theme-settings') || 'null');
+        var t = saved && saved.state && saved.state.theme;
+        if (!t) t = 'nikan-light';
+        document.documentElement.setAttribute('data-theme', t);
+        if (t === 'nikan-dark') document.documentElement.classList.add('dark');
+        var c = saved && saved.state && saved.state.color;
+        if (c && c !== 'default') document.documentElement.setAttribute('data-color', c);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
