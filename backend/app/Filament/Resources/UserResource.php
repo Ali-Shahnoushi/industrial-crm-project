@@ -49,6 +49,14 @@ class UserResource extends Resource
                     ->dehydrated(fn ($state) => filled($state))
                     ->required(fn (string $operation): bool => $operation === 'create')
                     ->maxLength(255),
+                Forms\Components\Select::make('user_type')
+                    ->label('نوع کاربر')
+                    ->options([
+                        'administrator' => 'مدیر ارشد (Administrator)',
+                        'manager' => 'مدیر (Manager)',
+                    ])
+                    ->default('manager')
+                    ->required(),
                 Forms\Components\Toggle::make('is_active')
                     ->label('حساب کاربری فعال است')
                     ->default(true)
@@ -75,6 +83,16 @@ class UserResource extends Resource
                 Tables\Columns\TextColumn::make('phone')
                     ->label('شماره موبایل')
                     ->searchable(),
+                Tables\Columns\BadgeColumn::make('user_type')
+                    ->label('نوع کاربر')
+                    ->formatStateUsing(fn (string $state): string => match ($state) {
+                        'administrator' => 'مدیر ارشد',
+                        default => 'مدیر',
+                    })
+                    ->colors([
+                        'warning' => 'administrator',
+                        'secondary' => 'manager',
+                    ]),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('فعال')
                     ->boolean(),

@@ -46,6 +46,7 @@ return new class extends Migration
                 'password' => Hash::make('Admin@123456'),
                 'email_verified_at' => now(),
                 'is_active' => true,
+                'user_type' => 'administrator',
             ]
         );
 

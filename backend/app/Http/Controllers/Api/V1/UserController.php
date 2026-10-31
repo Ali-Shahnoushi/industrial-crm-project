@@ -33,7 +33,18 @@ class UserController extends Controller
     {
         $this->authorizePermission('users.manage');
 
-        $users = User::latest()->get()->map(function ($u) {
+        $callingUser = auth()->user();
+        $query = User::latest();
+
+        // Managers cannot view administrator users in the users list
+        if ($callingUser && !$callingUser->isAdministrator()) {
+            $query->where(function ($q) {
+                $q->where('user_type', '!=', 'administrator')
+                  ->orWhereNull('user_type');
+            });
+        }
+
+        $users = $query->get()->map(function ($u) {
             return [
                 'id' => $u->id,
                 'name' => $u->name,
@@ -42,6 +53,7 @@ class UserController extends Controller
                 'avatar' => $u->avatar,
                 'avatar_url' => $u->avatar_url,
                 'is_active' => $u->is_active,
+                'user_type' => $u->user_type,
                 'created_at' => $u->created_at?->format('Y-m-d H:i'),
                 'permissions' => $u->getAllPermissions()->pluck('name')->values()->all(),
             ];
@@ -54,6 +66,11 @@ class UserController extends Controller
     {
         $this->authorizePermission('users.manage');
 
+        $callingUser = auth()->user();
+        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
+            abort(403, 'مدیران عادی دسترسی به اطلاعات حساب مدیر ارشد را ندارند.');
+        }
+
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,
@@ -62,6 +79,7 @@ class UserController extends Controller
             'avatar' => $user->avatar,
             'avatar_url' => $user->avatar_url,
             'is_active' => $user->is_active,
+            'user_type' => $user->user_type,
             'created_at' => $user->created_at?->format('Y-m-d H:i'),
             'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
         ]);
@@ -80,6 +98,7 @@ class UserController extends Controller
             'avatar' => 'nullable|image|max:3072',
             'permissions' => 'nullable|array',
             'permissions.*' => 'string|exists:permissions,name',
+            'user_type' => 'nullable|in:administrator,manager',
         ], [
             'name.required' => 'نام و نام خانوادگی کاربر الزامی است.',
             'email.required' => 'آدرس ایمیل الزامی است.',
@@ -108,8 +127,23 @@ class UserController extends Controller
             'is_active' => $request->boolean('is_active', true),
         ]);
 
+        // Determine user_type: only administrators can create other administrators
+        $callingUser = auth()->user();
+        if ($callingUser && $callingUser->isAdministrator()) {
+            $resolvedType = $validated['user_type'] ?? 'manager';
+        } else {
+            $resolvedType = 'manager';
+        }
+        $user->user_type = $resolvedType;
+        $user->save();
+
         if (!empty($validated['permissions'])) {
-            $user->syncPermissions($validated['permissions']);
+            $requestedPerms = $validated['permissions'];
+            if ($callingUser && !$callingUser->isAdministrator()) {
+                $callerPerms = $callingUser->getAllPermissions()->pluck('name')->all();
+                $requestedPerms = array_values(array_intersect($requestedPerms, $callerPerms));
+            }
+            $user->syncPermissions($requestedPerms);
         }
 
         return response()->json([
@@ -122,6 +156,7 @@ class UserController extends Controller
                 'avatar' => $user->avatar,
                 'avatar_url' => $user->avatar_url,
                 'is_active' => $user->is_active,
+                'user_type' => $user->user_type,
                 'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
             ],
         ], 201);
@@ -130,6 +165,11 @@ class UserController extends Controller
     public function update(Request $request, User $user): JsonResponse
     {
         $this->authorizePermission('users.manage');
+
+        $callingUser = auth()->user();
+        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
+            abort(403, 'مدیران عادی امکان ویرایش حساب مدیر ارشد را ندارند.');
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:100',
@@ -140,6 +180,7 @@ class UserController extends Controller
             'avatar' => 'nullable|image|max:3072',
             'permissions' => 'nullable|array',
             'permissions.*' => 'string|exists:permissions,name',
+            'user_type' => 'nullable|in:administrator,manager',
         ], [
             'name.required' => 'نام و نام خانوادگی کاربر الزامی است.',
             'email.required' => 'آدرس ایمیل الزامی است.',
@@ -184,8 +225,36 @@ class UserController extends Controller
 
         $user->save();
 
+        // Handle user_type update: only administrators can change user_type
+        $callingUser = auth()->user();
+        if ($request->has('user_type') && $callingUser && $callingUser->isAdministrator()) {
+            $newType = $validated['user_type'] ?? null;
+            if ($newType) {
+                // Ensure the root admin user remains administrator
+                if ($user->email === 'admin@crm.local') {
+                    $user->user_type = 'administrator';
+                } else {
+                    $user->user_type = $newType;
+                }
+                $user->save();
+            }
+        }
+
         if ($request->has('permissions') || $request->has('sync_permissions')) {
-            $user->syncPermissions($validated['permissions'] ?? []);
+            $requestedPerms = $validated['permissions'] ?? [];
+            if ($callingUser && !$callingUser->isAdministrator()) {
+                // Caller can only grant or revoke permissions within their own scope
+                $callerPerms = $callingUser->getAllPermissions()->pluck('name')->all();
+                $targetExistingPerms = $user->getAllPermissions()->pluck('name')->all();
+
+                $preservedPerms = array_diff($targetExistingPerms, $callerPerms);
+                $grantedInScope = array_intersect($requestedPerms, $callerPerms);
+
+                $finalPerms = array_values(array_unique(array_merge($preservedPerms, $grantedInScope)));
+                $user->syncPermissions($finalPerms);
+            } else {
+                $user->syncPermissions($requestedPerms);
+            }
         }
 
         return response()->json([
@@ -198,6 +267,7 @@ class UserController extends Controller
                 'avatar' => $user->avatar,
                 'avatar_url' => $user->avatar_url,
                 'is_active' => $user->is_active,
+                'user_type' => $user->user_type,
                 'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
             ],
         ]);
@@ -211,6 +281,21 @@ class UserController extends Controller
             return response()->json([
                 'message' => 'امکان حذف حساب کاربری خودتان وجود ندارد.',
             ], 422);
+        }
+
+        // Prevent deleting the original admin@crm.local account
+        if ($user->email === 'admin@crm.local') {
+            return response()->json([
+                'message' => 'امکان حذف حساب مدیر اصلی سیستم وجود ندارد.',
+            ], 422);
+        }
+
+        // Only administrators can delete administrator accounts
+        $callingUser = auth()->user();
+        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
+            return response()->json([
+                'message' => 'مدیران عادی امکان حذف حساب مدیر ارشد را ندارند.',
+            ], 403);
         }
 
         if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
@@ -230,12 +315,31 @@ class UserController extends Controller
     {
         $this->authorizePermission('users.manage');
 
+        $callingUser = auth()->user();
+        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
+            abort(403, 'مدیران عادی امکان تغییر دسترسی‌های مدیر ارشد را ندارند.');
+        }
+
         $validated = $request->validate([
             'permissions' => 'present|array',
             'permissions.*' => 'string|exists:permissions,name',
         ]);
 
-        $user->syncPermissions($validated['permissions']);
+        $requestedPerms = $validated['permissions'];
+        $callingUser = auth()->user();
+
+        if ($callingUser && !$callingUser->isAdministrator()) {
+            $callerPerms = $callingUser->getAllPermissions()->pluck('name')->all();
+            $targetExistingPerms = $user->getAllPermissions()->pluck('name')->all();
+
+            $preservedPerms = array_diff($targetExistingPerms, $callerPerms);
+            $grantedInScope = array_intersect($requestedPerms, $callerPerms);
+
+            $finalPerms = array_values(array_unique(array_merge($preservedPerms, $grantedInScope)));
+            $user->syncPermissions($finalPerms);
+        } else {
+            $user->syncPermissions($requestedPerms);
+        }
 
         return response()->json([
             'message' => "مجوزهای کاربر «{$user->name}» با موفقیت بروزرسانی شد.",
@@ -246,6 +350,13 @@ class UserController extends Controller
     public function toggleActive(User $user): JsonResponse
     {
         $this->authorizePermission('users.manage');
+
+        $callingUser = auth()->user();
+        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
+            return response()->json([
+                'message' => 'مدیران عادی امکان تغییر وضعیت حساب مدیر ارشد را ندارند.',
+            ], 403);
+        }
 
         if ($user->id === auth()->id()) {
             return response()->json([
@@ -265,7 +376,16 @@ class UserController extends Controller
     {
         $this->authorizePermission('users.manage');
 
-        $permissions = Permission::where('guard_name', 'web')
+        $callingUser = auth()->user();
+        $query = Permission::where('guard_name', 'web');
+
+        // Non-administrators can only see and grant permissions they already possess
+        if ($callingUser && !$callingUser->isAdministrator()) {
+            $callerPerms = $callingUser->getAllPermissions()->pluck('name')->all();
+            $query->whereIn('name', $callerPerms);
+        }
+
+        $permissions = $query
             ->get()
             ->map(function ($p) {
                 return [

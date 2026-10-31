@@ -16,7 +16,15 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return (bool) ($this->is_active && ($this->email === 'admin@crm.local' || $this->can('users.manage')));
+        return (bool) ($this->is_active && $this->isAdministrator() && ($this->email === 'admin@crm.local' || $this->can('users.manage')));
+    }
+
+    /**
+     * Returns true if this user is an administrator.
+     */
+    public function isAdministrator(): bool
+    {
+        return $this->user_type === 'administrator';
     }
 
     /**
@@ -31,6 +39,7 @@ class User extends Authenticatable implements FilamentUser
         'avatar',
         'password',
         'is_active',
+        'user_type',
     ];
 
     protected $appends = [
@@ -71,6 +80,7 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'user_type' => 'string',
         ];
     }
 }

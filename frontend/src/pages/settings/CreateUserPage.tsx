@@ -36,6 +36,7 @@ const schema = z.object({
     .min(8, 'کلمه عبور باید حداقل ۸ کاراکتر باشد')
     .regex(/^(?=.*[a-zA-Z])(?=.*\d)/, 'کلمه عبور باید شامل حروف انگلیسی و اعداد باشد'),
   is_active: z.boolean(),
+  user_type: z.enum(['administrator', 'manager']),
 })
 
 type CreateUserFormValues = z.infer<typeof schema>
@@ -44,6 +45,7 @@ export default function CreateUserPage() {
   const qc = useQueryClient()
   const nav = useNavigate()
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [selectedPerms, setSelectedPerms] = useState<string[]>([])
@@ -68,6 +70,7 @@ export default function CreateUserPage() {
       phone: '',
       password: '',
       is_active: true,
+      user_type: 'manager',
     },
   })
 
@@ -107,6 +110,7 @@ export default function CreateUserPage() {
     }
     formData.append('password', values.password)
     formData.append('is_active', values.is_active ? '1' : '0')
+    formData.append('user_type', values.user_type)
 
     if (avatarFile) {
       formData.append('avatar', avatarFile)
@@ -213,6 +217,62 @@ export default function CreateUserPage() {
             </Field>
           </div>
 
+          {/* User Type Selection */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+            <div>
+              <p className="font-bold text-xs text-base-content">نوع کاربری (نقش سیستمی)</p>
+              <p className="text-[11px] text-base-content/60 mt-0.5">
+                {isAdministrator
+                  ? 'تعیین سطح کاربری: مدیر ارشد یا مدیر عادی سامانه'
+                  : 'کاربران ایجاد شده توسط شما با سطح دسترسی «مدیر» تعریف می‌شوند.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <label
+                className={cx(
+                  'flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all',
+                  watch('user_type') === 'manager'
+                    ? 'border-primary bg-primary/5 text-primary shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/40',
+                )}
+              >
+                <input
+                  type="radio"
+                  value="manager"
+                  className="radio radio-primary radio-sm"
+                  {...register('user_type')}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-xs text-base-content">مدیر (Manager)</p>
+                  <p className="text-[11px] text-base-content/60">کاربر عملیاتی با مجوزهای تعیین‌شده</p>
+                </div>
+              </label>
+
+              {isAdministrator && (
+                <label
+                  className={cx(
+                    'flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all',
+                    watch('user_type') === 'administrator'
+                      ? 'border-amber-500 bg-amber-50/50 text-amber-900 shadow-xs dark:bg-amber-950/20 dark:text-amber-300'
+                      : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/40',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    value="administrator"
+                    className="radio radio-warning radio-sm"
+                    {...register('user_type')}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-xs text-base-content">مدیر ارشد (Administrator)</p>
+                    <p className="text-[11px] text-base-content/60">دسترسی به تمامی تنظیمات، برندینگ و رنگ</p>
+                  </div>
+                </label>
+              )}
+            </div>
+          </div>
+
           {/* Active status */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
             <label className="flex items-center justify-between cursor-pointer">
@@ -239,8 +299,13 @@ export default function CreateUserPage() {
               <div>
                 <h3 className="text-base font-bold text-base-content">تخصیص مجوزهای دسترسی (Pure ACL)</h3>
                 <p className="text-xs text-base-content/60">
-                  {selectedPerms.length} دسترسی از {availablePermissions.length} انتخاب شده است
+                  {selectedPerms.length} دسترسی از {availablePermissions.length} مجاز انتخاب شده است
                 </p>
+                {!isAdministrator && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                    * طبق سطح دسترسی شما، صرفاً مجوزهایی که خودتان دارا هستید قابل اعطا به کاربر جدید می‌باشند.
+                  </p>
+                )}
               </div>
             </div>
 

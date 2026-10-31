@@ -15,6 +15,12 @@ export interface User {
   is_active?: boolean
   permissions: string[]
   created_at?: string
+  user_type?: 'administrator' | 'manager'
+}
+
+export interface CompanySettings {
+  company_name: string | null
+  company_logo_url: string | null
 }
 
 export type CustomerType = 'potential' | 'effective'

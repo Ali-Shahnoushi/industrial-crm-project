@@ -12,6 +12,7 @@ interface AuthState {
   refreshMe: () => Promise<void>
   setUser: (user: User | null) => void
   hasPermission: (permission: string) => boolean
+  isAdministrator: () => boolean
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
@@ -97,5 +98,9 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     const u = get().user
     if (!u) return false
     return u.permissions?.includes(permission) || false
+  },
+
+  isAdministrator() {
+    return get().user?.user_type === 'administrator'
   },
 }))

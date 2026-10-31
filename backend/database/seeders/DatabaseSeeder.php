@@ -25,8 +25,13 @@ class DatabaseSeeder extends Seeder
                 'phone' => '09120000000',
                 'password' => Hash::make('Admin@123456'),
                 'is_active' => true,
+                'user_type' => 'administrator',
             ]
         );
+
+        // Ensure existing admin always has user_type set to administrator
+        $admin->user_type = 'administrator';
+        $admin->save();
 
         $admin->syncPermissions(Permission::all());
 

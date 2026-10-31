@@ -120,6 +120,7 @@ class AuthController extends Controller
                 'avatar' => $user->avatar,
                 'avatar_url' => $user->avatar_url,
                 'permissions' => $permissions,
+                'user_type' => $user->user_type,
             ],
             'token' => $token,
         ])->withCookie($cookie);
@@ -164,6 +165,7 @@ class AuthController extends Controller
                 'avatar' => $user->avatar,
                 'avatar_url' => $user->avatar_url,
                 'permissions' => $permissions,
+                'user_type' => $user->user_type,
             ],
             'token' => $token,
         ])->withCookie($cookie);
@@ -186,6 +188,7 @@ class AuthController extends Controller
                 'avatar' => $user->avatar,
                 'avatar_url' => $user->avatar_url,
                 'permissions' => $permissions,
+                'user_type' => $user->user_type,
             ],
         ]);
     }
@@ -247,6 +250,7 @@ class AuthController extends Controller
                 'avatar' => $user->avatar,
                 'avatar_url' => $user->avatar_url,
                 'permissions' => $permissions,
+                'user_type' => $user->user_type,
             ],
         ]);
     }

@@ -52,6 +52,7 @@ const schema = z.object({
       }
     }),
   is_active: z.boolean(),
+  user_type: z.enum(['administrator', 'manager']).optional(),
 })
 
 type EditUserFormValues = z.infer<typeof schema>
@@ -62,6 +63,7 @@ export default function EditUserPage() {
   const nav = useNavigate()
   const currentUser = useAuthStore((s) => s.user)
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
@@ -97,6 +99,7 @@ export default function EditUserPage() {
       phone: '',
       password: '',
       is_active: true,
+      user_type: 'manager',
     },
   })
 
@@ -108,6 +111,7 @@ export default function EditUserPage() {
         phone: user.phone || '',
         password: '',
         is_active: user.is_active ?? true,
+        user_type: user.user_type || 'manager',
       })
       setSelectedPerms(user.permissions || [])
     }
@@ -166,6 +170,9 @@ export default function EditUserPage() {
       formData.append('password', values.password.trim())
     }
     formData.append('is_active', values.is_active ? '1' : '0')
+    if (values.user_type) {
+      formData.append('user_type', values.user_type)
+    }
 
     if (avatarFile) {
       formData.append('avatar', avatarFile)
@@ -201,6 +208,16 @@ export default function EditUserPage() {
     )
   }
 
+  // Managers cannot view, edit or delete administrators
+  if (user.user_type === 'administrator' && !isAdministrator) {
+    return (
+      <AccessDenied
+        title="عدم دسترسی به حساب مدیر ارشد"
+        message="مدیران عادی اجازه دسترسی، ویرایش یا حذف حساب‌های کاربری مدیران ارشد را ندارند."
+      />
+    )
+  }
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-2 text-xs text-base-content/60">
@@ -215,7 +232,7 @@ export default function EditUserPage() {
         title={`ویرایش مشخصات کاربر: ${user.name}`}
         subtitle="ویرایش اطلاعات هویتی، آواتار و تنظیم مستقیم مجوزهای دسترسی (Pure ACL)"
         actions={
-          !isCurrent ? (
+          !isCurrent && (isAdministrator || user.user_type !== 'administrator') ? (
             <button
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
@@ -312,6 +329,68 @@ export default function EditUserPage() {
             </Field>
           </div>
 
+          {/* User Type Selection */}
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
+            <div>
+              <p className="font-bold text-xs text-base-content">نوع کاربری (نقش سیستمی)</p>
+              <p className="text-[11px] text-base-content/60 mt-0.5">
+                {user.email === 'admin@crm.local'
+                  ? 'این حساب، مدیر ارشد اصلی سامانه است و نوع کاربری آن تغییرناپذیر است.'
+                  : isAdministrator
+                    ? 'تعیین سطح کاربری: مدیر ارشد یا مدیر عادی سامانه'
+                    : 'مشاهده سطح کاربری حساب'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              <label
+                className={cx(
+                  'flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all',
+                  watch('user_type') === 'manager'
+                    ? 'border-primary bg-primary/5 text-primary shadow-xs'
+                    : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/40',
+                  (!isAdministrator || user.email === 'admin@crm.local') && 'opacity-70 cursor-not-allowed',
+                )}
+              >
+                <input
+                  type="radio"
+                  value="manager"
+                  disabled={!isAdministrator || user.email === 'admin@crm.local'}
+                  className="radio radio-primary radio-sm"
+                  {...register('user_type')}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-xs text-base-content">مدیر (Manager)</p>
+                  <p className="text-[11px] text-base-content/60">کاربر عملیاتی با مجوزهای تعیین‌شده</p>
+                </div>
+              </label>
+
+              {(isAdministrator || user.user_type === 'administrator') && (
+                <label
+                  className={cx(
+                    'flex items-center gap-3 rounded-xl border p-3 cursor-pointer transition-all',
+                    watch('user_type') === 'administrator'
+                      ? 'border-amber-500 bg-amber-50/50 text-amber-900 shadow-xs dark:bg-amber-950/20 dark:text-amber-300'
+                      : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900/40',
+                    (!isAdministrator || user.email === 'admin@crm.local') && 'opacity-70 cursor-not-allowed',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    value="administrator"
+                    disabled={!isAdministrator || user.email === 'admin@crm.local'}
+                    className="radio radio-warning radio-sm"
+                    {...register('user_type')}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-xs text-base-content">مدیر ارشد (Administrator)</p>
+                    <p className="text-[11px] text-base-content/60">دسترسی به تمامی تنظیمات، برندینگ و رنگ</p>
+                  </div>
+                </label>
+              )}
+            </div>
+          </div>
+
           {/* Active status */}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/60">
             <label className="flex items-center justify-between cursor-pointer">
@@ -343,8 +422,13 @@ export default function EditUserPage() {
               <div>
                 <h3 className="text-base font-bold text-base-content">مجوزهای مستقیم کاربر (Pure ACL)</h3>
                 <p className="text-xs text-base-content/60">
-                  {selectedPerms.length} دسترسی از {availablePermissions.length} برای این کاربر فعال است
+                  {selectedPerms.length} دسترسی از {availablePermissions.length} مجاز برای این کاربر تعیین شده است
                 </p>
+                {!isAdministrator && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
+                    * طبق سطح دسترسی شما، صرفاً مجوزهایی که خودتان دارا هستید در این بخش قابل ویرایش می‌باشند.
+                  </p>
+                )}
               </div>
             </div>
 

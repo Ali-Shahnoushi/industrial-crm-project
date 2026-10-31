@@ -29,6 +29,7 @@ export default function UsersAclPage() {
   const nav = useNavigate()
   const currentUser = useAuthStore((s) => s.user)
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
 
   const [permModalUser, setPermModalUser] = useState<User | null>(null)
   const [selectedPerms, setSelectedPerms] = useState<string[]>([])
@@ -40,6 +41,11 @@ export default function UsersAclPage() {
     enabled: hasPermission('users.manage'),
   })
 
+  // Managers cannot see administrator users in the list
+  const visibleUsers = isAdministrator
+    ? users
+    : users.filter((u) => u.user_type !== 'administrator')
+
   const { data: availablePermissions = [] } = useQuery({
     queryKey: ['available-permissions'],
     queryFn: usersApi.getAvailablePermissions,
@@ -47,6 +53,10 @@ export default function UsersAclPage() {
   })
 
   const openPermModal = (u: User) => {
+    if (!isAdministrator && u.user_type === 'administrator') {
+      toast.error('مدیران عادی امکان ویرایش دسترسی‌های مدیر ارشد را ندارند.')
+      return
+    }
     setPermModalUser(u)
     setSelectedPerms(u.permissions || [])
   }
@@ -115,7 +125,7 @@ export default function UsersAclPage() {
             <Users className="size-5 text-primary" />
             <span className="font-bold text-sm">فهرست کاربران سیستم</span>
             <span className="badge badge-sm bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
-              {num(users.length)} کاربر
+              {num(visibleUsers.length)} کاربر
             </span>
           </div>
         </div>
@@ -137,8 +147,10 @@ export default function UsersAclPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-base-200/80">
-                {users.map((u) => {
+                {visibleUsers.map((u) => {
                   const isCurrent = currentUser?.id === String(u.id)
+                  const isAdminUser = u.user_type === 'administrator'
+                  const canManageThisUser = isAdministrator || !isAdminUser
                   return (
                     <tr key={u.id} className="transition-colors hover:bg-base-200/40 text-xs">
                       <td>
@@ -150,6 +162,15 @@ export default function UsersAclPage() {
                               {isCurrent && (
                                 <span className="badge badge-xs bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/50 dark:text-blue-300">
                                   شما
+                                </span>
+                              )}
+                              {u.user_type === 'administrator' ? (
+                                <span className="badge badge-xs bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/50 dark:text-amber-300">
+                                  مدیر ارشد
+                                </span>
+                              ) : (
+                                <span className="badge badge-xs bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300">
+                                  مدیر
                                 </span>
                               )}
                             </div>
@@ -169,9 +190,13 @@ export default function UsersAclPage() {
                       </td>
                       <td>
                         <button
-                          onClick={() => openPermModal(u)}
-                          className="badge badge-primary badge-soft font-bold text-xs gap-1 cursor-pointer hover:opacity-85 transition-opacity py-1 px-2.5"
-                          title="مشاهده یا ویرایش مجوزها"
+                          onClick={() => canManageThisUser && openPermModal(u)}
+                          disabled={!canManageThisUser}
+                          className={cx(
+                            'badge badge-primary badge-soft font-bold text-xs gap-1 py-1 px-2.5',
+                            canManageThisUser ? 'cursor-pointer hover:opacity-85 transition-opacity' : 'cursor-default opacity-80',
+                          )}
+                          title={canManageThisUser ? 'مشاهده یا ویرایش مجوزها' : 'غیرقابل ویرایش توسط شما'}
                         >
                           <ShieldCheck className="size-3.5" />
                           {num(u.permissions?.length ?? 0)} دسترسی فعال
@@ -179,46 +204,58 @@ export default function UsersAclPage() {
                       </td>
                       <td>
                         <button
-                          onClick={() => toggleActiveMutation.mutate(u.id)}
-                          disabled={isCurrent}
+                          onClick={() => canManageThisUser && toggleActiveMutation.mutate(u.id)}
+                          disabled={isCurrent || !canManageThisUser}
                           className={cx(
                             'badge badge-xs font-bold transition-opacity',
-                            isCurrent ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:opacity-80',
+                            isCurrent || !canManageThisUser ? 'cursor-not-allowed opacity-80' : 'cursor-pointer hover:opacity-80',
                             u.is_active ? 'badge-success badge-soft' : 'badge-error badge-soft',
                           )}
-                          title={isCurrent ? 'امکان تغییر وضعیت حساب خودتان وجود ندارد' : 'کلیک برای تغییر وضعیت'}
+                          title={
+                            isCurrent
+                              ? 'امکان تغییر وضعیت حساب خودتان وجود ندارد'
+                              : !canManageThisUser
+                                ? 'مدیران عادی امکان تغییر وضعیت حساب مدیر ارشد را ندارند'
+                                : 'کلیک برای تغییر وضعیت'
+                          }
                         >
                           {u.is_active ? 'فعال' : 'غیرفعال'}
                         </button>
                       </td>
                       <td className="text-end">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            className="btn btn-xs btn-outline btn-primary gap-1"
-                            onClick={() => openPermModal(u)}
-                            title="مدیریت مجوزها"
-                          >
-                            <KeyRound className="size-3.5" />
-                            <span className="hidden sm:inline">مجوزها</span>
-                          </button>
+                          {canManageThisUser ? (
+                            <>
+                              <button
+                                className="btn btn-xs btn-outline btn-primary gap-1"
+                                onClick={() => openPermModal(u)}
+                                title="مدیریت مجوزها"
+                              >
+                                <KeyRound className="size-3.5" />
+                                <span className="hidden sm:inline">مجوزها</span>
+                              </button>
 
-                          <Link
-                            to={`/settings/users/${u.id}/edit`}
-                            className="btn btn-xs btn-ghost gap-1"
-                            title="ویرایش کاربر"
-                          >
-                            <Pencil className="size-3.5" />
-                            <span className="hidden sm:inline">ویرایش</span>
-                          </Link>
+                              <Link
+                                to={`/settings/users/${u.id}/edit`}
+                                className="btn btn-xs btn-ghost gap-1"
+                                title="ویرایش کاربر"
+                              >
+                                <Pencil className="size-3.5" />
+                                <span className="hidden sm:inline">ویرایش</span>
+                              </Link>
 
-                          {!isCurrent && (
-                            <button
-                              className="btn btn-xs btn-ghost text-error hover:bg-error/10 gap-1"
-                              onClick={() => setDeletingUser(u)}
-                              title="حذف کاربر"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
+                              {!isCurrent && (
+                                <button
+                                  className="btn btn-xs btn-ghost text-error hover:bg-error/10 gap-1"
+                                  onClick={() => setDeletingUser(u)}
+                                  title="حذف کاربر"
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-base-content/40 text-[11px] italic">عدم دسترسی</span>
                           )}
                         </div>
                       </td>
