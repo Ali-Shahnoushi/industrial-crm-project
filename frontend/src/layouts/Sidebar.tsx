@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   BookOpen,
   ChevronDown,
@@ -12,22 +13,45 @@ import {
 import { MAIN_NAV, SETTINGS_NAV } from './nav'
 import { useAuthStore } from '../store/useAuthStore'
 import { Avatar } from '../components/ui/Avatar'
+import { settingsApi } from '../services/api'
 import { cx } from '../utils/format'
 
 export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: settingsApi.getCompanySettings,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const companyName = companySettings?.company_name || 'سی‌آر‌ام قطعات'
+  const logoUrl = companySettings?.company_logo_url
+
   return (
-    <div className="flex items-center gap-3">
-      <span
-        className={cx(
-          'flex items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 font-black text-white shadow-lg shadow-blue-500/25',
-          size === 'lg' ? 'size-13 text-2xl' : 'size-10 text-xl',
-        )}
-      >
-        <Cpu className="size-6 text-white" />
-      </span>
-      <div className="leading-tight">
-        <p className={cx('font-extrabold tracking-tight', size === 'lg' ? 'text-xl' : 'text-base')}>سی‌آر‌ام قطعات</p>
-        <p className="text-[11px] text-base-content/50">مدیریت مشتریان و خدمات</p>
+    <div className="flex items-center gap-3 min-w-0">
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt={companyName}
+          className={cx(
+            'rounded-2xl object-cover border border-base-200 shadow-sm shrink-0',
+            size === 'lg' ? 'size-13' : 'size-10',
+          )}
+        />
+      ) : (
+        <span
+          className={cx(
+            'flex shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 font-black text-white shadow-lg shadow-blue-500/25',
+            size === 'lg' ? 'size-13 text-2xl' : 'size-10 text-xl',
+          )}
+        >
+          <Cpu className={cx(size === 'lg' ? 'size-8 text-white' : 'size-6 text-white')} />
+        </span>
+      )}
+      <div className="leading-tight min-w-0 flex-1">
+        <p className={cx('font-extrabold tracking-tight truncate', size === 'lg' ? 'text-xl' : 'text-base')}>
+          {companyName}
+        </p>
+        <p className="text-[11px] text-base-content/50 truncate">مدیریت مشتریان و خدمات</p>
       </div>
     </div>
   )
@@ -43,9 +67,16 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
   const isSettingsActive = location.pathname.startsWith('/settings')
 
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
+
   const visibleSettingsItems = SETTINGS_NAV.filter(
     (item) => !item.permission || hasPermission(item.permission),
-  )
+  ).map((item) => {
+    if (item.to === '/settings/system' && !isAdministrator) {
+      return { ...item, label: 'تنظیمات پوسته نمایشی' }
+    }
+    return item
+  })
 
   return (
     <>
@@ -176,7 +207,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         )}
 
         {/* External Links with solid high-contrast styling */}
-        <div className="p-3 border-t border-base-200 space-y-2">
+        {/* <div className="p-3 border-t border-base-200 space-y-2">
           <a
             href="/admin"
             target="_blank"
@@ -204,7 +235,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             </div>
             <ExternalLink className="size-3.5 opacity-60" />
           </a>
-        </div>
+        </div> */}
       </aside>
     </>
   )

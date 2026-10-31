@@ -95,7 +95,7 @@ export default function Login() {
 
   const onSubmit = async (v: FormValues) => {
     setError("");
-    const res = await login(v.login, v.password);
+    const res: any = await login(v.login, v.password);
     if (res.ok) {
       toast.success("خوش آمدید 👋");
       nav(from, { replace: true });
@@ -140,7 +140,7 @@ export default function Login() {
     }
     setOtpLoading(true);
     try {
-      const res = await loginWithOtp(otpPhone, otpCode);
+      const res: any = await loginWithOtp(otpPhone, otpCode);
       if (res.ok) {
         toast.success("ورود موفقیت‌آمیز بود 👋");
         nav(from, { replace: true });
@@ -276,7 +276,7 @@ export default function Login() {
               </button>
 
               {/* Quick Fill Admin Credentials */}
-              <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/60 p-3.5 text-xs space-y-1.5">
+              {/* <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/60 p-3.5 text-xs space-y-1.5">
                 <p className="font-bold text-base-content/70">
                   حساب پیش‌فرض مدیر ارشد (Administrator):
                 </p>
@@ -294,7 +294,7 @@ export default function Login() {
                 >
                   تکمیل خودکار حساب مدیر
                 </button>
-              </div>
+              </div> */}
             </form>
           )}
 
