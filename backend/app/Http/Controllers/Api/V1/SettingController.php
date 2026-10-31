@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class SettingController extends Controller
 {
@@ -56,6 +57,72 @@ class SettingController extends Controller
         ]);
     }
 
+    public function getCompanySettings(): JsonResponse
+    {
+        // Accessible by any authenticated user (sidebar always visible when logged in)
+        $companyName = Setting::get('company_name');
+        $companyLogoPath = Setting::get('company_logo');
+        $companyLogoUrl = null;
+
+        if ($companyLogoPath && Storage::disk('public')->exists($companyLogoPath)) {
+            $companyLogoUrl = '/storage/' . ltrim($companyLogoPath, '/');
+        }
+
+        return response()->json([
+            'company_name' => $companyName ?: null,
+            'company_logo_url' => $companyLogoUrl,
+        ]);
+    }
+
+    public function updateCompanySettings(Request $request): JsonResponse
+    {
+        $this->authorizePermission('settings.manage');
+
+        $callingUser = auth()->user();
+        if (!$callingUser || !$callingUser->isAdministrator()) {
+            abort(403, 'فقط مدیران ارشد می‌توانند تنظیمات شرکت را ویرایش کنند.');
+        }
+
+        $validated = $request->validate([
+            'company_name' => 'nullable|string|max:100',
+            'company_logo' => 'nullable|image|max:2048',
+        ]);
+
+        if (array_key_exists('company_name', $validated)) {
+            Setting::set('company_name', $validated['company_name'] ?? '');
+        }
+
+        // Remove existing logo if requested
+        if ($request->input('remove_logo') === '1') {
+            $existingLogo = Setting::get('company_logo');
+            if ($existingLogo && Storage::disk('public')->exists($existingLogo)) {
+                Storage::disk('public')->delete($existingLogo);
+            }
+            Setting::set('company_logo', '');
+        } elseif ($request->hasFile('company_logo')) {
+            // Delete old logo before storing new one
+            $existingLogo = Setting::get('company_logo');
+            if ($existingLogo && Storage::disk('public')->exists($existingLogo)) {
+                Storage::disk('public')->delete($existingLogo);
+            }
+            $logoPath = $request->file('company_logo')->store('logos', 'public');
+            Setting::set('company_logo', $logoPath);
+        }
+
+        // Build updated logo URL for response
+        $companyLogoPath = Setting::get('company_logo');
+        $companyLogoUrl = null;
+        if ($companyLogoPath && Storage::disk('public')->exists($companyLogoPath)) {
+            $companyLogoUrl = '/storage/' . ltrim($companyLogoPath, '/');
+        }
+
+        return response()->json([
+            'message' => 'تنظیمات برندینگ شرکت با موفقیت ذخیره شد.',
+            'company_name' => Setting::get('company_name') ?: null,
+            'company_logo_url' => $companyLogoUrl,
+        ]);
+    }
+
     protected function authorizePermission(string $permission): void
     {
         $user = auth()->user();
@@ -64,3 +131,4 @@ class SettingController extends Controller
         }
     }
 }
+

@@ -11,6 +11,7 @@ import type {
   DashboardStats,
   ResourceName,
   Resources,
+  CompanySettings,
 } from '../types'
 
 export const http = axios.create({
@@ -188,6 +189,14 @@ export const settingsApi = {
   },
   updateSmsSettings: async (body: Partial<SmsSettings & { melipayamak_password?: string }>) => {
     const { data } = await http.put<{ message: string }>('/settings/sms', body)
+    return data
+  },
+  getCompanySettings: async () => {
+    const { data } = await http.get<CompanySettings>('/settings/company')
+    return data
+  },
+  updateCompanySettings: async (body: FormData) => {
+    const { data } = await http.post<{ message: string; company_name: string | null; company_logo_url: string | null }>('/settings/company', body)
     return data
   },
 }

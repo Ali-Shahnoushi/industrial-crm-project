@@ -1,6 +1,12 @@
-import { Check, Moon, Palette, Sun } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { Building2, Check, Moon, Palette, Save, Sun } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
+import { FilePondLogo } from '../../components/ui/FilePondLogo'
 import { useThemeStore, type ThemeColor } from '../../store/useThemeStore'
+import { useAuthStore } from '../../store/useAuthStore'
+import { settingsApi } from '../../services/api'
 import { cx } from '../../utils/format'
 
 interface ColorOption {
@@ -44,13 +50,148 @@ const COLOR_OPTIONS: ColorOption[] = [
 
 export default function SystemSettingsPage() {
   const { theme, setTheme, color, setColor } = useThemeStore()
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
+  const qc = useQueryClient()
+
+  const [companyName, setCompanyName] = useState('')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [removeLogo, setRemoveLogo] = useState(false)
+
+  // Fetch company settings (admin only)
+  const { data: companySettings } = useQuery({
+    queryKey: ['company-settings'],
+    queryFn: settingsApi.getCompanySettings,
+    enabled: isAdministrator,
+  })
+
+  useEffect(() => {
+    if (companySettings) {
+      setCompanyName(companySettings.company_name || '')
+    }
+  }, [companySettings])
+
+  // Save company settings mutation
+  const saveCompanyMutation = useMutation({
+    mutationFn: (formData: FormData) => settingsApi.updateCompanySettings(formData),
+    onSuccess: (res) => {
+      toast.success(res.message)
+      qc.invalidateQueries({ queryKey: ['company-settings'] })
+      setLogoFile(null)
+      setRemoveLogo(false)
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'خطا در ذخیره تنظیمات شرکت')
+    },
+  })
+
+  // Remove logo mutation
+  const removeLogoMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData()
+      fd.append('remove_logo', '1')
+      return settingsApi.updateCompanySettings(fd)
+    },
+    onSuccess: () => {
+      toast.success('لوگوی شرکت حذف شد.')
+      qc.invalidateQueries({ queryKey: ['company-settings'] })
+      setLogoFile(null)
+      setRemoveLogo(false)
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'خطا در حذف لوگو')
+    },
+  })
+
+  const handleSaveCompany = () => {
+    const fd = new FormData()
+    fd.append('company_name', companyName.trim())
+    if (logoFile) {
+      fd.append('company_logo', logoFile)
+    }
+    if (removeLogo) {
+      fd.append('remove_logo', '1')
+    }
+    saveCompanyMutation.mutate(fd)
+  }
+
+  const currentLogoUrl = removeLogo ? null : companySettings?.company_logo_url
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
-        title="تنظیمات سیستم و ظاهر نرم‌افزار"
-        subtitle="شخصی‌سازی حالت روز/شب (Light/Dark) و انتخاب پالت رنگی اصلی سامانه"
+        title={isAdministrator ? 'تنظیمات سیستم، برندینگ و ظاهر' : 'تنظیمات پوسته نمایشی'}
+        subtitle={
+          isAdministrator
+            ? 'مدیریت مشخصات شرکت، پالت رنگی اصلی و حالت روز/شب (Light/Dark) سامانه'
+            : 'شخصی‌سازی حالت روز یا شب (Light/Dark) سامانه متناسب با نور محیط کار'
+        }
       />
+
+      {/* Company Branding - Admins Only */}
+      {isAdministrator && (
+        <div className="card-surface p-6 sm:p-8 space-y-5">
+          <div>
+            <h3 className="text-base font-bold text-base-content flex items-center gap-2">
+              <Building2 className="size-4 text-primary" />
+              مشخصات شرکت و برندینگ
+            </h3>
+            <p className="text-xs text-base-content/60 mt-1">
+              نام شرکت و لوگو در نوار کناری سامانه نمایش داده می‌شوند.
+            </p>
+          </div>
+
+          <div className="space-y-5">
+            {/* Company Name */}
+            <div>
+              <label className="block text-xs font-bold text-base-content mb-1.5">
+                نام شرکت یا سازمان
+              </label>
+              <input
+                type="text"
+                className="input input-bordered w-full text-sm"
+                placeholder="نام شرکت یا سازمان"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+              />
+            </div>
+
+            {/* Company Logo using FilePond */}
+            <FilePondLogo
+              label="لوگوی رسمی شرکت (جهت نمایش در نوار کناری)"
+              currentLogoUrl={currentLogoUrl}
+              onFileChange={(file) => {
+                setLogoFile(file)
+                if (file) setRemoveLogo(false)
+              }}
+              onRemoveCurrentLogo={() => {
+                setRemoveLogo(true)
+                setLogoFile(null)
+                if (companySettings?.company_logo_url) {
+                  removeLogoMutation.mutate()
+                }
+              }}
+              disabled={saveCompanyMutation.isPending || removeLogoMutation.isPending}
+            />
+
+            {/* Save button */}
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleSaveCompany}
+                disabled={saveCompanyMutation.isPending}
+                className="btn btn-primary gap-2"
+              >
+                {saveCompanyMutation.isPending ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <Save className="size-4" />
+                )}
+                ذخیره مشخصات شرکت
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Dark / Light Mode Selection */}
       <div className="card-surface p-6 sm:p-8 space-y-5">
@@ -111,54 +252,56 @@ export default function SystemSettingsPage() {
         </div>
       </div>
 
-      {/* Theme Color Selection */}
-      <div className="card-surface p-6 sm:p-8 space-y-5">
-        <div>
-          <h3 className="text-base font-bold text-base-content flex items-center gap-2">
-            <Palette className="size-4 text-primary" />
-            انتخاب پالت رنگی اصلی (تم رنگی)
-          </h3>
-          <p className="text-xs text-base-content/60 mt-1">
-            رنگ اصلی اجزای سامانه (دکمه‌ها، آیکون‌ها، تگ‌ها و عناصر تعاملی) را سفارشی‌سازی کنید.
-          </p>
-        </div>
+      {/* Theme Color Selection - Admins Only */}
+      {isAdministrator && (
+        <div className="card-surface p-6 sm:p-8 space-y-5">
+          <div>
+            <h3 className="text-base font-bold text-base-content flex items-center gap-2">
+              <Palette className="size-4 text-primary" />
+              انتخاب پالت رنگی اصلی (تم رنگی)
+            </h3>
+            <p className="text-xs text-base-content/60 mt-1">
+              رنگ اصلی اجزای سامانه (دکمه‌ها، آیکون‌ها، تگ‌ها و عناصر تعاملی) را سفارشی‌سازی کنید.
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-          {COLOR_OPTIONS.map((opt) => {
-            const isSelected = color === opt.id
-            return (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setColor(opt.id)}
-                className={cx(
-                  'flex items-center gap-4 rounded-2xl border-2 p-4 text-start transition-all cursor-pointer',
-                  isSelected
-                    ? 'border-primary bg-primary/5 shadow-xs'
-                    : 'border-base-200 hover:border-base-300 bg-base-100',
-                )}
-              >
-                <div
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+            {COLOR_OPTIONS.map((opt) => {
+              const isSelected = color === opt.id
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setColor(opt.id)}
                   className={cx(
-                    'flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr text-white shadow-xs',
-                    opt.previewClass,
+                    'flex items-center gap-4 rounded-2xl border-2 p-4 text-start transition-all cursor-pointer',
+                    isSelected
+                      ? 'border-primary bg-primary/5 shadow-xs'
+                      : 'border-base-200 hover:border-base-300 bg-base-100',
                   )}
                 >
-                  <span className="size-3.5 rounded-full bg-white/90" />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <p className="font-bold text-xs text-base-content">{opt.name}</p>
-                    {isSelected && <Check className="size-4 text-primary" />}
+                  <div
+                    className={cx(
+                      'flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr text-white shadow-xs',
+                      opt.previewClass,
+                    )}
+                  >
+                    <span className="size-3.5 rounded-full bg-white/90" />
                   </div>
-                  <p className="text-[11px] text-base-content/60 mt-0.5 truncate">{opt.description}</p>
-                </div>
-              </button>
-            )
-          })}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="font-bold text-xs text-base-content">{opt.name}</p>
+                      {isSelected && <Check className="size-4 text-primary" />}
+                    </div>
+                    <p className="text-[11px] text-base-content/60 mt-0.5 truncate">{opt.description}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

@@ -15,6 +15,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/otp/send', [AuthController::class, 'sendOtp']);
     Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
     Route::get('/customers/template', [CustomerController::class, 'template']);
+    Route::get('/settings/company', [SettingController::class, 'getCompanySettings']);
 
     // Protected API endpoints
     Route::middleware('auth:sanctum')->group(function () {
@@ -43,6 +44,7 @@ Route::prefix('v1')->group(function () {
         // System Settings
         Route::get('/settings/sms', [SettingController::class, 'getSmsSettings']);
         Route::put('/settings/sms', [SettingController::class, 'updateSmsSettings']);
+        Route::post('/settings/company', [SettingController::class, 'updateCompanySettings']);
 
         // Users & Pure ACL Permissions
         Route::get('/permissions', [UserController::class, 'availablePermissions']);

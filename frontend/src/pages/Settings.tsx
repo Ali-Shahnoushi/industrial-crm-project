@@ -12,6 +12,7 @@ import { Can } from '../components/common/Can'
 
 export default function Settings() {
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
 
   const cards = [
     {
@@ -42,8 +43,10 @@ export default function Settings() {
     },
     {
       to: '/settings/system',
-      title: 'تنظیمات ظاهر و رنگ سیستم',
-      desc: 'تغییر پوسته شب/روز و انتخاب پالت رنگی (پیش‌فرض، آبی، سبز، قرمز)',
+      title: isAdministrator ? 'تنظیمات برندینگ، ظاهر و رنگ' : 'تنظیمات پوسته نمایشی (روز/شب)',
+      desc: isAdministrator
+        ? 'تغییر نام و لوگوی شرکت در سایدبار، انتخاب پالت رنگی و پوسته شب/روز'
+        : 'انتخاب پوسته دیداری تاریک یا روشن سامانه متناسب با نور محیط',
       icon: Palette,
       badge: 'شخصی‌سازی',
       color: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
