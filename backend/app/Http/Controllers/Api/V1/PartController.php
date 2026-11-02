@@ -24,10 +24,11 @@ class PartController extends Controller
 
         if ($request->filled('q')) {
             $term = trim($request->q);
-            $query->where(function ($q) use ($term) {
-                $q->where('name', 'ilike', "%{$term}%")
-                    ->orWhere('code', 'ilike', "%{$term}%")
-                    ->orWhere('description', 'ilike', "%{$term}%");
+            $op = $this->likeOp();
+            $query->where(function ($q) use ($term, $op) {
+                $q->where('name', $op, "%{$term}%")
+                    ->orWhere('code', $op, "%{$term}%")
+                    ->orWhere('description', $op, "%{$term}%");
             });
         }
 
