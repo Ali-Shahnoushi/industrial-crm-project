@@ -7,7 +7,7 @@
  *  بعد از نصب موفق تلاش می‌کند خودش را حذف کند؛ اگر حذف نشد دستی پاک کنید.
  *
  *  مرحله ۱ (GET)  : بررسی پیش‌نیازها + فرم اطلاعات دیتابیس
- *  مرحله ۲ (POST) : تست اتصال → نوشتن .env → migrate → seed
+ *  مرحله ۲ (POST) : تست اتصال → نوشتن .env → migrate → ساخت مدیر
  * ═════════════════════════════════════════════════════════════════════
  */
 declare(strict_types=1);
@@ -16,19 +16,6 @@ header('Content-Type: text/html; charset=utf-8');
 header('X-Robots-Tag: noindex');
 header('Cache-Control: no-store');
 header('Referrer-Policy: no-referrer');
-ini_set('session.use_strict_mode', '1');
-session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
-session_start();
-$_SESSION['install_csrf'] ??= bin2hex(random_bytes(32));
-
-$baseDir = require __DIR__ . '/resolve-private.php';
-$envPath = $baseDir . '/.env';
-if (is_file($baseDir.'/storage/installed.lock')) {
-    http_response_code(403);
-    exit('Installation is locked. Remove install.php from the public directory.');
-}
-
-
 /* ─────────── Helper functions ─────────── */
 
 function e(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
@@ -39,7 +26,12 @@ function envValue(?string $file, string $key): ?string
     foreach (file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (preg_match('/^\s*' . preg_quote($key, '/') . '\s*=\s*(.*)$/', $line, $m)) {
             $v = trim($m[1]);
-            if (preg_match('/^(["\'])(.*)\1$/', $v, $q)) $v = $q[2];
+            if (preg_match('/^(["\'])(.*)\1$/', $v, $q)) {
+                $v = $q[2];
+                if ($q[1] === '"') {
+                    $v = strtr($v, ['\\\\' => '\\', '\\"' => '"', '\\$' => '$']);
+                }
+            }
             return $v;
         }
     }
@@ -86,8 +78,8 @@ function checkEnvironment(string $baseDir): array
         $checks[] = ['افزونه PHP: ' . $ext, extension_loaded($ext), extension_loaded($ext) ? 'فعال' : 'غیرفعال — از Select PHP Version فعال کنید'];
     }
     $checks[] = ['قابل نوشتن: پوشه عمومی آپلود', is_dir(__DIR__.'/storage') && is_writable(__DIR__.'/storage'), __DIR__.'/storage'];
-    $checks[] = ['وجود vendor (برنامه کامل)', is_dir($baseDir . '/vendor'), is_dir($baseDir . '/vendor') ? 'ok' : 'vendor یافت نشد'];
-    foreach (['storage', 'storage/framework', 'storage/framework/sessions', 'storage/framework/cache', 'storage/framework/views', 'storage/logs', 'bootstrap/cache'] as $dir) {
+    $checks[] = ['وجود vendor (برنامه کامل)', is_file($baseDir . '/vendor/autoload.php') && is_file($baseDir . '/vendor/composer/platform_check.php'), is_file($baseDir . '/vendor/autoload.php') ? 'ok' : 'vendor یافت نشد'];
+    foreach (['storage', 'storage/framework', 'storage/framework/sessions', 'storage/framework/cache', 'storage/framework/cache/data', 'storage/framework/views', 'storage/logs', 'bootstrap/cache'] as $dir) {
         $p = $baseDir . '/' . $dir;
         $checks[] = ['قابل نوشتن: ' . $dir, is_dir($p) && is_writable($p), $p];
     }
@@ -115,6 +107,95 @@ function page(string $title, string $body): string
         . $body . '</div></div></body></html>';
 }
 
+
+/** Report failures independently of Laravel's exception handler/logger. */
+function installerFailure(Throwable $error): void
+{
+    global $installerStage, $installerErrorShown, $baseDir, $installerBufferLevel;
+    if ($installerErrorShown) return;
+    $installerErrorShown = true;
+    $reference = date('Ymd-His').'-'.substr(hash('sha256', uniqid('', true)), 0, 8);
+    $detail = get_class($error).': '.$error->getMessage().' in '.$error->getFile().':'.$error->getLine();
+    // Do not put credentials in the diagnostic log, even in dotenv/SQL errors.
+    foreach (['db_pass', 'admin_password'] as $key) {
+        $secret = (string) ($_POST[$key] ?? '');
+        if ($secret !== '') {
+            $quoted = str_replace(['\\', '"', '$'], ['\\\\', '\\"', '\\$'], $secret);
+            $detail = str_replace([$quoted, $secret], '[REDACTED]', $detail);
+        }
+    }
+    if (isset($GLOBALS['appKey']) && is_string($GLOBALS['appKey'])) {
+        $detail = str_replace($GLOBALS['appKey'], '[REDACTED]', $detail);
+    }
+    $line = json_encode(['time' => date(DATE_ATOM), 'reference' => $reference,
+        'stage' => $installerStage, 'error' => $detail], JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE)."\n";
+    $logged = false;
+    if (is_string($baseDir) && is_dir($baseDir.'/storage/logs')) {
+        $logPath = $baseDir.'/storage/logs/installer.log';
+        // Set restrictive permissions before writing any diagnostic data.
+        $handle = @fopen($logPath, 'ab');
+        if ($handle) {
+            @chmod($logPath, 0600);
+            if (flock($handle, LOCK_EX)) {
+                $logged = fwrite($handle, $line) !== false;
+                flock($handle, LOCK_UN);
+            }
+            fclose($handle);
+        }
+    }
+    if (!$logged && function_exists('error_log')) @error_log('[CRM installer] '.$line);
+    while (ob_get_level() > $installerBufferLevel) @ob_end_clean();
+    http_response_code(500);
+    header('Content-Type: text/html; charset=utf-8');
+    $hints = [
+        'session' => 'فضای session و تنظیمات PHP هاست را بررسی کنید.',
+        'autoload' => 'PHP دامنه باید حداقل 8.4.1 باشد و پوشه vendor کامل از همان بسته آپلود شده باشد.',
+        'bootstrap' => 'فایل .env، افزونه‌های PHP، محدودیت open_basedir و دسترسی bootstrap/cache و storage را بررسی کنید.',
+        'migrations' => 'مجوزهای کاربر دیتابیس و خطای مایگریشن ثبت‌شده در لاگ را بررسی کنید.',
+        'administrator' => 'ساخت مدیر کامل نشده است؛ لاگ نصب را بررسی کنید. جدول‌ها را حذف نکنید.',
+        'finalize' => 'نوشتن قفل نصب یا تنظیمات نهایی ممکن نشد؛ دسترسی storage و فایل .env را بررسی کنید.',
+    ];
+    echo page('نصب کامل نشد', '<div class="warn"><b>نصب در این مرحله متوقف شد: '.e($installerStage).'</b>'
+        .'<p>'.e($hints[$installerStage] ?? 'خطای نصب در لاگ خصوصی ثبت شده است.').'</p>'
+        .'<p>کد پیگیری: <code>'.e($reference).'</code></p></div>'
+        .'<div class="note">جزئیات را در <code>storage/logs/installer.log</code> در مسیر خصوصی بخوانید.'
+        .(!$logged ? ' اگر فایل لاگ قابل نوشتن نبود، بخش Errors در cPanel را بررسی کنید.' : '')
+        .'<p>پس از اصلاح مشکل، صفحه نصب را دوباره باز کنید. دیتابیس، جدول‌ها و APP_KEY را حذف نکنید و APP_DEBUG را روشن نکنید.</p></div>');
+}
+
+$installerStage = 'session';
+$installerErrorShown = false;
+$baseDir = null;
+$installerBufferLevel = ob_get_level();
+ob_start();
+@ini_set('display_errors', '0');
+// Reserve enough memory to show a useful response on an out-of-memory fatal error.
+$installerReserve = str_repeat('x', 65536);
+register_shutdown_function(function () {
+    global $installerReserve, $installerErrorShown;
+    $installerReserve = null;
+    $last = error_get_last();
+    if (!$installerErrorShown && $last && in_array($last['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR], true)) {
+        installerFailure(new ErrorException($last['message'], 0, $last['type'], $last['file'], $last['line']));
+    }
+});
+
+try {
+
+ini_set('session.use_strict_mode', '1');
+session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
+if (!session_start()) { throw new RuntimeException('PHP session could not be started.'); }
+$_SESSION['install_csrf'] ??= bin2hex(random_bytes(32));
+
+$baseDir = require __DIR__ . '/resolve-private.php';
+$envPath = $baseDir . '/.env';
+if (is_file($baseDir.'/storage/installed.lock')) {
+    http_response_code(403);
+    exit('Installation is locked. Remove install.php from the public directory.');
+}
+
+
+
 /* ─────────── Guard: already installed? ─────────── */
 
 $state = installedState($envPath);
@@ -133,10 +214,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         http_response_code(419);
         exit('Invalid session. Reload installer.');
     }
+    session_write_close();
+    if (function_exists('set_time_limit')) @set_time_limit(180);
     foreach (checkEnvironment($baseDir) as [$label, $ok]) {
         if (!$ok) { http_response_code(422); exit(e($label)); }
     }
     // Hold an exclusive process lock through the entire installation.
+    $installerStage = 'installation-lock';
     $installMutex = fopen($baseDir.'/storage/install.mutex', 'c');
     if (!$installMutex || !flock($installMutex, LOCK_EX | LOCK_NB)) {
         http_response_code(409); exit('Installation already running.');
@@ -188,6 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    $installerStage = 'environment';
     // Preserve the key on retries. Quote values without dotenv interpolation.
     $appKey = envValue($envPath, 'APP_KEY') ?: 'base64:' . base64_encode(random_bytes(32));
     $rawConfig = ['APP_URL' => $appUrl, 'APP_PUBLIC_PATH' => __DIR__];
@@ -269,43 +354,47 @@ ENV;
     // Discard environment-specific caches from a previous deployment before boot.
     foreach (['config.php', 'events.php'] as $cache) @unlink($baseDir.'/bootstrap/cache/'.$cache);
     foreach (glob($baseDir.'/bootstrap/cache/routes*.php') ?: [] as $cache) @unlink($cache);
+    $installerStage = 'autoload';
     require $baseDir . '/vendor/autoload.php';
+    $installerStage = 'bootstrap';
     $app = require $baseDir . '/bootstrap/app.php';
     $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
     $kernel->bootstrap();
 
     $migrateOut = '';
-    $seedOut = '';
-    try {
+    $installerStage = 'migrations';
         if (Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]) !== 0) {
             throw new RuntimeException(Illuminate\Support\Facades\Artisan::output());
         }
         $migrateOut = Illuminate\Support\Facades\Artisan::output();
+        $installerStage = 'administrator';
         // No demonstration customers or known-password account in production.
         Illuminate\Support\Facades\DB::transaction(function () use ($adminEmail, $adminPhone, $adminPassword) {
-            $admin = App\Models\User::where('email', 'admin@crm.local')->firstOrFail();
+            $admin = App\Models\User::where('email', 'admin@crm.local')->first()
+                ?? App\Models\User::where('email', $adminEmail)->where('user_type', 'administrator')->firstOrFail();
             $admin->fill(['email' => $adminEmail, 'phone' => $adminPhone,
                 'password' => Illuminate\Support\Facades\Hash::make($adminPassword),
                 'user_type' => 'administrator', 'is_active' => true])->save();
             $admin->syncPermissions(Spatie\Permission\Models\Permission::all());
         });
-        file_put_contents($envPath, str_replace('CPANEL_INSTALL_PENDING=true', 'CPANEL_INSTALL_PENDING=false', $env), LOCK_EX);
+        $installerStage = 'finalize';
+        // Keep pending=true until the durable lock exists, allowing a safe retry after failure.
         if (file_put_contents($baseDir.'/storage/installed.lock', date(DATE_ATOM), LOCK_EX) === false) {
             throw new RuntimeException('Could not write installation lock.');
         }
-    } catch (Throwable $e) {
-        echo page('خطای مایگریشن', '<div class="warn">دیتابیس متصل شد و .env نوشته شد، اما اجرای جداول خطا داد:</div>'
-            . '<pre>' . e($e->getMessage()) . '</pre>'
-            . '<div class="note">خطا را برطرف کنید و دوباره فرم را ارسال کنید (یا جداول را از phpMyAdmin حذف و تلاش کنید).</div>');
-        exit;
-    }
+        $completedEnv = str_replace('CPANEL_INSTALL_PENDING=true', 'CPANEL_INSTALL_PENDING=false', $env);
+        if (file_put_contents($envPath.'.installing', $completedEnv, LOCK_EX) === false
+            || !chmod($envPath.'.installing', 0640) || !rename($envPath.'.installing', $envPath)) {
+            @unlink($baseDir.'/storage/installed.lock');
+            throw new RuntimeException('Could not finalize environment.');
+        }
 
     @unlink(__DIR__.'/setup-check.php');
     $selfDeleted = @unlink(__FILE__);
 
     echo page('نصب کامل شد ✅',
         '<div class="note">🎉 تبریک! برنامه با موفقیت نصب شد.</div>'
-        . '<p><b>مراحل انجام‌شده:</b></p><pre>migrate:\n' . e(trim($migrateOut)) . '\n\nseed:\n' . e(trim($seedOut)) . '</pre>'
+        . '<p><b>مراحل انجام‌شده:</b></p><pre>migrate:\n' . e(trim($migrateOut)) . '</pre>'
         . '<p><b>اطلاعات ورود مدیر سیستم:</b></p>'
         . '<p>از ایمیل و رمز انتخاب‌شده در ویزارد استفاده کنید.</p>'
         . '<div class="warn">⚠️ <b>الان سه کار فوری انجام بده:</b><ol>'
@@ -356,3 +445,7 @@ echo page('نصب Industrial CRM',
     . '<button type="submit"' . ($allOk ? '' : ' disabled') . '>🚀 شروع نصب (ساخت جداول + داده اولیه)</button>'
     . '</form>'
     . '<div class="note">💡 قبل از این فرم، در cPanel با <b>MySQL Database Wizard</b> یک دیتابیس خالی و کاربر آن را ساخته باش. این نصب‌کننده خودش جدول‌ها را می‌سازد — دیگر نیازی به Import فایل SQL از phpMyAdmin نیست.</div>');
+
+} catch (Throwable $error) {
+    installerFailure($error);
+}

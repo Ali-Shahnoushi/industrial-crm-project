@@ -7,5 +7,5 @@ if (!$privatePath || !is_file($privatePath.'/bootstrap/app.php')) {
     exit('Private application path is invalid. Configure private-path.php in the public directory.');
 }
 $_SERVER['APP_PUBLIC_PATH'] = __DIR__;
-putenv('APP_PUBLIC_PATH='.__DIR__);
+// $_SERVER is sufficient; putenv may be disabled on shared hosting.
 return $privatePath;

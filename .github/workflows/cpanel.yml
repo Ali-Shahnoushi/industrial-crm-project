@@ -52,6 +52,15 @@ jobs:
           SESSION_DRIVER: file
           CPANEL_INSTALL_PENDING: 'true'
         run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+      - name: Real installer GET/POST, failure diagnostics and retry tests
+        env:
+          CPANEL_INSTALLER_HTTP: '1'
+          INSTALLER_TEST_DATABASE: crm_installer_http_test
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: test_password
+        run: python3 -m unittest discover -s deploy/cpanel/tests -p test_installer_http.py -v
       - uses: actions/upload-artifact@v4
         with:
           name: cpanel-package
