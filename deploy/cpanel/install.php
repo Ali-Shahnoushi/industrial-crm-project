@@ -62,6 +62,9 @@ function installedState(string $envPath): array
     }
     try {
         $pdo = dbConnect($db);
+        if ($pdo->query("SHOW TABLES LIKE 'users'")->fetchColumn() === false) {
+            return ['state' => 'db-empty', 'db' => $db];
+        }
         $users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
         if ((int) $users > 0) return ['state' => 'installed', 'db' => $db];
         return ['state' => 'db-empty', 'db' => $db]; // .env set but tables missing
@@ -168,7 +171,7 @@ $installerErrorShown = false;
 $baseDir = null;
 $installerBufferLevel = ob_get_level();
 ob_start();
-@ini_set('display_errors', '0');
+if (function_exists('ini_set')) @ini_set('display_errors', '0');
 // Reserve enough memory to show a useful response on an out-of-memory fatal error.
 $installerReserve = str_repeat('x', 65536);
 register_shutdown_function(function () {
@@ -182,7 +185,7 @@ register_shutdown_function(function () {
 
 try {
 
-ini_set('session.use_strict_mode', '1');
+if (function_exists('ini_set')) ini_set('session.use_strict_mode', '1');
 session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off']);
 if (!session_start()) { throw new RuntimeException('PHP session could not be started.'); }
 $_SESSION['install_csrf'] ??= bin2hex(random_bytes(32));

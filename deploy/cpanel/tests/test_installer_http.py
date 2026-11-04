@@ -177,7 +177,8 @@ $db=getenv('TEST_DB_NAME');$pdo->exec("GRANT ALL PRIVILEGES ON `$db`.* TO $user"
         status, body=self.request()
         self.assertEqual(status, 200, body)
         # If envValue did not unescape the saved password, the GET would show a DB error.
-        self.assertNotIn('اتصال دیتابیس خطا می‌دهد', body)
+        warnings = re.findall(r'<div class="warn">.*?</div>', body, re.S)
+        self.assertFalse(any('اتصال دیتابیس خطا می‌دهد' in warning for warning in warnings), str(warnings))
         self.assert_success(*self.submit())
 
     def test_invalid_csrf_does_not_write_environment(self):
