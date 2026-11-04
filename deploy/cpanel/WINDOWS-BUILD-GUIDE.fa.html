@@ -13,7 +13,9 @@
 <p>خروجی:</p>
 <pre><code class="language-text">cpanel-release/
 ├── cpanel-public.zip
-└── cpanel-private.zip
+├── cpanel-private.zip
+├── SHA256SUMS
+└── build-info.txt
 </code></pre>
 <ul>
 <li><code>cpanel-public.zip</code>: فایل‌های عمومی، React ساخته‌شده، assets، ورودی PHP، ویزارد و قواعد Apache.</li>
@@ -109,7 +111,7 @@ npm -v
 </blockquote>
 <hr />
 <h2 id="_4">۵. قرار دادن پروژه در محیط ساخت</h2>
-<p><strong>پیشنهاد جدی: یک کپی تمیز و مخصوص build داشته باشید</strong>، نه نسخه‌ای که روی آن اطلاعات واقعی مشتری، آپلود شخصی یا تنظیمات محیط عملیاتی دارید. اسکریپت، vendor را بدون بسته‌های توسعه نصب می‌کند و فرانت‌اند را دوباره می‌سازد؛ پوشه‌های داده محلی نیز نباید وارد بسته عمومی شوند.</p>
+<p><strong>پیشنهاد جدی: یک کپی تمیز و مخصوص build داشته باشید</strong>، نه نسخه‌ای که روی آن اطلاعات واقعی مشتری، آپلود شخصی یا تنظیمات محیط عملیاتی دارید. نسخه جدید اسکریپت در پوشه موقت و مستقل کار می‌کند؛ vendor، node_modules، dist و .env سورس شما را تغییر نمی‌دهد. اطلاعات runtime و آپلودهای محلی را کپی نمی‌کند. با این حال سورس مخصوص build را تمیز نگه دارید.</p>
 <h3 id="git">روش الف: دریافت از Git</h3>
 <p>داخل Ubuntu:</p>
 <pre><code class="language-bash">mkdir -p ~/projects
@@ -170,9 +172,9 @@ bash -n deploy/cpanel/build.sh
 <li>حذف <code>.env</code> فعال، لاگ‌ها، sessionها و کش‌های محیط ساخت از بسته.</li>
 <li>ایجاد دو ZIP مستقل عمومی و خصوصی.</li>
 </ol>
-<p>اگر <code>backend/.env</code> وجود نداشته باشد، اسکریپت موقتاً آن را از نمونه می‌سازد و در پایان حذف می‌کند. در کپی تمیز نیازی نیست خودتان اطلاعات دیتابیس هاست یا رمزهای واقعی را برای build وارد کنید.</p>
+<p>اسکریپت دیگر به <code>backend/.env</code> شما دست نمی‌زند؛ یک محیط ساخت مستقل داخل پوشه موقت می‌سازد و آن را پس از اتمام حذف می‌کند. نیازی به اطلاعات دیتابیس هاست یا رمزهای واقعی برای build نیست. assetهای Filament هم در محیط موقت دوباره منتشر می‌شوند.</p>
 <p>در انتها باید این پیام را ببینید:</p>
-<pre><code class="language-text">Built: .../cpanel-release/cpanel-public.zip + .../cpanel-release/cpanel-private.zip
+<pre><code class="language-text">SUCCESS: .../cpanel-release
 </code></pre>
 <p>کنترل موفقیت و اندازه فایل‌ها:</p>
 <pre><code class="language-bash">ls -lh cpanel-release/*.zip
@@ -180,6 +182,20 @@ unzip -t cpanel-release/cpanel-public.zip
 unzip -t cpanel-release/cpanel-private.zip
 </code></pre>
 <p>هر دو دستور <code>unzip -t</code> باید بدون خطا تمام شوند. اگر build متوقف شد، <strong>فایل ZIP قدیمی باقی‌مانده را خروجی موفق نسخه جدید فرض نکنید</strong>؛ ابتدا خطا را برطرف و دوباره build کنید و زمان فایل‌ها را بررسی کنید.</p>
+<h3 id="_8">کنترل بسته، خروجی سفارشی و تست محلی</h3>
+<p>نسخه جدید ZIPها را قبل از اعلام موفقیت تست و محتویات حساس را بررسی می‌کند. خروجی قبلی تا زمان آماده‌شدن هر دو بسته جدید حفظ می‌شود؛ در خطا آن را نسخه جدید فرض نکنید.</p>
+<pre><code class="language-bash">bash deploy/cpanel/verify-package.sh cpanel-release
+(cd cpanel-release &amp;&amp; sha256sum -c SHA256SUMS)
+CPANEL_OUT_DIR=&quot;./my output/packages&quot; bash deploy/cpanel/build.sh
+</code></pre>
+<p>برای اجرای تست‌های بسته‌بندی بدون دانلود وابستگی (نیازمند Python 3؛ Composer/PHP در این تست‌ها شبیه‌سازی می‌شوند):</p>
+<pre><code class="language-bash">python3 -m unittest discover -s deploy/cpanel/tests -v
+</code></pre>
+<p>برای تست <strong>واقعی</strong> Laravel از ZIPهای ساخته‌شده، با PHP 8.4.1+ و افزونه pdo_sqlite:</p>
+<pre><code class="language-bash">bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+</code></pre>
+<p>این دستور بسته‌ها را در دو مسیر جدا استخراج می‌کند، دیتابیس SQLite موقت می‌سازد، migrate را دوبار اجرا می‌کند و مسیر آپلود و مجوزهای مدیر را بررسی می‌کند. به دیتابیس عملیاتی متصلش نکنید.</p>
+<p>اگر خطای <code>.build.lock</code> گرفتید، بیلد دیگری در همان پوشه خروجی فعال است. فقط بعد از اطمینان از توقف کامل فرآیند قبلی، پوشه <code>.build.lock</code> را حذف کنید.</p>
 <h3 id="php_1">بررسی وابستگی‌های PHP و امنیت</h3>
 <p>بعد از ساخت:</p>
 <pre><code class="language-bash">cd backend
@@ -188,7 +204,7 @@ composer audit --no-dev
 cd ..
 </code></pre>
 <p>دستور اول سازگاری با <strong>PHP محلی</strong> را کنترل می‌کند، نه PHP هاست. نتیجه audit به وضعیت روز آسیب‌پذیری‌ها وابسته است؛ هشدارهای آن را قبل از انتشار بررسی کنید، نه اینکه به صورت خودکار نادیده بگیرید.</p>
-<h3 id="_8">بررسی محتویات بسته‌ها</h3>
+<h3 id="_9">بررسی محتویات بسته‌ها</h3>
 <pre><code class="language-bash">unzip -l cpanel-release/cpanel-public.zip
 unzip -l cpanel-release/cpanel-private.zip
 </code></pre>
@@ -207,7 +223,7 @@ unzip -l cpanel-release/cpanel-private.zip
 <p>نام کاربری و نام پوشه را با مقدار واقعی خودتان جایگزین کنید.</p>
 <hr />
 <h2 id="zip-cpanel">۹. آپلود مستقیم دو ZIP به cPanel</h2>
-<h3 id="_9">مثال مسیرها</h3>
+<h3 id="_10">مثال مسیرها</h3>
 <p>فرض کنیم نام کاربری هاست <code>alice</code> و دامنه <code>xx.example.com</code> است:</p>
 <pre><code class="language-text">/home/alice/xx.example.com/                 ← محتویات cpanel-public.zip
 /home/alice/private_pro/project1/myc/        ← محتویات cpanel-private.zip
@@ -221,7 +237,7 @@ unzip -l cpanel-release/cpanel-private.zip
 <li>ZIPها را پس از استخراج از هاست حذف کنید، مخصوصاً ZIP خصوصی را هرگز داخل Document Root نگه ندارید.</li>
 </ol>
 <p>مسیر خصوصی نباید زیر پوشه دامنه یا Document Root هیچ سایت دیگری باشد. اگر File Manager شما home حساب را به شکل <code>/</code> نمایش می‌دهد، این لزوماً ریشه واقعی سیستم‌عامل نیست؛ مسیر واقعی معمولاً با <code>/home/USERNAME</code> شروع می‌شود. از پشتیبانی هاست مسیر مطلق را بپرسید.</p>
-<h3 id="_10">تنظیم مسیر خصوصی؛ مرحله ضروری</h3>
+<h3 id="_11">تنظیم مسیر خصوصی؛ مرحله ضروری</h3>
 <p>فایل زیر را با ویرایشگر File Manager باز کنید:</p>
 <pre><code class="language-text">/home/alice/xx.example.com/private-path.php
 </code></pre>
@@ -233,7 +249,7 @@ return '/home/alice/private_pro/project1/myc';
 <p>مقدار پیش‌فرض <code>CPANEL_USER</code> داخل بسته صرفاً placeholder است و باید تغییر کند. نیازی به جست‌وجو و تغییر مسیر در چند فایل PHP ندارید.</p>
 <p>اگر هاست <code>open_basedir</code> دارد، باید خواندن هر دو مسیر عمومی و خصوصی را مجاز کند. خطای این محدودیت با تغییر رمز دیتابیس حل نمی‌شود و ممکن است نیازمند پشتیبانی هاست باشد.</p>
 <hr />
-<h2 id="_11">۱۰. دیتابیس و اجرای ویزارد نصب</h2>
+<h2 id="_12">۱۰. دیتابیس و اجرای ویزارد نصب</h2>
 <ol>
 <li>SSL/AutoSSL دامنه را فعال کنید و از HTTPS استفاده کنید.</li>
 <li>تا پایان نصب، پوشه دامنه را با Directory Privacy یا محدودیت IP محافظت کنید؛ نصب‌کننده راه‌اندازی‌نشده نباید در دسترس دیگران باشد.</li>
@@ -251,7 +267,7 @@ return '/home/alice/private_pro/project1/myc';
 </ol>
 <p>ویزارد <code>.env</code> را در مسیر <strong>خصوصی</strong> می‌سازد، کلید برنامه و جداول را ایجاد می‌کند و اطلاعات مدیر انتخابی شما را ذخیره می‌کند. داده نمایشی وارد نمی‌شود. برای نصب cPanel از رمز نمایشی <code>Admin@123456</code> استفاده نمی‌شود.</p>
 <p>نصب زیر ریشه URL دامنه پشتیبانی می‌شود؛ APP_URL را مثلاً <code>https://xx.example.com</code> بدهید، نه <code>https://example.com/crm</code>.</p>
-<h3 id="_12">دسترسی فایل‌ها</h3>
+<h3 id="_13">دسترسی فایل‌ها</h3>
 <ul>
 <li>پوشه‌ها معمولاً <code>755</code> و فایل‌ها <code>644</code>.</li>
 <li><code>.env</code> خصوصی توسط نصب‌کننده با دسترسی محدودتر ساخته می‌شود.</li>
@@ -259,7 +275,7 @@ return '/home/alice/private_pro/project1/myc';
 <li>برای حل خطاها دسترسی <code>777</code> ندهید؛ مالکیت و تنظیمات PHP هاست را بررسی کنید.</li>
 </ul>
 <hr />
-<h2 id="_13">۱۱. چک‌لیست نهایی پس از نصب</h2>
+<h2 id="_14">۱۱. چک‌لیست نهایی پس از نصب</h2>
 <ul>
 <li>[ ] ورود از <code>/login</code> با اطلاعات مدیر انتخابی.</li>
 <li>[ ] بارگذاری داشبورد و refresh مستقیم مسیرهایی مثل <code>/customers</code>.</li>
@@ -277,7 +293,7 @@ return '/home/alice/private_pro/project1/myc';
 </ul>
 <p>فایل‌های حساس را در دیسک عمومی یا <code>xx.example.com/storage</code> قرار ندهید؛ این مسیر برای فایل‌های قابل انتشار است. فایل خصوصی باید خارج Document Root بماند.</p>
 <hr />
-<h2 id="_14">۱۲. ساخت نسخه‌های بعدی و ارتقای هاست</h2>
+<h2 id="_15">۱۲. ساخت نسخه‌های بعدی و ارتقای هاست</h2>
 <p>برای هر نسخه جدید، سورس نسخه جدید را به <strong>کپی مخصوص build</strong> بیاورید و از ریشه دوباره اجرا کنید:</p>
 <pre><code class="language-bash">bash deploy/cpanel/build.sh
 </code></pre>
@@ -293,7 +309,7 @@ return '/home/alice/private_pro/project1/myc';
 </ol>
 <p><strong>هرگز برای ارتقای سایت واقعی <code>migrate:fresh</code>، حذف جدول‌ها یا seed نمایشی اجرا نکنید.</strong> ارتقا rollback خودکار ندارد.</p>
 <hr />
-<h2 id="_15">۱۳. خطاهای رایج</h2>
+<h2 id="_16">۱۳. خطاهای رایج</h2>
 <h3 id="your-composer-dependencies-require-a-php-version-841"><code>Your Composer dependencies require a PHP version &gt;= 8.4.1</code></h3>
 <p>نسخه PHP فعال کافی نیست. در Ubuntu <code>php -v</code> و <code>which php</code>، و در cPanel نسخه PHP <strong>همان دامنه</strong> را بررسی کنید. خاموش کردن platform check راه‌حل نیست.</p>
 <h3 id="ext-intl-ext-gd-ext-zip-ext-dom-missing"><code>ext-intl</code>، <code>ext-gd</code>، <code>ext-zip</code> یا <code>ext-dom</code> missing</h3>
@@ -317,9 +333,9 @@ which node
 <p>ابتدا Error Log در cPanel و <code>storage/logs/laravel.log</code> خصوصی را بخوانید. PHP، افزونه‌ها، وجود <code>vendor/autoload.php</code>، دسترسی پوشه‌ها و تنظیم <code>.htaccess</code> را بررسی کنید. <code>APP_DEBUG=true</code> را روی سایت عمومی روشن نگذارید و لاگ حاوی اطلاعات محرمانه را منتشر نکنید.</p>
 <h3 id="refresh-customers">صفحه اصلی باز می‌شود اما refresh روی <code>/customers</code> خطا می‌دهد</h3>
 <p>وجود <code>.htaccess</code> عمومی، Document Root صحیح و فعال بودن mod_rewrite/AllowOverride را بررسی کنید. اگر وب‌سرور قواعد Apache را نمی‌پذیرد، از پشتیبانی هاست کمک بگیرید.</p>
-<h3 id="_16">اتصال دیتابیس برقرار نمی‌شود</h3>
+<h3 id="_17">اتصال دیتابیس برقرار نمی‌شود</h3>
 <p>نام کامل پیشونددار دیتابیس و کاربر، رمز، host و مجوز اتصال کاربر به دیتابیس را کنترل کنید. host اغلب <code>localhost</code> یا <code>127.0.0.1</code> است ولی مقدار قطعی را از هاست بگیرید. برای رفع خطا جداول سایت موجود را حذف نکنید.</p>
-<h3 id="_17">نصب موفق شده اما تلاش برای نصب دوباره مسدود است</h3>
+<h3 id="_18">نصب موفق شده اما تلاش برای نصب دوباره مسدود است</h3>
 <p>وجود قفل نصب رفتار درست امنیتی است. برای بروزرسانی از روش ارتقا استفاده کنید، نه حذف قفل و اجرای دوباره ویزارد.</p>
 <hr />
 <h2 id="wsl">۱۴. خلاصه اجرای روزمره پس از آماده بودن WSL</h2>
@@ -333,5 +349,5 @@ unzip -t cpanel-release/cpanel-private.zip
 explorer.exe .
 </code></pre>
 <p>دو ZIP را از <code>cpanel-release</code> بردارید، به مسیرهای صحیح روی cPanel منتقل کنید، <code>private-path.php</code> را تنظیم کنید و برای نصب جدید ویزارد را اجرا کنید؛ برای سایت موجود فقط مراحل ارتقا را انجام دهید.</p>
-<h2 id="_18">وضعیت اعتبارسنجی این آموزش</h2>
-<p>این راهنما بر مبنای اسکریپت و lockهای فعلی مخزن نوشته شده است. نیاز PHP 8.4.1 از بررسی <code>composer.lock</code> مشخص شده است. نصب WSL و اجرای کامل build روی یک ویندوز واقعی در این محیط انجام نشده؛ بنابراین این سند ادعای تست موفق ویندوز/هاست شما را ندارد. گزارش بررسی قبلی در <a href="AUDIT.md">AUDIT.md</a> و راهنمای استقرار در <a href="README.md">README.md</a> قرار دارد.</p></main></body></html>
+<h2 id="_19">وضعیت اعتبارسنجی این آموزش</h2>
+<p>این راهنما بر مبنای اسکریپت و lockهای فعلی مخزن نوشته شده است. نیاز PHP 8.4.1 از بررسی <code>composer.lock</code> مشخص شده است. ساخت واقعی ZIP و اجرای بسته‌های خروجی با PHP 8.4 و هر دو دیتابیس SQLite و MySQL در <a href="https://github.com/diswebir/industrial-crm-project/actions/runs/41890513016">GitHub Actions</a> موفق بوده است. نصب WSL و اجرای build روی یک ویندوز واقعی و اجرای وب‌سرور cPanel شما هنوز آزمون نشده‌اند. گزارش بررسی قبلی در <a href="AUDIT.md">AUDIT.md</a> و راهنمای استقرار در <a href="README.md">README.md</a> قرار دارد.</p></main></body></html>

@@ -21,20 +21,27 @@
 - افزودن throttle به ورود و OTP؛ استفاده از random_int برای کد OTP.
 - افزودن workflow برای ساخت بسته و smoke test مایگریشن MySQL؛ مستندات قبلی درباره پیوست خودکار Release اصلاح شد.
 
-## آزمون‌های انجام‌شده در این محیط
+## آزمون‌های انجام‌شده پس از اصلاح بیلد
+
+اجرای واقعی CI در [GitHub Actions، شماره 41890513016](https://github.com/diswebir/industrial-crm-project/actions/runs/41890513016) موفق بود:
 
 | بررسی | نتیجه |
 |---|---|
-| `npm ci` | موفق |
-| `npm run build` (TypeScript و Vite production) | موفق |
-| `npm run lint` | صفر خطا، ۹۴ هشدار موجود (از جمله unused imports و React hooks) |
-| parse استاتیک ۸۳ فایل PHP با php-parser و گرامر PHP 8.2 | بدون خطای syntax؛ جایگزین php -l نیست |
-| `bash -n deploy/cpanel/build.sh` | موفق |
-| `git diff --check` | موفق |
+| نصب واقعی Composer production با PHP 8.4 و platform check | موفق در CI |
+| npm ci و TypeScript/Vite production build | موفق محلی و CI |
+| PHP syntax با php -l | موفق در CI |
+| ۱۰ تست رگرسیون بسته‌بندی با dependency doubles | موفق محلی و CI |
+| ساخت هر دو ZIP، unzip integrity، layout و sensitive-file checks | موفق در CI |
+| استخراج بسته در دو مسیر مستقل و bootstrap واقعی Laravel | موفق در CI |
+| migrate دوبار، مدیر، ۱۴ مجوز و مسیر آپلود با SQLite | موفق در CI |
+| همان تست‌ها با MySQL 8 | موفق در CI |
+| bash syntax و git diff --check | موفق محلی |
+
+تست‌های doubles به تنهایی آزمون Laravel نیستند؛ workflow جداگانه بسته واقعی را با PHP و دیتابیس اجرا کرده است. تست ZIP شامل مسیر نسبی و دارای فاصله، حفظ سورس و .env، شکست Composer/npm/lint، قفل هم‌زمان، رد symlink، فایل حساس، zip-slip و ZIP خراب است.
 
 ## موارد اجرا نشده و ریسک‌های باقی‌مانده
 
-- PHP و Composer در sandbox نصب نیستند؛ اجرای واقعی Laravel، PHPUnit، composer install/audit، ساخت ZIP کامل و اجرای مایگریشن MySQL در این محیط ممکن نشد. workflow افزوده‌شده هنوز در GitHub اجرا نشده است؛ نتیجه آن را قبل از نصب کنترل کنید.
+- PHP و Composer در sandbox نصب نیستند؛ اجرای واقعی Composer، Laravel، ساخت ZIP و مایگریشن‌ها در GitHub Actions انجام و موفق شد. PHPUnit و composer audit اجرا نشده‌اند. نصب مستقیم ویندوز/WSL روی رایانه کاربر هنوز آزمایش نشده است.
 - بازنویسی Apache/LiteSpeed، مجوز فایل‌ها، open_basedir و پشتیبانی واقعی نسخه MySQL/MariaDB باید روی هاست مقصد تست شود.
 - تمام CRUDها، ورود Filament، import/export اکسل و آپلودها نیازمند آزمون انتهابه‌انتها با دیتابیس واقعی‌اند. فایل‌های تست اولیه مخزن پوشش جامعی ندارند.
 - اتصال واقعی ملی‌پیامک آزمایش نشده است. Sandbox کد ورود را نمایش می‌دهد؛ آن را پیش از بهره‌برداری واقعی خاموش کنید.
