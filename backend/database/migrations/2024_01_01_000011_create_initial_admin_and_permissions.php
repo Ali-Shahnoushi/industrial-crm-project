@@ -44,7 +44,7 @@ return new class extends Migration
         $adminData = [
             'name' => 'مدیر ارشد سامانه',
             'phone' => '09120000000',
-            'password' => Hash::make('Admin@123456'),
+            'password' => Hash::make(env('CPANEL_INSTALL_PENDING') ? bin2hex(random_bytes(32)) : 'Admin@123456'),
             'email_verified_at' => now(),
             'is_active' => true,
         ];

@@ -1,0 +1,58 @@
+name: cPanel package
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: crm_test
+          MYSQL_ROOT_PASSWORD: test_password
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -ptest_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring, intl, gd, zip, bcmath
+          tools: composer:v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: PHP syntax
+        run: find backend deploy/cpanel -name '*.php' -print0 | xargs -0 -n1 php -l
+      - run: bash deploy/cpanel/build.sh
+      - name: MySQL fresh install and idempotent upgrade smoke test
+        working-directory: backend
+        env:
+          APP_ENV: testing
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: crm_test
+          DB_USERNAME: root
+          DB_PASSWORD: test_password
+          CACHE_STORE: file
+          SESSION_DRIVER: file
+          CPANEL_INSTALL_PENDING: 'true'
+        run: |
+          php artisan migrate --force
+          php artisan migrate --force
+          php artisan route:list --except-vendor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpanel-package
+          path: cpanel-release/*.zip
+          if-no-files-found: error

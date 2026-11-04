@@ -9,7 +9,10 @@
 header('Content-Type: text/html; charset=utf-8');
 header('X-Robots-Tag: noindex');
 
-$baseDir = dirname(__DIR__); // Laravel root
+$baseDir = require __DIR__ . '/resolve-private.php'; // Laravel root
+if (is_file($baseDir.'/storage/installed.lock') || is_file($baseDir.'/.env')) {
+    http_response_code(403); exit('Diagnostics disabled after configuration.');
+}
 
 $requiredExtensions = ['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'ctype', 'json'];
 $recommendedExtensions = ['gd', 'intl', 'zip', 'bcmath'];

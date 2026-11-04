@@ -6,18 +6,15 @@
 
 ## 🟢 استقرار روی هاست cPanel (بدون SSH) — روش اصلی
 
-این پروژه یک **مسیر استقرار کامل روی cPanel** دارد که کاملاً بدون SSH، Composer و Node کار می‌کند:
+بسته استقرار شامل دو فایل مستقل `cpanel-public.zip` و `cpanel-private.zip` است. مسیر خصوصی در `private-path.php` قابل تنظیم است؛ برای مثال فایل‌های عمومی در `/home/USER/xx.example.com` و هسته خصوصی در `/home/USER/private_pro/project1/myc` قرار می‌گیرند.
 
-- **نصب جدید:** پکیج `cpanel-app.zip` را از [GitHub Releases](../../releases) دانلود کن، روی هاست استخراج کن و `install.php` را در مرورگر باز کن (نصب‌کننده تحت وب مثل وردپرس: اتصال دیتابیس + ساخت `.env` + مایگریشن‌ها + داده اولیه).
-- **به‌روزرسانی:** زیپ نسخه جدید را روی نسخه قبلی استخراج کن و `update.php` را با `APP_KEY` اجرا کن.
-- راهنمای کامل فارسی: [`deploy/cpanel/README.md`](deploy/cpanel/README.md)
+- ساخت بدون SSH روی هاست: از GitHub Actions → **cPanel package** → Run workflow و دانلود artifact استفاده کنید.
+- ساخت محلی: `bash deploy/cpanel/build.sh` (نیازمند PHP/Composer و Node 22.12+ روی ماشین ساخت).
+- نصب: ویزارد فارسی `install.php`، انتخاب اطلاعات مدیر اختصاصی و ایجاد قفل دائمی نصب.
+- آموزش کامل ساخت محلی روی ویندوز و آپلود مستقیم به هاست: [`WINDOWS-BUILD-GUIDE.fa.md`](deploy/cpanel/WINDOWS-BUILD-GUIDE.fa.md) — lock فعلی به PHP 8.4.1+ نیاز دارد.
+- راهنمای کامل و ارتقا: [`deploy/cpanel/README.md`](deploy/cpanel/README.md)
+- وضعیت بررسی و محدودیت‌های آزمون: [`deploy/cpanel/AUDIT.md`](deploy/cpanel/AUDIT.md)
 
-### ساخت پکیج (توسعه‌دهنده)
-با push کردن تگ نسخه، GitHub Actions خودش پکیج را می‌سازد و به Release پیوست می‌کند:
-```bash
-git tag v1.0.1 && git push origin v1.0.1
-```
-بیلد لوکال: `bash deploy/cpanel/build.sh` (خروجی: `cpanel-release/cpanel-app.zip`)
 
 ---
 
@@ -31,7 +28,7 @@ git tag v1.0.1 && git push origin v1.0.1
 | **مستندات تعاملی API (OpenAPI/Scramble)** | [http://localhost:3001/docs/api](http://localhost:3001/docs/api) یا [http://localhost:8000/docs/api](http://localhost:8000/docs/api) | مستندات کامل تمامی اندپوینت‌های بکند به همراه پارامترها و نمونه خروجی‌ها |
 | **بکند API (Laravel 11)** | [http://localhost:8000/api/v1](http://localhost:8000/api/v1) | هسته سرویس‌های RESTful با توکن Sanctum |
 
-### 🔐 اطلاعات ورود پیش‌فرض (مدیر ارشد سامانه)
+### 🔐 اطلاعات ورود محیط نمایشی (نه نصب cPanel)
 - **نام کاربری / ایمیل:** `admin@crm.local` (یا شماره موبایل: `09120000000`)
 - **رمز عبور:** `Admin@123456`
 - **نوع دسترسی:** دارای تمامی ۱۴ مجوز مستقیم سیستمی (Pure ACL بدون نقش واسط - قابل ورود هم به فرانت‌اند و هم به پنل ادمین Filament)
