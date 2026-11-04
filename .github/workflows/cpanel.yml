@@ -60,7 +60,15 @@ jobs:
           DB_PORT: 3306
           DB_USERNAME: root
           DB_PASSWORD: test_password
-        run: python3 -m unittest discover -s deploy/cpanel/tests -p test_installer_http.py -v
+        run: |
+          set +e
+          python3 -m unittest discover -s deploy/cpanel/tests -p test_installer_http.py -v > installer-http-tests.log 2>&1
+          status=$?
+          cat installer-http-tests.log
+          if [ "$status" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; s=Path("installer-http-tests.log").read_text()[-20000:]; print("::error title=Installer HTTP test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          fi
+          exit "$status"
       - uses: actions/upload-artifact@v4
         with:
           name: cpanel-package
