@@ -1,187 +1,125 @@
-# 🚀 راهنمای استقرار Industrial CRM روی هاست cPanel — بدون SSH
+# نصب cPanel با مسیر عمومی و خصوصی مستقل
 
-> کل فرآیند فقط با **File Manager** مرورگر انجام می‌شود؛ نه SSH لازم است، نه Composer، نه Node.
-> پکیج نصب شامل «نصب‌کننده تحت وب» است — درست مثل نصب وردپرس.
+این بسته برای **Apache/LiteSpeed با mod_rewrite و AllowOverride** و PHP **8.4.1 یا بالاتر سازگار** طراحی شده است. MySQL 8 / MariaDB سازگار با Laravel لازم است. روی هاست Node، Composer، SSH، Redis یا symlink لازم نیست؛ ساخت بسته باید روی رایانه توسعه‌دهنده یا GitHub Actions انجام شود.
 
----
+> **اصلاح پیش‌نیاز نسخه فعلی:** حداقل 8.2 مربوط به تعریف کلی پروژه است؛ `composer.lock` فعلی وابستگی‌هایی با نیاز **PHP >= 8.4.1** دارد. برای ساخت و اجرای همین lock از PHP 8.4 به‌روز روی ماشین ساخت و هاست استفاده کنید؛ `--ignore-platform-reqs` راه‌حل نیست.
 
-## 📦 پکیج شامل چیست؟
+## ساخت روی کامپیوتر ویندوزی
 
-`cpanel-app.zip` (ساخته‌شده توسط `deploy/cpanel/build.sh` یا GitHub Actions):
+آموزش کامل نصب ابزارها در WSL، ساخت محلی دو ZIP، انتقال به ویندوز و آپلود مستقیم به هاست: [راهنمای ویندوز](WINDOWS-BUILD-GUIDE.fa.md).
 
-| بخش | توضیح |
-|---|---|
-| برنامه Laravel 11 | با پوشه `vendor` کامل — بدون نیاز به composer روی هاست |
-| فرانت‌اند React | بیلدشده و قرارگرفته در `public/` (index.html + assets) |
-| `public/install.php` | 🔰 نصب‌کننده تحت وب: اتصال دیتابیس، ساخت `.env`، اجرای مایگریشن‌ها و داده اولیه |
-| `public/update.php` | 🔄 اجرای مایگریشن‌های جدید هنگام به‌روزرسانی نسخه قبلی |
-| `public/setup-check.php` | 🩺 بررسی سلامت محیط (بعد از نصب حذف شود) |
-| `.env.cpanel.example` | قالب تنظیمات (برای روش نصب دستی) |
-| `_cpanel-root-htaccess.txt` | برای وقتی که برنامه داخل `public_html` نصب می‌شود |
+## ۱. دریافت بسته
 
-`crm-database.sql` (کنار زیپ در Release) فقط برای **روش نصب دستی** لازم است — با نصب‌کننده وب دیگر نیازی به آن نیست.
+در GitHub بخش Actions، workflow به نام **cPanel package** را با Run workflow اجرا کنید. پس از موفقیت artifact به نام `cpanel-package` را دانلود کنید. این workflow با تگ `v*` نیز اجرا می‌شود؛ فایل‌ها artifact هستند، نه پیوست خودکار Release.
 
----
+یا روی ماشین دارای PHP و افزونه‌های موردنیاز، Composer، Node 22.12+، npm و zip:
 
-## ✅ پیش‌نیازهای هاست
-
-1. **PHP نسخه 8.2+** (تست‌شده روی 8.4) — از **MultiPHP Manager**
-2. **MySQL + phpMyAdmin** — تقریباً همه هاست‌های cPanel
-3. افزونه‌های PHP (از **Select PHP Version → Extensions**):
-   ضروری: `pdo_mysql` ، `mbstring` ، `openssl` ، `fileinfo` ، `curl` ، `tokenizer` ، `xml`
-   پیشنهادی: `gd` ، `intl` ، `zip`
-4. File Manager با قابلیت آپلود/Extract زیپ ~۲۰ مگابایتی
-
----
-
-## 🗺️ انتخاب محل نصب
-
-| | سناریو A (ترجیحی ⭐) | سناریو B |
-|---|---|---|
-| شرط | بتوانی **DocumentRoot** را عوض کنی (برای Subdomain / Addon Domain در بیشتر cPanelها ممکن است) | DocumentRoot قفل است روی `public_html` |
-| محل نصب | خارج از `public_html` مثل `/home/USER/crm-app` | مستقیماً داخل `public_html` |
-
-> 💡 ساده‌ترین راه برای سناریو A: یک **ساب‌دامنه** مثل `crm.yoursite.ir` بساز و DocumentRoot آن را مشخص کن.
-
----
-
-## 🟢 روش ۱ — نصب با نصب‌کننده وب (پیشنهادی)
-
-### گام ۱ — ساخت دیتابیس
-cPanel → **MySQL® Database Wizard** → نام دیتابیس و کاربر + رمز قوی بساز → **ALL PRIVILEGES**.
-*(فقط دیتابیس خالی لازم است — جدول‌ها را خود نصب‌کننده می‌سازد.)*
-
-### گام ۲ — آپلود و استخراج
-**سناریو A:** در File Manager یک پوشه `crm-app` بالای `public_html` بساز → `cpanel-app.zip` را آپلود و همان‌جا **Extract** کن → زیپ را حذف کن → در بخش Subdomains مقدار Document Root را روی `/home/USER/crm-app/public` بگذار.
-
-**سناریو B:** زیپ را داخل `public_html` آپلود و Extract کن → زیپ را حذف کن → محتوای `_cpanel-root-htaccess.txt` را جایگزین `public_html/.htaccess` کن.
-
-### گام ۳ — اجرای نصب‌کننده
-در مرورگر باز کن: `https://دامنه/install.php`
-
-1. جدول بررسی پیش‌نیازها را ببین (همه باید ✅ باشند)
-2. فرم را پر کن:
-   - **آدرس کامل سایت:** `https://crm.yoursite.ir`
-   - **host / پورت:** `127.0.0.1` و `3306`
-   - **نام دیتابیس / کاربر / رمز:** همان‌هایی که در گام ۱ ساختی (مثل `youruser_crmdb`)
-3. دکمه **«شروع نصب»** را بزن → مایگریشن‌ها و داده اولیه اجرا می‌شود
-4. `APP_KEY` یکتا تولید و `.env` ساخته می‌شود — و `install.php` خودش را حذف می‌کند ✅
-
-### گام ۴ — اولین ورود
-- آدرس سایت → ورود با `admin@crm.local` / `Admin@123456`
-- تست کن: داشبورد، مشتریان (جستجوی «سارا»)، قطعات، پیامک، `/admin` (پنل Filament)، `/docs/api`
-
-> ⚠️ **فوراً رمز ادمین را عوض کن** (پروفایل من → تغییر کلمه عبور).
-
----
-
-## 🔵 روش ۲ — نصب دستی (بدون نصب‌کننده)
-
-1. دیتابیس بساز (مثل گام ۱ بالا)
-2. **phpMyAdmin** → دیتابیس را انتخاب → تب Import → فایل `crm-database.sql` → Go (باید ۲۲ جدول ساخته شود)
-3. زیپ را طبق سناریو A یا B استخراج کن
-4. در File Manager (با **Show Hidden Files**) فایل `.env.cpanel.example` را به `.env` تغییر نام بده و **Edit** کن:
-   ```env
-   APP_URL=https://crm.yoursite.ir
-   DB_DATABASE=youruser_crmdb
-   DB_USERNAME=youruser_crmuser
-   DB_PASSWORD=رمز-دیتابیس
-   ```
-5. `https://دامنه/setup-check.php` را باز کن — همه باید سبز باشد (بعدش حذفش کن)
-
----
-
-## 🔁 به‌روزرسانی نسخه نصب‌شده (خیلی مهم)
-
-وقتی نسخه جدیدی از برنامه آمد (Release جدید در گیت‌هاب):
-
-1. **بکاپ بگیر:** phpMyAdmin → Export + یک کپی از `.env` و پوشه `public/storage`
-2. زیپ جدید را **روی نسخه قبلی** استخراج کن (Extract در همان محل نصب) — فایل‌ها جایگزین می‌شوند
-   - ⚠️ نگران `.env` نباش: در زیپ دیتابیس-محور نیست و رونویسی نمی‌شود
-   - ⚠️ فایل‌های آپلودشده (`public/storage`) و سوابق (`storage`) با extract از بین نمی‌روند
-3. مقدار `APP_KEY` را از فایل `.env` کپی کن و این آدرس را باز کن:
-   ```
-   https://دامنه/update.php?key=APP_KEY
-   ```
-4. وضعیت مایگریشن‌ها را می‌بینی → دکمه **اجرای مایگریشن‌ها** را بزن
-5. تمام — `update.php` بعد از اجرا خودش را حذف می‌کند
-
-> اگر نسخه جدید **فقط تغییر فرانت/ظاهر** داشته باشد و مایگریشن جدیدی نباشد، مرحله ۳-۴ لازم نیست؛ کافی است استخراج کنی و `Ctrl+F5` بزنی.
-
----
-
-## 🔐 چک‌لیست امنیتی بعد از نصب
-
-- [ ] رمز `admin@crm.local` تغییر کرد
-- [ ] `install.php` حذف شد (نصب‌کننده خودکار حذفش می‌کند — مطمئن شو)
-- [ ] `setup-check.php` از پوشه `public` حذف شد
-- [ ] `update.php` حذف شد (بعد از هر استفاده)
-- [ ] SSL رایگان فعال شد: cPanel → **SSL/TLS Status** → **Run AutoSSL**
-- [ ] `APP_URL` دقیقاً همان دامنه‌ای است که باز می‌کنی (www و بدون www یکی نیستند)
-- [ ] بکاپ اولیه دیتابیس گرفته شد
-
----
-
-## 🩹 عیب‌یابی رایج
-
-| مشکل | علت | راه‌حل |
-|---|---|---|
-| نصب‌کننده: «اتصال ناموفق» | اطلاعات دیتابیس غلط / دیتابیس نساختی | مقادیر را با MySQL Databases در cPanel مقایسه کن (پیشوند حساب فراموش نشود: `youruser_...`) |
-| نصب‌کننده: خطای مایگریشن | جدول تکراری از ایمپورت قبلی | جداول را از phpMyAdmin حذف و دوباره تلاش کن |
-| صفحه 500 | خطای برنامه | `storage/logs/laravel.log` را از File Manager بخوان |
-| «could not find driver» | `pdo_mysql` خاموش | Select PHP Version → Extensions |
-| صفحه سفید | PHP < 8.2 | MultiPHP Manager → 8.2+ |
-| بعد از لاگین بیرون می‌اندازد | `APP_URL` ناهماهنگ با دامنه باز‌شده | `.env` را اصلاح کن |
-| آپلود آواتار/اکسل خطا | محدودیت PHP | MultiPHP INI Editor → `upload_max_filesize=12M` و `post_max_size=12M` |
-| deep-link 404 (مثل /customers) | htaccess قدیمی | `deploy/cpanel/htaccess/public.htaccess` را در `public/.htaccess` بگذار |
-| خطای 419/session | storage غیرقابل‌نوشتن | پوشه `storage` و `bootstrap/cache` → 775 |
-| پیامک واقعی ارسال نمی‌شود | حالت Sandbox روشن | برنامه → تنظیمات → ملی‌پیامک → اطلاعات را وارد کن و Sandbox را خاموش کن |
-
----
-
-## 🛠️ ساخت پکیج (توسعه‌دهنده)
-
-### روش ۱ — خودکار با GitHub Actions (پیشنهادی)
-هر بار تگ نسخه push کنی، پکیج ساخته و به Release پیوست می‌شود:
-```bash
-git add -A
-git commit -m "your changes"
-git push
-git tag v1.0.1
-git push origin v1.0.1
-# → در صفحه GitHub → Releases فایل cpanel-app.zip و crm-database.sql ظاهر می‌شود
-```
-اجرای دستی هم از تب **Actions → Build cPanel Package → Run workflow** ممکن است.
-
-### روش ۲ — لوکال (Linux / macOS / WSL)
 ```bash
 bash deploy/cpanel/build.sh
-# خروجی: cpanel-release/cpanel-app.zip
 ```
-پیش‌نیاز: PHP 8.2+ و Composer و Node 18+ و `zip`.
 
-### ساخت `crm-database.sql` لوکال (فقط برای روش نصب دستی)
+خروجی‌ها در `cpanel-release/`:
+- `cpanel-public.zip`: فقط فایل‌های قابل انتشار در وب
+- `cpanel-private.zip`: Laravel، vendor، تنظیمات، دیتابیس و فایل‌های خصوصی
+
+ساخت جدید در پوشه موقت و مستقل انجام می‌شود و `.env`، vendor و node_modules سورس را تغییر نمی‌دهد. اطلاعات runtime و آپلودها کپی نمی‌شوند. قبل از ساخت، ابزارها، PHP 8.4.1+ و Node سازگار بررسی می‌شوند؛ در خطا خروجی ناقص جایگزین نسخه قبلی نمی‌شود.
+
+کنترل خروجی:
 ```bash
-cd backend
-cp .env.example .env   # سپس DB_* را روی MySQL محلی تنظیم کن
-php artisan key:generate
-php artisan migrate:fresh --seed
-mysqldump --add-drop-table -u USER -p DBNAME > ../cpanel-release/crm-database.sql
+bash deploy/cpanel/verify-package.sh cpanel-release
+(cd cpanel-release && sha256sum -c SHA256SUMS)
 ```
 
----
-
-## 📁 نقشه فایل‌های استقرار (داخل ریپو)
-
+آزمون بسته‌بندی بدون شبکه (با ابزارهای شبیه‌سازی‌شده):
+```bash
+python3 -m unittest discover -s deploy/cpanel/tests -v
 ```
-deploy/cpanel/
-├── README.md               ← همین راهنما
-├── build.sh                ← اسکریپت ساخت پکیج (لوکال + GitHub Actions)
-├── install.php             ← نصب‌کننده تحت وب (به public کپی می‌شود)
-├── update.php              ← اجرای مایگریشن هنگام آپدیت (به public کپی می‌شود)
-├── setup-check.php         ← بررسی سلامت محیط (به public کپی می‌شود)
-├── env.cpanel.example      ← قالب .env production (APP_KEY موقع بیلد ساخته می‌شود)
-└── htaccess/
-    ├── public.htaccess     ← مسیریابی SPA + API داخل public/
-    └── root.htaccess       ← هدایت همه به public/ (نصب داخل public_html)
+
+آزمون واقعی Laravel روی بسته استخراج‌شده و SQLite موقت (نیازمند pdo_sqlite):
+```bash
+bash deploy/cpanel/tests/smoke-package.sh cpanel-release
 ```
+
+`build-info.txt` نسخه ابزارها و hash فایل‌های lock را ثبت می‌کند. مسیر خروجی دلخواه، حتی نسبی و دارای فاصله:
+```bash
+CPANEL_OUT_DIR="./my output/packages" bash deploy/cpanel/build.sh
+```
+
+## ۲. مسیرها و استخراج
+
+مثال برای نام کاربری cPanel برابر `alice`:
+
+```text
+/home/alice/xx.example.com/              ← محتویات cpanel-public.zip
+    index.php, index.html, assets/, .htaccess,
+    private-path.php, resolve-private.php, install.php, storage/ ...
+/home/alice/private_pro/project1/myc/     ← محتویات cpanel-private.zip
+    app/, bootstrap/, config/, database/, routes/, storage/, vendor/ ...
+```
+
+در cPanel → Domains، Document Root دامنه `xx.example.com` را روی `/home/alice/xx.example.com` بگذارید. پوشه خصوصی نباید Document Root هیچ دامنه‌ای یا زیرمجموعه پوشه عمومی باشد. `.htaccess` خصوصی نیز دسترسی وب را مسدود می‌کند، اما جای جداسازی واقعی مسیر را نمی‌گیرد.
+
+در فایل عمومی `private-path.php`، **مسیر مطلق واقعی سرور** را بنویسید:
+
+```php
+<?php
+return '/home/alice/private_pro/project1/myc';
+```
+
+مسیر `/private_pro/project1/myc` معمولاً منظور مسیر داخل home حساب است، نه ریشه سیستم‌عامل؛ مسیر واقعی را در File Manager بررسی کنید. مسیر خصوصی از ورودی درخواست وب خوانده نمی‌شود. برای جابه‌جایی بعدی همین فایل و مقدار `APP_PUBLIC_PATH` در `.env` را اصلاح کنید؛ کش config قبلی را حذف کنید.
+
+فایل‌های مخفی را با Show Hidden Files نمایش دهید. پوشه‌ها معمولاً 755 و فایل‌ها 644؛ `storage/` و `bootstrap/cache/` خصوصی و `storage/` عمومی باید توسط PHP قابل نوشتن باشند. هرگز 777 ندهید. محدودیت `open_basedir` هاست باید هر دو مسیر را مجاز کند.
+
+## ۳. ویزارد نصب
+
+1. پیش از انتشار، SSL/AutoSSL را فعال کنید و از **Directory Privacy** یا محدودیت IP موقت برای حفاظت پوشه نصب استفاده کنید؛ نصب‌کننده عمومیِ راه‌اندازی‌نشده نباید در اختیار دیگران باشد.
+2. در MySQL Database Wizard دیتابیس **خالی** و کاربر با ALL PRIVILEGES بسازید. نام‌ها معمولاً پیشوند نام حساب دارند.
+3. در Select PHP Version افزونه‌های نمایش‌داده‌شده در ویزارد (از جمله pdo_mysql، mbstring، intl، gd، zip، XML و curl) را فعال کنید.
+4. `https://xx.example.com/install.php` را باز کنید. پیش‌نیازها و مسیرها را بررسی کنید، آدرس ریشه دامنه، اتصال دیتابیس و ایمیل، موبایل و رمز اختصاصی مدیر (حداقل ۱۲ کاراکتر) را بدهید.
+5. ویزارد `.env` و کلید اختصاصی، جداول و مدیر را می‌سازد. داده نمایشی وارد نمی‌شود. برای این روش رمز عمومی `Admin@123456` قابل استفاده نیست.
+6. پس از موفقیت، قفل دائمی `storage/installed.lock` در مسیر خصوصی ساخته می‌شود؛ نصب‌کننده حتی اگر دوباره آپلود شود اجرا نمی‌شود. `install.php` و `setup-check.php` را از پوشه عمومی حذف کنید و `update.php` را نیز تا زمان نیاز حذف کنید.
+
+مسیر public در اجرای وب و CLI یکسان تنظیم می‌شود؛ آپلود عمومی مستقیم به `xx.example.com/storage` می‌رود و نیازی به `storage:link` نیست. **فایل‌های حساس را روی دیسک public ذخیره نکنید**؛ دیسک local در storage/app/private خصوصی باقی می‌ماند.
+
+نصب از ریشه دامنه/ساب‌دامنه پشتیبانی می‌شود؛ نصب زیر URL مثل `/crm` در این نسخه پشتیبانی نمی‌شود.
+
+## خطای ۵۰۰ بعد از ارسال فرم نصب
+
+در نسخه اصلاح‌شده، بارگذاری vendor، bootstrap، مایگریشن و ساخت مدیر همگی زیر مدیریت خطا هستند؛ خطای fatal وابستگی‌ها نیز تا حد امکان گزارش می‌شود. در خطا، مرحله و کد پیگیری روی صفحه و جزئیات بدون رمزهای فرم در `storage/logs/installer.log` **خصوصی** ثبت می‌شود. اگر لاگ قابل نوشتن نبود، Errors در cPanel را ببینید. APP_DEBUG را روشن نکنید.
+
+برای نصب نیمه‌کاره، ابتدا از `.env` و دیتابیس بکاپ بگیرید، سپس `install.php` جدید را در پوشه عمومی جایگزین کنید و صفحه را مجدداً باز کنید. اگر بسته‌های مسیر مستقل این پروژه را دارید، برای دریافت پیام خطا نیازی به جایگزینی کل هسته نیست. در بسته جدید `resolve-private.php` نیز بدون وابستگی به تابع putenv کار می‌کند؛ هنگام جایگزینی آن، `private-path.php` واقعی خود را حفظ کنید.
+
+دیتابیس، جدول‌ها، APP_KEY و قفل نصب موفق را حذف نکنید. روی هاست PHP حداقل 8.4.1 و vendor کامل لازم است. اگر باز هم فقط ۵۰۰ عمومی نمایش داده شد، لاگ همان زمان را از cPanel بررسی کنید؛ خطای وب‌سرور، ModSecurity یا توقف اجباری PHP ممکن است قبل از رسیدن به کد نصب رخ دهد.
+
+### خطای Monolog و PsrExt روی هاست
+
+اگر خطا شامل `Monolog\Logger::emergency` و `PsrExt\Log\LoggerInterface` است، افزونه بومی `psr` روی PHP هاست رابط لاگ‌گیری قدیمی را قبل از Composer بارگذاری کرده و با Monolog پروژه تداخل دارد. این مشکل دیتابیس یا مسیر خصوصی نیست.
+
+1. در cPanel → Select PHP Version → Extensions، افزونه **psr** را برای PHP همین دامنه غیرفعال و تغییرات را ذخیره کنید.
+2. اگر گزینه وجود ندارد یا PHP تحت MultiPHP/EasyApache مدیریت می‌شود، از پشتیبانی بخواهید افزونه `psr/PsrExt` را برای PHP handler/pool دامنه غیرفعال و پردازش‌های LiteSpeed/LSAPI یا PHP-FPM مربوط را reload/restart کند. روی هاست مشترک این تغییر را سراسری برای حساب‌های دیگر انجام ندهید.
+3. نسخه واقعی PHP وب دامنه باید حداقل 8.4.1 باشد. برچسبی مثل `php74` در نام handler لاگ به تنهایی نسخه PHP فعال را ثابت نمی‌کند؛ نسخه گزارش‌شده توسط ویزارد را ملاک بگیرید.
+4. صفحه نصب را دوباره باز کنید. نصب‌کننده جدید پیش از vendor این تداخل را بررسی و ارسال فرم را مسدود می‌کند.
+
+**پکیج Composer به نام `psr/log` را حذف نکنید** و امضای متدهای Monolog یا فایل‌های vendor را تغییر ندهید. `psr/log` با افزونه بومی `psr` فرق دارد و برای برنامه لازم است. غیرفعال‌سازی افزونه بارگذاری‌شده با `ini_set` یا افزودن `extension=` خالی در `.user.ini` انجام نمی‌شود. نصب دوباره دیتابیس یا ساخت مجدد ZIP هم افزونه سرور را غیرفعال نمی‌کند.
+
+متن پیشنهادی تیکت:
+
+> در دامنه موردنظر، PHP افزونه psr/PsrExt را با امضای قدیمی LoggerInterface بارگذاری می‌کند و Monolog 3 با خطای Declaration of Monolog\Logger::emergency(Stringable|string ...) must be compatible with PsrExt\Log\LoggerInterface::emergency($message, ...) متوقف می‌شود. لطفاً افزونه psr را برای handler/pool این دامنه غیرفعال کنید، PHP وب را روی 8.4.1 یا بالاتر سازگار قرار دهید و workerهای مربوط را reload کنید. پکیج Composer psr/log باید باقی بماند.
+
+## ۴. آزمون پس از نصب
+
+- `/login` و refresh مستقیم `/customers` باید SPA را برگردانند.
+- `/up` باید پاسخ سلامت Laravel باشد، نه HTML فرانت‌اند.
+- ورود با مدیر انتخاب‌شده، خروج، ثبت مشتری و قطعه، تخصیص، تاریخچه، اکسل و آپلود لوگو/آواتار را امتحان کنید.
+- `/admin` و فایل‌های Filament باید بارگذاری شوند.
+- `/.env` و `/private-path.php` و `/resolve-private.php` نباید اطلاعات بدهند.
+- بارگذاری PHP در `/storage` باید مسدود باشد.
+- پیامک ابتدا در حالت Sandbox است؛ **قبل از استفاده واقعی از ورود پیامکی Sandbox را خاموش کنید** و ارسال/خطای سرویس را با حساب واقعی آزمایش کنید.
+
+## ۵. ارتقا
+
+از دیتابیس، `.env`، `storage/` خصوصی، `storage/` عمومی و `private-path.php` بکاپ بگیرید. هنگام جایگزینی فایل‌های نسخه جدید این موارد و قفل نصب را حفظ کنید؛ فایل `private-path.php` بسته جدید را روی تنظیم واقعی سرور overwrite نکنید. فایل‌های cache قبلی `bootstrap/cache/config.php`، `events.php` و `routes*.php` را قبل از اجرا حذف کنید. `update.php` را موقتاً آپلود، با HTTPS باز و APP_KEY را **فقط داخل فرم POST** وارد کنید، نه URL. پس از ارتقا آن را حذف کنید. ارتقا rollback خودکار ندارد و نباید `migrate:fresh` یا seed نمایشی اجرا شود.
+
+## محدودیت تأیید
+
+بیلد فرانت‌اند جای آزمون هاست واقعی نیست. workflow شامل بررسی syntax PHP، ساخت بسته و اجرای مایگریشن MySQL دوبار است؛ آزمون کامل مرورگری و سرویس ملی‌پیامک روی هاست مقصد همچنان لازم است. گزارش بررسی در `deploy/cpanel/AUDIT.md` است.

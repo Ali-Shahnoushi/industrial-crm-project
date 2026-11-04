@@ -6,7 +6,7 @@
  *  این فایل توسط build به داخل public/ اضافه می‌شود.
  *
  *  استفاده: بعد از جایگزینی فایل‌های برنامه با نسخه جدید، این آدرس را باز کن:
- *     https://دامنه/update.php?key=مقدار-APP_KEY-از-فایل-env
+ *     https://دامنه/update.php (POST form only)
  *
  *  امنیت: فقط با داشتن APP_KEY (که فقط در فایل .env سرور توست) اجرا می‌شود.
  *  بعد از اجرای موفق، خودش را حذف می‌کند.
@@ -16,8 +16,10 @@ declare(strict_types=1);
 
 header('Content-Type: text/html; charset=utf-8');
 header('X-Robots-Tag: noindex');
+header('Cache-Control: no-store');
+header('Referrer-Policy: no-referrer');
 
-$baseDir = dirname(__DIR__);
+$baseDir = require __DIR__ . '/resolve-private.php';
 $envPath = $baseDir . '/.env';
 
 function e(string $s): string { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); }
@@ -68,12 +70,11 @@ if ($appKey === '' || $appKey === 'base64:') {
 }
 
 /* ─── اعتبارسنجی کلید (APP_KEY از فایل .env) ─── */
-$provided = isset($_REQUEST['key']) ? str_replace(' ', '+', trim((string) $_REQUEST['key'])) : '';
+$provided = isset($_POST['key']) ? trim((string) $_POST['key']) : '';
 
 if ($provided === '' ) {
-    echo page('کلید لازم است',
-        '<div class="note">برای اجرا، مقدار <b>APP_KEY</b> را از فایل <code>.env</code> (قابل مشاهده از File Manager با Show Hidden Files) کپی کن و به انتهای آدرس اضافه کن:<br><br>'
-        . '<code>https://دامنه/update.php?key=APP_KEY</code></div>');
+    echo page('کلید لازم است', '<div class="note">ابتدا از دیتابیس بکاپ بگیرید. کلید APP_KEY را فقط در فرم زیر وارد کنید، نه در URL.</div>'
+        . '<form method="post"><input type="password" name="key" required autocomplete="off"><button>اجرای مایگریشن‌ها</button></form>');
     exit;
 }
 if (!hash_equals($appKey, $provided)) {
@@ -97,7 +98,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 /* ─── POST: اجرای migrate ─── */
 try {
-    Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]);
+    if (Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]) !== 0) {
+        throw new RuntimeException(Illuminate\Support\Facades\Artisan::output());
+    }
     $out = Illuminate\Support\Facades\Artisan::output();
 } catch (Throwable $e) {
     echo page('خطا', '❌ اجرای مایگریشن خطا داد:<pre>' . e($e->getMessage()) . '</pre>');

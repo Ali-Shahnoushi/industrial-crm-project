@@ -51,7 +51,7 @@ class AuthController extends Controller
         }
 
         // Generate 5-digit OTP
-        $otpCode = strval(rand(10000, 99999));
+        $otpCode = strval(random_int(10000, 99999));
         \Illuminate\Support\Facades\Cache::put('otp_' . $phone, $otpCode, now()->addMinutes(2));
         \Illuminate\Support\Facades\Cache::put($cooldownKey, true, now()->addSeconds(60));
 

@@ -1,3 +1,11 @@
+Options -Indexes
+<FilesMatch "^(private-path|resolve-private)\.php$|^\.">
+    Require all denied
+</FilesMatch>
+# Never execute uploaded scripts, including double extensions.
+RewriteEngine On
+RewriteRule ^storage/.*\.(php[0-9]*|phtml|phar)(\.|/|$) - [F,L,NC]
+
 DirectoryIndex index.html index.php
 
 <IfModule mod_rewrite.c>
@@ -25,7 +33,7 @@ DirectoryIndex index.html index.php
     # public_html and a root .htaccess rewrites requests into public/.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} !^/?(public/)?(api|admin|docs|livewire|storage|css|fonts|js)(/|$) [NC]
+    RewriteCond %{REQUEST_URI} !^/?(public/)?(api|admin|docs|livewire|storage|css|fonts|js|up)(/|$) [NC]
     RewriteRule ^ index.html [L]
 
     # Send Requests To Front Controller...

@@ -11,9 +11,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     // Public Auth & Utility endpoints
-    Route::post('/auth/login', [AuthController::class, 'login'])->name('login');
-    Route::post('/auth/otp/send', [AuthController::class, 'sendOtp']);
-    Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp']);
+    Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:10,1')->name('login');
+    Route::post('/auth/otp/send', [AuthController::class, 'sendOtp'])->middleware('throttle:5,1');
+    Route::post('/auth/otp/verify', [AuthController::class, 'verifyOtp'])->middleware('throttle:10,1');
     Route::get('/customers/template', [CustomerController::class, 'template']);
     Route::get('/settings/company', [SettingController::class, 'getCompanySettings']);
 

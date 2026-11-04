@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>راهنمای ساخت بسته cPanel روی ویندوز</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#172033;font:16px/2 Tahoma,Arial,sans-serif}main{max-width:1000px;margin:32px auto;padding:32px 40px;background:white;border-radius:16px;box-shadow:0 4px 30px #1720330c}h1,h2,h3{line-height:1.7;color:#12366b}h2{border-bottom:1px solid #dbe3ed;padding-bottom:12px;margin-top:38px}a{color:#175bb5;overflow-wrap:anywhere}pre{direction:ltr;text-align:left;background:#101b30;color:#e2e8f0;border-radius:10px;padding:18px;overflow:auto;font:14px/1.8 Consolas,monospace}code{font-family:Consolas,monospace;direction:ltr;unicode-bidi:isolate}p code,li code,td code{background:#eef2f7;padding:2px 5px;border-radius:4px}blockquote{margin:20px 0;padding:12px 20px;background:#fff7df;border-right:4px solid #e2a52a}table{border-collapse:collapse;width:100%;display:block;overflow:auto}th,td{border:1px solid #dbe3ed;padding:10px 14px;text-align:right}th{background:#edf3fc}hr{border:0;border-top:1px solid #dbe3ed;margin:32px 0}.toolbar{background:#eaf3ff;padding:12px 18px;border-radius:10px}button{background:#175bb5;color:white;border:0;border-radius:6px;padding:9px 18px;font:inherit;cursor:pointer}@media(max-width:650px){main{margin:0;padding:20px;border-radius:0}body{font-size:14px}}@media print{body{background:white}main{margin:0;max-width:none;padding:0;box-shadow:none}.toolbar{display:none}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f5f5f5;color:black}h2,h3{break-after:avoid}a{color:inherit}}
+</style></head><body><main><div class="toolbar">نسخه آفلاین — تمام مراحل ساخت روی کامپیوتر شما انجام می‌شود. <button onclick="window.print()">چاپ / ذخیره PDF</button></div><h1 id="cpanel">راهنمای کامل ساخت بسته نصب cPanel روی کامپیوتر ویندوزی</h1>
+<p>این راهنما برای همین پروژه نوشته شده است. تمام مراحل دانلود وابستگی‌ها، ساخت React و تولید ZIP روی <strong>کامپیوتر خودتان</strong> انجام می‌شود؛ روی هاست فقط فایل‌ها را استخراج و ویزارد نصب را اجرا می‌کنید. نیازی به GitHub Actions، Node، Composer یا SSH روی هاست ندارید.</p>
+<blockquote>
+<p><strong>نکته بسیار مهم درباره نسخه PHP:</strong> با وجود اینکه <code>composer.json</code> حداقل PHP 8.2 را اعلام می‌کند، فایل فعلی <code>backend/composer.lock</code> شامل وابستگی‌هایی مثل <code>symfony/string</code> و <code>symfony/translation</code> با نیاز <strong>PHP &gt;= 8.4.1</strong> است. بنابراین برای ساخت <strong>همین نسخه قفل‌شده</strong> و اجرای آن روی هاست، PHP <strong>8.4.1 یا جدیدتر سازگار</strong> لازم است. پیشنهاد این راهنما PHP 8.4 به‌روز است. اگر هاست فقط 8.2 یا 8.3 دارد، این بسته را روی آن نصب نکنید؛ باید وابستگی‌ها جداگانه برای نسخه هدف بازحل، قفل و آزمون شوند. از <code>--ignore-platform-reqs</code> استفاده نکنید.</p>
+</blockquote>
+<hr />
+<h2 id="_1">۱. روش پیشنهادی و خروجی نهایی</h2>
+<p>از <strong>WSL 2 + Ubuntu 24.04</strong> استفاده می‌کنیم. WSL محیط لینوکس داخل ویندوز است، نه سرور خارجی. مزیت آن این است که اسکریپت موجود <code>build.sh</code> بدون تبدیل به PowerShell اجرا می‌شود و محیط ساخت به هاست لینوکسی نزدیک است.</p>
+<p>خروجی:</p>
+<pre><code class="language-text">cpanel-release/
+├── cpanel-public.zip
+├── cpanel-private.zip
+├── SHA256SUMS
+└── build-info.txt
+</code></pre>
+<ul>
+<li><code>cpanel-public.zip</code>: فایل‌های عمومی، React ساخته‌شده، assets، ورودی PHP، ویزارد و قواعد Apache.</li>
+<li><code>cpanel-private.zip</code>: هسته Laravel، vendor و فایل‌های خصوصی برنامه؛ بدون <code>.env</code> فعال.</li>
+</ul>
+<p><strong>نباید ZIP سورس کل پروژه، پوشه frontend یا node_modules را به جای این دو فایل روی هاست آپلود کنید.</strong></p>
+<h3 id="_2">پیش‌نیازها</h3>
+<ul>
+<li>Windows 11 یا Windows 10 به‌روز و سازگار با WSL 2.</li>
+<li>دسترسی Administrator فقط برای فعال‌سازی WSL.</li>
+<li>اینترنت برای دریافت بسته‌های Ubuntu، PHP، Composer و npm.</li>
+<li>چند گیگابایت فضای آزاد؛ پیشنهاد حداقل ۱۰ گیگابایت برای محیط و وابستگی‌ها.</li>
+<li>هاست Linux cPanel با PHP 8.4.1+، MySQL سازگار و Apache/LiteSpeed با rewrite.</li>
+</ul>
+<h3 id="_3">کدام ترمینال؟</h3>
+<table>
+<thead>
+<tr>
+<th>عنوان کنار دستور</th>
+<th>محل اجرا</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PowerShell مدیر</td>
+<td>ویندوز، Run as administrator</td>
+</tr>
+<tr>
+<td>Ubuntu / WSL</td>
+<td>برنامه Ubuntu از منوی Start</td>
+</tr>
+<tr>
+<td>cPanel</td>
+<td>مرورگر، File Manager و تنظیمات هاست</td>
+</tr>
+</tbody>
+</table>
+<p><strong>دستورهای <code>sudo</code>، <code>bash</code>، <code>composer</code> و <code>npm</code> این راهنما را در Ubuntu اجرا کنید، نه PowerShell ویندوز یا Git Bash.</strong> نصب XAMPP یا PHP ویندوز برای این روش لازم نیست.</p>
+<hr />
+<h2 id="wsl-ubuntu">۲. نصب WSL و Ubuntu؛ فقط بار اول</h2>
+<p>در Start عبارت PowerShell را جست‌وجو و <strong>Run as administrator</strong> را انتخاب کنید:</p>
+<pre><code class="language-powershell">wsl --install -d Ubuntu-24.04
+</code></pre>
+<p>اگر نصب نیاز به Restart داشت، ویندوز را Restart کنید. سپس Ubuntu 24.04 را از Start باز کنید و نام کاربری و رمز لینوکسی دلخواه بسازید. هنگام وارد کردن رمز در Ubuntu چیزی نمایش داده نمی‌شود؛ طبیعی است.</p>
+<p>برای کنترل وضعیت، در PowerShell:</p>
+<pre><code class="language-powershell">wsl --list --verbose
+</code></pre>
+<p>باید Ubuntu-24.04 با نسخه 2 دیده شود. در صورت نیاز:</p>
+<pre><code class="language-powershell">wsl --set-version Ubuntu-24.04 2
+wsl --update
+</code></pre>
+<p>اگر خطای virtualization یا WSL 2 دارید، فعال بودن Virtualization در BIOS/UEFI و قابلیت‌های Virtual Machine Platform و Windows Subsystem for Linux را بررسی کنید. راهنمای رسمی: https://learn.microsoft.com/windows/wsl/install</p>
+<hr />
+<h2 id="php-ubuntu">۳. نصب ابزارهای پایه و PHP؛ داخل Ubuntu</h2>
+<p>تمام دستورهای این بخش را در Ubuntu اجرا کنید:</p>
+<pre><code class="language-bash">sudo apt update
+sudo apt install -y ca-certificates curl git unzip zip software-properties-common
+</code></pre>
+<p>Ubuntu 24.04 به صورت پیش‌فرض PHP 8.3 دارد؛ برای lock فعلی کافی نیست. در این روش از مخزن شناخته‌شده <strong>Ondřej PHP PPA</strong> استفاده می‌کنیم. این مخزن شخص ثالث است؛ افزودن آن یعنی اعتماد به نگه‌دارنده مخزن. اگر سازمان شما اجازه نمی‌دهد، PHP سازگار را با روش تأییدشده سازمان نصب کنید و از ادامه با PHP 8.3 خودداری کنید.</p>
+<pre><code class="language-bash">sudo add-apt-repository ppa:ondrej/php -y
+sudo apt update
+sudo apt install -y php8.4-cli php8.4-common php8.4-curl php8.4-mbstring php8.4-xml php8.4-zip php8.4-gd php8.4-intl php8.4-bcmath php8.4-mysql php8.4-sqlite3 composer
+sudo update-alternatives --set php /usr/bin/php8.4
+</code></pre>
+<p>کنترل نسخه‌ها:</p>
+<pre><code class="language-bash">php -v
+php --ini
+composer --version
+php -m
+</code></pre>
+<p>نسخه PHP باید 8.4.1 یا بالاترِ سری 8.4 باشد. افزونه‌های مهم شامل <code>pdo_mysql</code>، <code>curl</code>، <code>mbstring</code>، <code>dom</code>، <code>xml</code>، <code>xmlreader</code>، <code>xmlwriter</code>، <code>SimpleXML</code>، <code>zip</code>، <code>gd</code>، <code>intl</code>، <code>fileinfo</code> و <code>openssl</code> هستند. افزونه‌های پایه ممکن است از بسته common یا خود PHP تأمین شوند.</p>
+<p>برای کارهای ساخت نیازی به نصب سرویس MySQL محلی نیست؛ نصب دیتابیس واقعی بعداً روی cPanel انجام می‌شود. تست عملی قابلیت‌های دیتابیس، جدا از ساخت ZIP است.</p>
+<hr />
+<h2 id="nodejs-npm-ubuntu">۴. نصب Node.js و npm؛ داخل Ubuntu</h2>
+<p>برای ساخت از <strong>Node 22 به‌روز (حداقل 22.12)</strong> استفاده کنید. Node 18 یا 20 قدیمی مناسب Vite فعلی نیست.</p>
+<p>یکی از روش‌ها استفاده از nvm است. دستور زیر اسکریپت نصب nvm را از مخزن رسمی دریافت و اجرا می‌کند؛ فقط در صورت اعتماد به این منبع اجرا کنید. می‌توانید ابتدا آن را دانلود و بررسی کنید. راهنمای رسمی nvm: https://github.com/nvm-sh/nvm</p>
+<pre><code class="language-bash">curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh -o /tmp/install-nvm.sh
+less /tmp/install-nvm.sh
+</code></pre>
+<p>برای خروج از نمایش <code>less</code> کلید <code>q</code> را بزنید. سپس:</p>
+<pre><code class="language-bash">bash /tmp/install-nvm.sh
+export NVM_DIR=&quot;$HOME/.nvm&quot;
+[ -s &quot;$NVM_DIR/nvm.sh&quot; ] &amp;&amp; . &quot;$NVM_DIR/nvm.sh&quot;
+nvm install 22
+nvm use 22
+nvm alias default 22
+node -v
+npm -v
+</code></pre>
+<p>اگر <code>nvm</code> بعداً پیدا نشد، Ubuntu را ببندید و دوباره باز کنید، یا دو خط بارگذاری <code>NVM_DIR</code> و <code>nvm.sh</code> بالا را اجرا کنید.</p>
+<blockquote>
+<p>PHP، Composer و Node این محیط مستقل از نسخه‌های نصب‌شده در ویندوز هستند. برای جلوگیری از اختلاط مسیرها خروجی <code>which php composer node npm</code> باید به مسیرهای لینوکسی اشاره کند، نه فایل‌های ویندوزی زیر <code>/mnt/c/</code>.</p>
+</blockquote>
+<hr />
+<h2 id="_4">۵. قرار دادن پروژه در محیط ساخت</h2>
+<p><strong>پیشنهاد جدی: یک کپی تمیز و مخصوص build داشته باشید</strong>، نه نسخه‌ای که روی آن اطلاعات واقعی مشتری، آپلود شخصی یا تنظیمات محیط عملیاتی دارید. نسخه جدید اسکریپت در پوشه موقت و مستقل کار می‌کند؛ vendor، node_modules، dist و .env سورس شما را تغییر نمی‌دهد. اطلاعات runtime و آپلودهای محلی را کپی نمی‌کند. با این حال سورس مخصوص build را تمیز نگه دارید.</p>
+<h3 id="git">روش الف: دریافت از Git</h3>
+<p>داخل Ubuntu:</p>
+<pre><code class="language-bash">mkdir -p ~/projects
+cd ~/projects
+git clone https://github.com/diswebir/industrial-crm-project.git
+cd industrial-crm-project
+</code></pre>
+<p><strong>مهم:</strong> باید نسخه‌ای را دریافت کنید که فایل‌های ساخت جدید این راهنما در آن وجود دارند. کلون شاخه پیش‌فرضی که هنوز تغییرات به آن منتقل نشده کافی نیست. اگر تغییرات فعلاً فقط در فایل‌های محلی شما هستند، از روش ب استفاده کنید. برای مخزن خصوصی از روش ورود استاندارد Git/GitHub استفاده کنید؛ رمز یا توکن را داخل اسکریپت، راهنما یا فایل بسته ذخیره نکنید.</p>
+<p>وجود فایل‌های لازم را کنترل کنید:</p>
+<pre><code class="language-bash">ls deploy/cpanel/build.sh
+ls backend/public/resolve-private.php
+ls backend/public/private-path.php
+</code></pre>
+<h3 id="_5">روش ب: کپی از پوشه ویندوز</h3>
+<p>فرض کنیم پروژه در این مسیر است:</p>
+<pre><code class="language-text">C:\Users\YourName\Downloads\industrial-crm-project
+</code></pre>
+<p>در Ubuntu همان مسیر به شکل زیر دیده می‌شود:</p>
+<pre><code class="language-text">/mnt/c/Users/YourName/Downloads/industrial-crm-project
+</code></pre>
+<p>می‌توانید با File Explorer پوشه پروژه را داخل مسیر زیر کپی کنید:</p>
+<pre><code class="language-text">\\wsl.localhost\Ubuntu-24.04\home\LINUX_USER\projects\
+</code></pre>
+<p><code>LINUX_USER</code> نام کاربری Ubuntu شماست. پوشه <code>projects</code> را قبلاً با <code>mkdir -p ~/projects</code> بسازید. فایل‌های سورس، فایل‌های مخفی، <code>composer.lock</code> و <code>package-lock.json</code> را نگه دارید. انتقال <code>node_modules</code> و <code>vendor</code> قدیمی لازم نیست؛ روی WSL دوباره نصب می‌شوند.</p>
+<p>بعد داخل Ubuntu:</p>
+<pre><code class="language-bash">cd ~/projects/industrial-crm-project
+pwd
+ls -a
+</code></pre>
+<p>باید پوشه‌های <code>backend</code>، <code>frontend</code> و <code>deploy</code> را ببینید. کار کردن مستقیم روی <code>/mnt/c/</code> نیز ممکن است، اما معمولاً کندتر است و احتمال مشکلات مجوز/حساسیت حروف بیشتر می‌شود.</p>
+<hr />
+<h2 id="_6">۶. بررسی اولیه قبل از ساخت</h2>
+<p>از <strong>ریشه پروژه</strong> در Ubuntu:</p>
+<pre><code class="language-bash">php -v
+composer --version
+node -v
+npm -v
+zip -v
+bash -n deploy/cpanel/build.sh
+</code></pre>
+<p>اگر اسکریپت با ویرایشگر ویندوزی به CRLF تبدیل شده و خطای <code>$'\r'</code> یا <code>bad interpreter</code> می‌گیرید:</p>
+<pre><code class="language-bash">sed -i 's/\r$//' deploy/cpanel/build.sh
+</code></pre>
+<h3 id="php">نسخه PHP ساخت و هاست را یکسان انتخاب کنید</h3>
+<p>در cPanel → MultiPHP Manager / Select PHP Version بررسی کنید PHP دامنه هدف نیز <strong>8.4.1 یا جدیدتر سازگار</strong> است. ساخت موفق روی PHP 8.4 به معنی قابل اجرا بودن روی هاست PHP 8.2 نیست.</p>
+<p>فایل‌های lock را حذف نکنید و برای رفع خطای ساخت خودسرانه <code>composer update</code> یا <code>npm update</code> نزنید؛ این کار نسخه وابستگی‌ها را تغییر می‌دهد.</p>
+<hr />
+<h2 id="_7">۷. ساخت دو بسته خروجی روی کامپیوتر خودتان</h2>
+<p>در Ubuntu و از ریشه پروژه فقط این دستور را اجرا کنید:</p>
+<pre><code class="language-bash">bash deploy/cpanel/build.sh
+</code></pre>
+<p>اسکریپت این کارها را انجام می‌دهد:</p>
+<ol>
+<li>نصب وابستگی‌های PHP از <code>composer.lock</code> بدون ابزارهای توسعه.</li>
+<li>نصب وابستگی‌های فرانت‌اند از <code>package-lock.json</code> و اجرای TypeScript و Vite build.</li>
+<li>آماده کردن نسخه استقرار در یک پوشه موقت.</li>
+<li>اضافه کردن فرانت‌اند ساخته‌شده، ویزارد و قواعد Apache.</li>
+<li>حذف <code>.env</code> فعال، لاگ‌ها، sessionها و کش‌های محیط ساخت از بسته.</li>
+<li>ایجاد دو ZIP مستقل عمومی و خصوصی.</li>
+</ol>
+<p>اسکریپت دیگر به <code>backend/.env</code> شما دست نمی‌زند؛ یک محیط ساخت مستقل داخل پوشه موقت می‌سازد و آن را پس از اتمام حذف می‌کند. نیازی به اطلاعات دیتابیس هاست یا رمزهای واقعی برای build نیست. assetهای Filament هم در محیط موقت دوباره منتشر می‌شوند.</p>
+<p>در انتها باید این پیام را ببینید:</p>
+<pre><code class="language-text">SUCCESS: .../cpanel-release
+</code></pre>
+<p>کنترل موفقیت و اندازه فایل‌ها:</p>
+<pre><code class="language-bash">ls -lh cpanel-release/*.zip
+unzip -t cpanel-release/cpanel-public.zip
+unzip -t cpanel-release/cpanel-private.zip
+</code></pre>
+<p>هر دو دستور <code>unzip -t</code> باید بدون خطا تمام شوند. اگر build متوقف شد، <strong>فایل ZIP قدیمی باقی‌مانده را خروجی موفق نسخه جدید فرض نکنید</strong>؛ ابتدا خطا را برطرف و دوباره build کنید و زمان فایل‌ها را بررسی کنید.</p>
+<h3 id="_8">کنترل بسته، خروجی سفارشی و تست محلی</h3>
+<p>نسخه جدید ZIPها را قبل از اعلام موفقیت تست و محتویات حساس را بررسی می‌کند. خروجی قبلی تا زمان آماده‌شدن هر دو بسته جدید حفظ می‌شود؛ در خطا آن را نسخه جدید فرض نکنید.</p>
+<pre><code class="language-bash">bash deploy/cpanel/verify-package.sh cpanel-release
+(cd cpanel-release &amp;&amp; sha256sum -c SHA256SUMS)
+CPANEL_OUT_DIR=&quot;./my output/packages&quot; bash deploy/cpanel/build.sh
+</code></pre>
+<p>برای اجرای تست‌های بسته‌بندی بدون دانلود وابستگی (نیازمند Python 3؛ Composer/PHP در این تست‌ها شبیه‌سازی می‌شوند):</p>
+<pre><code class="language-bash">python3 -m unittest discover -s deploy/cpanel/tests -v
+</code></pre>
+<p>برای تست <strong>واقعی</strong> Laravel از ZIPهای ساخته‌شده، با PHP 8.4.1+ و افزونه pdo_sqlite:</p>
+<pre><code class="language-bash">bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+</code></pre>
+<p>این دستور بسته‌ها را در دو مسیر جدا استخراج می‌کند، دیتابیس SQLite موقت می‌سازد، migrate را دوبار اجرا می‌کند و مسیر آپلود و مجوزهای مدیر را بررسی می‌کند. به دیتابیس عملیاتی متصلش نکنید.</p>
+<p>اگر خطای <code>.build.lock</code> گرفتید، بیلد دیگری در همان پوشه خروجی فعال است. فقط بعد از اطمینان از توقف کامل فرآیند قبلی، پوشه <code>.build.lock</code> را حذف کنید.</p>
+<h3 id="php_1">بررسی وابستگی‌های PHP و امنیت</h3>
+<p>بعد از ساخت:</p>
+<pre><code class="language-bash">cd backend
+composer check-platform-reqs --no-dev
+composer audit --no-dev
+cd ..
+</code></pre>
+<p>دستور اول سازگاری با <strong>PHP محلی</strong> را کنترل می‌کند، نه PHP هاست. نتیجه audit به وضعیت روز آسیب‌پذیری‌ها وابسته است؛ هشدارهای آن را قبل از انتشار بررسی کنید، نه اینکه به صورت خودکار نادیده بگیرید.</p>
+<h3 id="_9">بررسی محتویات بسته‌ها</h3>
+<pre><code class="language-bash">unzip -l cpanel-release/cpanel-public.zip
+unzip -l cpanel-release/cpanel-private.zip
+</code></pre>
+<p>در ZIP عمومی باید مستقیماً <code>index.php</code>، <code>index.html</code>، <code>.htaccess</code>، <code>assets/</code>، <code>install.php</code>، <code>private-path.php</code> و <code>resolve-private.php</code> وجود داشته باشد، نه یک پوشه اضافی <code>public/</code> دور آن‌ها.</p>
+<p>در ZIP خصوصی باید <code>vendor/autoload.php</code>، <code>bootstrap/app.php</code>، <code>artisan</code>، <code>app/</code>، <code>config/</code>، <code>routes/</code> و <code>storage/</code> وجود داشته باشد. فایل <code>.env.cpanel.example</code> نمونه است و وجودش طبیعی است؛ <strong>فایل فعال با نام دقیق <code>.env</code> نباید داخل ZIP باشد.</strong> اطلاعات مشتری، آپلود شخصی، کلید خصوصی و backup واقعی هم نباید در بسته باشند.</p>
+<p>ساخت ZIP به معنی آزمون کامل Laravel یا همه قابلیت‌های سامانه نیست. تست ورود، اکسل، آپلود و پیامک پس از نصب روی هاست همچنان لازم است.</p>
+<hr />
+<h2 id="file-explorer">۸. پیدا کردن خروجی در File Explorer و کپی به ویندوز</h2>
+<p>در Ubuntu، از ریشه پروژه:</p>
+<pre><code class="language-bash">explorer.exe .
+</code></pre>
+<p>File Explorer باز می‌شود. پوشه <code>cpanel-release</code> را باز و دو ZIP را به Desktop یا Downloads ویندوز کپی کنید. فایل‌ها را <strong>بدون بازکردن و ZIP مجدد</strong> آپلود کنید تا فایل مخفی <code>.htaccess</code> از قلم نیفتد.</p>
+<p>روش دیگر: در نوار آدرس File Explorer بنویسید:</p>
+<pre><code class="language-text">\\wsl.localhost\Ubuntu-24.04\home\LINUX_USER\projects\industrial-crm-project\cpanel-release
+</code></pre>
+<p>نام کاربری و نام پوشه را با مقدار واقعی خودتان جایگزین کنید.</p>
+<hr />
+<h2 id="zip-cpanel">۹. آپلود مستقیم دو ZIP به cPanel</h2>
+<h3 id="_10">مثال مسیرها</h3>
+<p>فرض کنیم نام کاربری هاست <code>alice</code> و دامنه <code>xx.example.com</code> است:</p>
+<pre><code class="language-text">/home/alice/xx.example.com/                 ← محتویات cpanel-public.zip
+/home/alice/private_pro/project1/myc/        ← محتویات cpanel-private.zip
+</code></pre>
+<ol>
+<li>در cPanel → Domains، Document Root دامنه را روی <code>/home/alice/xx.example.com</code> تنظیم کنید.</li>
+<li>در File Manager گزینه <strong>Show Hidden Files</strong> را روشن کنید.</li>
+<li><code>cpanel-public.zip</code> را داخل پوشه دامنه آپلود و همان‌جا Extract کنید.</li>
+<li><code>cpanel-private.zip</code> را داخل <code>/home/alice/private_pro/project1/myc</code> آپلود و همان‌جا Extract کنید.</li>
+<li>مطمئن شوید پوشه اضافی بین مسیر مقصد و فایل‌ها ساخته نشده است.</li>
+<li>ZIPها را پس از استخراج از هاست حذف کنید، مخصوصاً ZIP خصوصی را هرگز داخل Document Root نگه ندارید.</li>
+</ol>
+<p>مسیر خصوصی نباید زیر پوشه دامنه یا Document Root هیچ سایت دیگری باشد. اگر File Manager شما home حساب را به شکل <code>/</code> نمایش می‌دهد، این لزوماً ریشه واقعی سیستم‌عامل نیست؛ مسیر واقعی معمولاً با <code>/home/USERNAME</code> شروع می‌شود. از پشتیبانی هاست مسیر مطلق را بپرسید.</p>
+<h3 id="_11">تنظیم مسیر خصوصی؛ مرحله ضروری</h3>
+<p>فایل زیر را با ویرایشگر File Manager باز کنید:</p>
+<pre><code class="language-text">/home/alice/xx.example.com/private-path.php
+</code></pre>
+<p>محتوا را این‌گونه تنظیم کنید:</p>
+<pre><code class="language-php">&lt;?php
+return '/home/alice/private_pro/project1/myc';
+</code></pre>
+<p>از <code>/</code> استفاده کنید، نه <code>\</code> ویندوز. نام کاربری <code>alice</code> فقط مثال است. در مقدار <code>return</code> مسیر وب مثل <code>https://...</code> وارد نکنید؛ این مسیر فایل‌سیستم سرور است.</p>
+<p>مقدار پیش‌فرض <code>CPANEL_USER</code> داخل بسته صرفاً placeholder است و باید تغییر کند. نیازی به جست‌وجو و تغییر مسیر در چند فایل PHP ندارید.</p>
+<p>اگر هاست <code>open_basedir</code> دارد، باید خواندن هر دو مسیر عمومی و خصوصی را مجاز کند. خطای این محدودیت با تغییر رمز دیتابیس حل نمی‌شود و ممکن است نیازمند پشتیبانی هاست باشد.</p>
+<hr />
+<h2 id="_12">۱۰. دیتابیس و اجرای ویزارد نصب</h2>
+<ol>
+<li>SSL/AutoSSL دامنه را فعال کنید و از HTTPS استفاده کنید.</li>
+<li>تا پایان نصب، پوشه دامنه را با Directory Privacy یا محدودیت IP محافظت کنید؛ نصب‌کننده راه‌اندازی‌نشده نباید در دسترس دیگران باشد.</li>
+<li>در MySQL Database Wizard یک دیتابیس <strong>خالی</strong> و کاربر بسازید و کاربر را با ALL PRIVILEGES به همان دیتابیس متصل کنید.</li>
+<li>نام کامل دیتابیس و کاربر را همراه پیشوند cPanel نگه دارید، مثلاً <code>alice_crmdb</code> و <code>alice_crmuser</code>.</li>
+<li>PHP دامنه و افزونه‌های لازم را فعال کنید. نسخه PHP ترمینال/CLI هاست در صورت استفاده نیز باید سازگار باشد.</li>
+<li>نشانی زیر را باز کنید:</li>
+</ol>
+<pre><code class="language-text">https://xx.example.com/install.php
+</code></pre>
+<ol>
+<li>مسیرها و پیش‌نیازها را کنترل، سپس APP_URL ریشه دامنه، host/port دیتابیس، نام دیتابیس، کاربر و رمز را وارد کنید.</li>
+<li>ایمیل، موبایل و رمز اختصاصی مدیر (حداقل ۱۲ کاراکتر) را تعیین کنید.</li>
+<li>نصب را اجرا کنید و تا دریافت نتیجه صبر کنید. در این روش نیازی به وارد کردن SQL از phpMyAdmin یا اجرای Composer روی هاست نیست.</li>
+</ol>
+<p>ویزارد <code>.env</code> را در مسیر <strong>خصوصی</strong> می‌سازد، کلید برنامه و جداول را ایجاد می‌کند و اطلاعات مدیر انتخابی شما را ذخیره می‌کند. داده نمایشی وارد نمی‌شود. برای نصب cPanel از رمز نمایشی <code>Admin@123456</code> استفاده نمی‌شود.</p>
+<p>نصب زیر ریشه URL دامنه پشتیبانی می‌شود؛ APP_URL را مثلاً <code>https://xx.example.com</code> بدهید، نه <code>https://example.com/crm</code>.</p>
+<h3 id="_13">دسترسی فایل‌ها</h3>
+<ul>
+<li>پوشه‌ها معمولاً <code>755</code> و فایل‌ها <code>644</code>.</li>
+<li><code>.env</code> خصوصی توسط نصب‌کننده با دسترسی محدودتر ساخته می‌شود.</li>
+<li><code>storage/</code> و <code>bootstrap/cache/</code> خصوصی و <code>storage/</code> عمومی باید توسط کاربر PHP قابل نوشتن باشند.</li>
+<li>برای حل خطاها دسترسی <code>777</code> ندهید؛ مالکیت و تنظیمات PHP هاست را بررسی کنید.</li>
+</ul>
+<hr />
+<h2 id="_14">۱۱. چک‌لیست نهایی پس از نصب</h2>
+<ul>
+<li>[ ] ورود از <code>/login</code> با اطلاعات مدیر انتخابی.</li>
+<li>[ ] بارگذاری داشبورد و refresh مستقیم مسیرهایی مثل <code>/customers</code>.</li>
+<li>[ ] باز شدن <code>/admin</code> و نمایش صحیح CSS و JS پنل Filament.</li>
+<li>[ ] پاسخ سلامت Laravel در <code>/up</code>، نه صفحه React.</li>
+<li>[ ] ایجاد مشتری، قطعه، تخصیص و ثبت تاریخچه.</li>
+<li>[ ] تست ورود و خروج اکسل.</li>
+<li>[ ] آپلود و مشاهده آواتار/لوگو از <code>/storage</code>.</li>
+<li>[ ] غیرقابل مشاهده بودن <code>/.env</code>، <code>/private-path.php</code> و <code>/resolve-private.php</code> از مرورگر.</li>
+<li>[ ] حذف <code>install.php</code> و <code>setup-check.php</code> در صورت باقی ماندن؛ حذف <code>update.php</code> تا زمان نیاز.</li>
+<li>[ ] وجود <code>storage/installed.lock</code> در مسیر خصوصی؛ قفل را برای نصب معمول حذف نکنید.</li>
+<li>[ ] حذف ZIPهای آپلودشده از هاست.</li>
+<li>[ ] راه‌اندازی بکاپ دیتابیس، <code>.env</code> و آپلودها.</li>
+<li>[ ] خاموش کردن Sandbox پیامک پیش از بهره‌برداری واقعی از ورود پیامکی و تست ارسال با حساب واقعی.</li>
+</ul>
+<p>فایل‌های حساس را در دیسک عمومی یا <code>xx.example.com/storage</code> قرار ندهید؛ این مسیر برای فایل‌های قابل انتشار است. فایل خصوصی باید خارج Document Root بماند.</p>
+<hr />
+<h2 id="_15">۱۲. ساخت نسخه‌های بعدی و ارتقای هاست</h2>
+<p>برای هر نسخه جدید، سورس نسخه جدید را به <strong>کپی مخصوص build</strong> بیاورید و از ریشه دوباره اجرا کنید:</p>
+<pre><code class="language-bash">bash deploy/cpanel/build.sh
+</code></pre>
+<p>سپس هر دو خروجی را بررسی کنید. برای ارتقای سایت موجود:</p>
+<ol>
+<li>از دیتابیس و فایل‌ها بکاپ قابل بازیابی بگیرید و تغییرات را ابتدا روی محیط آزمایشی امتحان کنید.</li>
+<li><code>.env</code>، <code>storage/</code> خصوصی، <code>storage/</code> عمومی، <code>storage/installed.lock</code> و <code>private-path.php</code> واقعی هاست را حفظ کنید.</li>
+<li>ZIP عمومی جدید حاوی <code>private-path.php</code> پیش‌فرض است؛ هنگام استخراج <strong>تنظیم واقعی خود را از دست ندهید</strong>. بعد از استخراج و قبل از بازکردن سایت دوباره مسیر صحیح را اعمال کنید.</li>
+<li>فایل‌های کش محیط قبلی <code>bootstrap/cache/config.php</code>، <code>events.php</code> و <code>routes*.php</code> را در صورت وجود حذف کنید؛ فایل‌های خود framework را پاک نکنید.</li>
+<li><code>update.php</code> را موقتاً با HTTPS باز کنید و APP_KEY را فقط در فرم وارد کنید، نه در URL.</li>
+<li>مایگریشن‌های جدید را اجرا و سپس ابزارهای نصب/ارتقا را حذف کنید. وجود دوباره <code>install.php</code> در بسته جدید دلیل اجرای دوباره نصب نیست.</li>
+<li>آزمون‌های عملکرد را تکرار کنید.</li>
+</ol>
+<p><strong>هرگز برای ارتقای سایت واقعی <code>migrate:fresh</code>، حذف جدول‌ها یا seed نمایشی اجرا نکنید.</strong> ارتقا rollback خودکار ندارد.</p>
+<hr />
+<h2 id="_16">۱۳. خطاهای رایج</h2>
+<h3 id="your-composer-dependencies-require-a-php-version-841"><code>Your Composer dependencies require a PHP version &gt;= 8.4.1</code></h3>
+<p>نسخه PHP فعال کافی نیست. در Ubuntu <code>php -v</code> و <code>which php</code>، و در cPanel نسخه PHP <strong>همان دامنه</strong> را بررسی کنید. خاموش کردن platform check راه‌حل نیست.</p>
+<h3 id="ext-intl-ext-gd-ext-zip-ext-dom-missing"><code>ext-intl</code>، <code>ext-gd</code>، <code>ext-zip</code> یا <code>ext-dom</code> missing</h3>
+<p>افزونه PHP در همان محیطی که Composer اجرا می‌شود نصب نیست. بسته مربوط به PHP 8.4 را نصب و با <code>php -m</code> کنترل کنید. افزونه PHP ویندوز اثری روی PHP داخل WSL ندارد؛ افزونه WSL نیز افزونه هاست را فعال نمی‌کند.</p>
+<h3 id="composer-command-not-found-zip-command-not-found"><code>composer: command not found</code> یا <code>zip: command not found</code></h3>
+<p>مراحل نصب ابزارها را داخل Ubuntu انجام دهید. دستور build را در Git Bash اجرا نکنید.</p>
+<h3 id="node-unsupported-engine">خطای Node / unsupported engine</h3>
+<p>داخل Ubuntu:</p>
+<pre><code class="language-bash">nvm use 22
+node -v
+which node
+</code></pre>
+<p>Node باید نسخه به‌روز 22 و متعلق به WSL باشد.</p>
+<h3 id="npm-composer">خطای شبکه npm یا Composer</h3>
+<p>اتصال اینترنت و دسترسی به registry.npmjs.org، GitHub و Packagist را بررسی کنید. بعد از رفع شبکه، همان build را دوباره اجرا کنید. تأیید TLS را خاموش نکنید و lockها را برای رفع خطای دانلود حذف نکنید.</p>
+<h3 id="npm-ci-packagejson-lock"><code>npm ci</code> می‌گوید package.json و lock هماهنگ نیستند</h3>
+<p>نسخه هماهنگ فایل‌های پروژه را بازیابی کنید. این خطا با دستکاری تصادفی lock یا نصب نسخه‌های جدید روی هاست حل نمی‌شود. اگر تغییر وابستگی عمدی است، lock باید در محیط توسعه بازتولید و آزمون شود.</p>
+<h3 id="private-application-path-is-invalid"><code>Private application path is invalid</code></h3>
+<p>مسیر <code>private-path.php</code> اشتباه است یا فایل <code>bootstrap/app.php</code> خصوصی دقیقاً زیر آن مسیر نیست. مسیر مطلق، پوشه‌های تودرتوی اضافی، بزرگی/کوچکی حروف و open_basedir را کنترل کنید.</p>
+<h3 id="500">خطای 500 یا صفحه سفید روی هاست</h3>
+<p>ابتدا Error Log در cPanel و <code>storage/logs/laravel.log</code> خصوصی را بخوانید. PHP، افزونه‌ها، وجود <code>vendor/autoload.php</code>، دسترسی پوشه‌ها و تنظیم <code>.htaccess</code> را بررسی کنید. <code>APP_DEBUG=true</code> را روی سایت عمومی روشن نگذارید و لاگ حاوی اطلاعات محرمانه را منتشر نکنید.</p>
+<h3 id="refresh-customers">صفحه اصلی باز می‌شود اما refresh روی <code>/customers</code> خطا می‌دهد</h3>
+<p>وجود <code>.htaccess</code> عمومی، Document Root صحیح و فعال بودن mod_rewrite/AllowOverride را بررسی کنید. اگر وب‌سرور قواعد Apache را نمی‌پذیرد، از پشتیبانی هاست کمک بگیرید.</p>
+<h3 id="_17">اتصال دیتابیس برقرار نمی‌شود</h3>
+<p>نام کامل پیشونددار دیتابیس و کاربر، رمز، host و مجوز اتصال کاربر به دیتابیس را کنترل کنید. host اغلب <code>localhost</code> یا <code>127.0.0.1</code> است ولی مقدار قطعی را از هاست بگیرید. برای رفع خطا جداول سایت موجود را حذف نکنید.</p>
+<h3 id="_18">نصب موفق شده اما تلاش برای نصب دوباره مسدود است</h3>
+<p>وجود قفل نصب رفتار درست امنیتی است. برای بروزرسانی از روش ارتقا استفاده کنید، نه حذف قفل و اجرای دوباره ویزارد.</p>
+<hr />
+<h2 id="wsl">۱۴. خلاصه اجرای روزمره پس از آماده بودن WSL</h2>
+<p>داخل Ubuntu:</p>
+<pre><code class="language-bash">cd ~/projects/industrial-crm-project
+nvm use 22
+php -v
+bash deploy/cpanel/build.sh
+unzip -t cpanel-release/cpanel-public.zip
+unzip -t cpanel-release/cpanel-private.zip
+explorer.exe .
+</code></pre>
+<p>دو ZIP را از <code>cpanel-release</code> بردارید، به مسیرهای صحیح روی cPanel منتقل کنید، <code>private-path.php</code> را تنظیم کنید و برای نصب جدید ویزارد را اجرا کنید؛ برای سایت موجود فقط مراحل ارتقا را انجام دهید.</p>
+<h2 id="_19">وضعیت اعتبارسنجی این آموزش</h2>
+<p>این راهنما بر مبنای اسکریپت و lockهای فعلی مخزن نوشته شده است. نیاز PHP 8.4.1 از بررسی <code>composer.lock</code> مشخص شده است. ساخت واقعی ZIP و اجرای بسته‌های خروجی با PHP 8.4 و هر دو دیتابیس SQLite و MySQL در <a href="https://github.com/diswebir/industrial-crm-project/actions/runs/41890513016">GitHub Actions</a> موفق بوده است. نصب WSL و اجرای build روی یک ویندوز واقعی و اجرای وب‌سرور cPanel شما هنوز آزمون نشده‌اند. گزارش بررسی قبلی در <a href="AUDIT.md">AUDIT.md</a> و راهنمای استقرار در <a href="README.md">README.md</a> قرار دارد.</p></main></body></html>
