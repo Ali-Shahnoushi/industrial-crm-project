@@ -55,7 +55,13 @@ $db=getenv('TEST_DB_NAME');$pdo->exec("DROP DATABASE IF EXISTS `$db`");$pdo->exe
             self.port = sock.getsockname()[1]
         self.server_log = open(self.work/'php-server.log', 'wb')
         self.addCleanup(self.server_log.close)
-        self.server = subprocess.Popen(['php', '-d', 'display_errors=0', '-S', f'127.0.0.1:{self.port}', '-t', str(self.public)],
+        php_args = ['php', '-d', 'display_errors=0']
+        if self._testMethodName == 'test_native_psr_is_blocked_before_autoload':
+            # Emulate the host's preloaded native interface without installing an obsolete PECL binary.
+            prepend = self.work/'native-psr.php'
+            prepend.write_text('<?php namespace PsrExt\\Log; interface LoggerInterface { public function emergency($message, array $context = []); }')
+            php_args += ['-d', 'auto_prepend_file='+str(prepend)]
+        self.server = subprocess.Popen(php_args + ['-S', f'127.0.0.1:{self.port}', '-t', str(self.public)],
                                        env=self.env, stdout=self.server_log, stderr=subprocess.STDOUT)
         self.addCleanup(self.stop_server)
         self.url=f'http://127.0.0.1:{self.port}/install.php'
@@ -180,6 +186,18 @@ $db=getenv('TEST_DB_NAME');$pdo->exec("GRANT ALL PRIVILEGES ON `$db`.* TO $user"
         warnings = re.findall(r'<div class="warn">.*?</div>', body, re.S)
         self.assertFalse(any('اتصال دیتابیس خطا می‌دهد' in warning for warning in warnings), str(warnings))
         self.assert_success(*self.submit())
+
+    def test_native_psr_is_blocked_before_autoload(self):
+        status, body = self.request()
+        self.assertEqual(status, 200, body)
+        self.assertIn('psr/PsrExt', body)
+        self.assertIn('افزونه psr را غیرفعال کنید', body)
+        self.assertIn(' disabled', body)
+        # Even a manually submitted form cannot bypass the check.
+        status, body = self.submit()
+        self.assertEqual(status, 422, body)
+        self.assertIn('psr/PsrExt', body)
+        self.assertFalse((self.private/'.env').exists())
 
     def test_invalid_csrf_does_not_write_environment(self):
         self.assertEqual(self.submit(csrf='wrong')[0], 419)

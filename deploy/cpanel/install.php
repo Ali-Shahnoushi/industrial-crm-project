@@ -77,6 +77,12 @@ function checkEnvironment(string $baseDir): array
 {
     $checks = [];
     $checks[] = ['نسخه PHP (حداقل 8.4.1)', version_compare(PHP_VERSION, '8.4.1', '>='), PHP_VERSION];
+    // Native PSR interfaces can shadow Composer's psr/log and fatally break Monolog 3.
+    // Keep this check before vendor/autoload.php: loading Monolog to test it is already too late.
+    $nativePsr = extension_loaded('psr') || interface_exists('PsrExt\\Log\\LoggerInterface', false)
+        || interface_exists('Psr\\Log\\LoggerInterface', false);
+    $checks[] = ['غیرفعال بودن افزونه بومی psr/PsrExt (تداخل با Monolog)', !$nativePsr,
+        $nativePsr ? 'در Select PHP Version افزونه psr را غیرفعال کنید؛ اگر در فهرست نیست از پشتیبانی هاست بخواهید برای همین دامنه غیرفعالش کند.' : 'بدون تداخل'];
     foreach (['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'dom', 'xmlreader', 'xmlwriter', 'zip', 'gd', 'intl', 'ctype', 'iconv', 'simplexml'] as $ext) {
         $checks[] = ['افزونه PHP: ' . $ext, extension_loaded($ext), extension_loaded($ext) ? 'فعال' : 'غیرفعال — از Select PHP Version فعال کنید'];
     }

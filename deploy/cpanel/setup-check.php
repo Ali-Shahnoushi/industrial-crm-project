@@ -94,6 +94,10 @@ function row(string $label, string $status, string $detail = ''): string
     <tbody>
       <?php
       echo row('نسخه PHP (حداقل 8.4.1)', version_compare(PHP_VERSION, '8.4.1', '>=') ? 'ok' : 'fail', PHP_VERSION);
+      $nativePsr = extension_loaded('psr') || interface_exists('PsrExt\\Log\\LoggerInterface', false)
+          || interface_exists('Psr\\Log\\LoggerInterface', false);
+      echo row('افزونه بومی psr/PsrExt', $nativePsr ? 'fail' : 'ok', $nativePsr
+          ? 'افزونه psr را برای PHP همین دامنه غیرفعال کنید؛ با Monolog پروژه تداخل دارد.' : 'بدون تداخل');
       foreach ($requiredExtensions as $ext) {
           echo row('افزونه PHP: ' . $ext, extension_loaded($ext) ? 'ok' : 'fail', extension_loaded($ext) ? 'loaded' : 'در MultiPHP Manager فعال کنید');
       }

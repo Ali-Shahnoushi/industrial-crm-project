@@ -91,6 +91,21 @@ return '/home/alice/private_pro/project1/myc';
 
 دیتابیس، جدول‌ها، APP_KEY و قفل نصب موفق را حذف نکنید. روی هاست PHP حداقل 8.4.1 و vendor کامل لازم است. اگر باز هم فقط ۵۰۰ عمومی نمایش داده شد، لاگ همان زمان را از cPanel بررسی کنید؛ خطای وب‌سرور، ModSecurity یا توقف اجباری PHP ممکن است قبل از رسیدن به کد نصب رخ دهد.
 
+### خطای Monolog و PsrExt روی هاست
+
+اگر خطا شامل `Monolog\Logger::emergency` و `PsrExt\Log\LoggerInterface` است، افزونه بومی `psr` روی PHP هاست رابط لاگ‌گیری قدیمی را قبل از Composer بارگذاری کرده و با Monolog پروژه تداخل دارد. این مشکل دیتابیس یا مسیر خصوصی نیست.
+
+1. در cPanel → Select PHP Version → Extensions، افزونه **psr** را برای PHP همین دامنه غیرفعال و تغییرات را ذخیره کنید.
+2. اگر گزینه وجود ندارد یا PHP تحت MultiPHP/EasyApache مدیریت می‌شود، از پشتیبانی بخواهید افزونه `psr/PsrExt` را برای PHP handler/pool دامنه غیرفعال و پردازش‌های LiteSpeed/LSAPI یا PHP-FPM مربوط را reload/restart کند. روی هاست مشترک این تغییر را سراسری برای حساب‌های دیگر انجام ندهید.
+3. نسخه واقعی PHP وب دامنه باید حداقل 8.4.1 باشد. برچسبی مثل `php74` در نام handler لاگ به تنهایی نسخه PHP فعال را ثابت نمی‌کند؛ نسخه گزارش‌شده توسط ویزارد را ملاک بگیرید.
+4. صفحه نصب را دوباره باز کنید. نصب‌کننده جدید پیش از vendor این تداخل را بررسی و ارسال فرم را مسدود می‌کند.
+
+**پکیج Composer به نام `psr/log` را حذف نکنید** و امضای متدهای Monolog یا فایل‌های vendor را تغییر ندهید. `psr/log` با افزونه بومی `psr` فرق دارد و برای برنامه لازم است. غیرفعال‌سازی افزونه بارگذاری‌شده با `ini_set` یا افزودن `extension=` خالی در `.user.ini` انجام نمی‌شود. نصب دوباره دیتابیس یا ساخت مجدد ZIP هم افزونه سرور را غیرفعال نمی‌کند.
+
+متن پیشنهادی تیکت:
+
+> در دامنه موردنظر، PHP افزونه psr/PsrExt را با امضای قدیمی LoggerInterface بارگذاری می‌کند و Monolog 3 با خطای Declaration of Monolog\Logger::emergency(Stringable|string ...) must be compatible with PsrExt\Log\LoggerInterface::emergency($message, ...) متوقف می‌شود. لطفاً افزونه psr را برای handler/pool این دامنه غیرفعال کنید، PHP وب را روی 8.4.1 یا بالاتر سازگار قرار دهید و workerهای مربوط را reload کنید. پکیج Composer psr/log باید باقی بماند.
+
 ## ۴. آزمون پس از نصب
 
 - `/login` و refresh مستقیم `/customers` باید SPA را برگردانند.

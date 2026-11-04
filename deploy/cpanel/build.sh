@@ -33,6 +33,7 @@ for tool in php composer node npm tar zip unzip sha256sum mktemp find; do
   command -v "$tool" >/dev/null 2>&1 || fail "Missing tool: $tool. See WINDOWS-BUILD-GUIDE.fa.md."
 done
 php -r 'if (version_compare(PHP_VERSION, "8.4.1", "<")) {fwrite(STDERR, "Current composer.lock requires PHP >= 8.4.1; got ".PHP_VERSION."\n"); exit(1);} $missing = array_filter(["ctype","curl","dom","fileinfo","filter","gd","iconv","intl","mbstring","openssl","pdo_mysql","session","simplexml","tokenizer","xml","xmlreader","xmlwriter","zip","zlib"], fn($e) => !extension_loaded($e)); if ($missing) {fwrite(STDERR, "Missing PHP extensions: ".implode(", ", $missing)."\n"); exit(1);}'
+php -r 'if (extension_loaded("psr") || interface_exists("PsrExt\\Log\\LoggerInterface", false) || interface_exists("Psr\\Log\\LoggerInterface", false)) {fwrite(STDERR, "Disable native psr/PsrExt in the PHP CLI configuration before building; it can conflict with Monolog.\n"); exit(1);}'
 node -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(!((major===22 && minor>=12) || major>=24)){console.error("Use Node 22.12+ (22 LTS recommended) or 24+; got "+process.version);process.exit(1)}'
 printf 'PHP: %s\nNode: %s\n' "$(php -r 'echo PHP_VERSION;')" "$(node -v)"
 composer --version
