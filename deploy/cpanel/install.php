@@ -363,31 +363,31 @@ ENV;
 
     $migrateOut = '';
     $installerStage = 'migrations';
-        if (Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]) !== 0) {
-            throw new RuntimeException(Illuminate\Support\Facades\Artisan::output());
-        }
-        $migrateOut = Illuminate\Support\Facades\Artisan::output();
-        $installerStage = 'administrator';
-        // No demonstration customers or known-password account in production.
-        Illuminate\Support\Facades\DB::transaction(function () use ($adminEmail, $adminPhone, $adminPassword) {
-            $admin = App\Models\User::where('email', 'admin@crm.local')->first()
-                ?? App\Models\User::where('email', $adminEmail)->where('user_type', 'administrator')->firstOrFail();
-            $admin->fill(['email' => $adminEmail, 'phone' => $adminPhone,
-                'password' => Illuminate\Support\Facades\Hash::make($adminPassword),
-                'user_type' => 'administrator', 'is_active' => true])->save();
-            $admin->syncPermissions(Spatie\Permission\Models\Permission::all());
-        });
-        $installerStage = 'finalize';
-        // Keep pending=true until the durable lock exists, allowing a safe retry after failure.
-        if (file_put_contents($baseDir.'/storage/installed.lock', date(DATE_ATOM), LOCK_EX) === false) {
-            throw new RuntimeException('Could not write installation lock.');
-        }
-        $completedEnv = str_replace('CPANEL_INSTALL_PENDING=true', 'CPANEL_INSTALL_PENDING=false', $env);
-        if (file_put_contents($envPath.'.installing', $completedEnv, LOCK_EX) === false
-            || !chmod($envPath.'.installing', 0640) || !rename($envPath.'.installing', $envPath)) {
-            @unlink($baseDir.'/storage/installed.lock');
-            throw new RuntimeException('Could not finalize environment.');
-        }
+    if (Illuminate\Support\Facades\Artisan::call('migrate', ['--force' => true]) !== 0) {
+        throw new RuntimeException(Illuminate\Support\Facades\Artisan::output());
+    }
+    $migrateOut = Illuminate\Support\Facades\Artisan::output();
+    $installerStage = 'administrator';
+    // No demonstration customers or known-password account in production.
+    Illuminate\Support\Facades\DB::transaction(function () use ($adminEmail, $adminPhone, $adminPassword) {
+        $admin = App\Models\User::where('email', 'admin@crm.local')->first()
+            ?? App\Models\User::where('email', $adminEmail)->where('user_type', 'administrator')->firstOrFail();
+        $admin->fill(['email' => $adminEmail, 'phone' => $adminPhone,
+            'password' => Illuminate\Support\Facades\Hash::make($adminPassword),
+            'user_type' => 'administrator', 'is_active' => true])->save();
+        $admin->syncPermissions(Spatie\Permission\Models\Permission::all());
+    });
+    $installerStage = 'finalize';
+    // Keep pending=true until the durable lock exists, allowing a safe retry after failure.
+    if (file_put_contents($baseDir.'/storage/installed.lock', date(DATE_ATOM), LOCK_EX) === false) {
+        throw new RuntimeException('Could not write installation lock.');
+    }
+    $completedEnv = str_replace('CPANEL_INSTALL_PENDING=true', 'CPANEL_INSTALL_PENDING=false', $env);
+    if (file_put_contents($envPath.'.installing', $completedEnv, LOCK_EX) === false
+        || !chmod($envPath.'.installing', 0640) || !rename($envPath.'.installing', $envPath)) {
+        @unlink($baseDir.'/storage/installed.lock');
+        throw new RuntimeException('Could not finalize environment.');
+    }
 
     @unlink(__DIR__.'/setup-check.php');
     $selfDeleted = @unlink(__FILE__);

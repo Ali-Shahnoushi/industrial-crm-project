@@ -160,6 +160,26 @@ if(!Illuminate\\Support\\Facades\\Hash::check(getenv('TEST_ADMIN_PASSWORD'),$u->
         (self.private/'vendor/autoload.php').write_text('<?php trigger_error("Injected platform fatal", E_USER_ERROR);')
         self.assert_diagnostic(*self.submit(), 'autoload')
 
+    def test_database_password_with_special_characters(self):
+        # Exercise dotenv quoting and pre-bootstrap retry decoding with real MySQL auth.
+        self.env['TEST_SPECIAL_PASSWORD'] = 'DB$pass# with"\\and\'quote123'
+        self.php('''$pdo=new PDO('mysql:host='.getenv('TEST_DB_HOST').';port='.getenv('TEST_DB_PORT'),getenv('TEST_DB_USER'),getenv('TEST_DB_PASS'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$user="'crm_installer_http'@'%'";$password=$pdo->quote(getenv('TEST_SPECIAL_PASSWORD'));
+$pdo->exec("CREATE USER IF NOT EXISTS $user IDENTIFIED BY $password");
+$pdo->exec("ALTER USER $user IDENTIFIED BY $password");
+$db=getenv('TEST_DB_NAME');$pdo->exec("GRANT ALL PRIVILEGES ON `$db`.* TO $user");''')
+        self.env['TEST_DB_USER'] = 'crm_installer_http'
+        self.env['TEST_DB_PASS'] = self.env['TEST_SPECIAL_PASSWORD']
+        broken=self.private/'config/installer_failure.php'
+        broken.write_text('<?php throw new RuntimeException("Temporary bootstrap failure");')
+        self.assert_diagnostic(*self.submit(), 'bootstrap')
+        broken.unlink()
+        status, body=self.request()
+        self.assertEqual(status, 200, body)
+        # If envValue did not unescape the saved password, the GET would show a DB error.
+        self.assertNotIn('اتصال دیتابیس خطا می‌دهد', body)
+        self.assert_success(*self.submit())
+
     def test_invalid_csrf_does_not_write_environment(self):
         self.assertEqual(self.submit(csrf='wrong')[0], 419)
         self.assertFalse((self.private/'.env').exists())

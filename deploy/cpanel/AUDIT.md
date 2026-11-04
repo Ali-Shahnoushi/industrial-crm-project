@@ -49,3 +49,7 @@
 - نصب‌کننده اولیه و ابزار ارتقا را فقط در بازه کوتاه و با محدودیت دسترسی/HTTPS در دسترس بگذارید؛ قفل نصب، حفاظت از نصب راه‌اندازی‌نشده را جایگزین نمی‌کند.
 - عملیات DDL در MySQL rollback خودکار ندارد؛ قبل از ارتقا بکاپ اجباری است. در خطای نصب، APP_KEY را نگه دارید و علت خطا را از لاگ خصوصی برطرف کنید؛ جداول محیط عملیاتی را حذف نکنید.
 - رمز ثابت demo در مسیر قدیمی seed توسعه باقی مانده است؛ برای production فقط از ویزارد مستندشده استفاده کنید، نه db:seed.
+
+## تکمیل آزمون ویزارد
+
+در اجرای https://github.com/diswebir/industrial-crm-project/actions/runs/41902437021 تست GET/POST واقعی نصب و سناریوهای bootstrap failure، migration failure/retry و fatal autoload موفق شدند. این تست از PHP built-in server استفاده می‌کند، نه Apache/cPanel واقعی. جزئیات در BUILD-TEST-REPORT.md است.
