@@ -1,5 +1,7 @@
 name: cPanel package
 on:
+  pull_request:
+    paths: ["backend/**", "frontend/**", "deploy/cpanel/**", ".github/workflows/cpanel.yml"]
   workflow_dispatch:
   push:
     tags: ['v*']
@@ -22,8 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          extensions: pdo_mysql, mbstring, intl, gd, zip, bcmath
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, mbstring, intl, gd, zip, bcmath
           tools: composer:v2
       - uses: actions/setup-node@v4
         with:
@@ -32,12 +34,14 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: PHP syntax
         run: find backend deploy/cpanel -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Offline packaging regression tests
+        run: python3 -m unittest discover -s deploy/cpanel/tests -v
       - run: bash deploy/cpanel/build.sh
+      - name: SQLite extracted-package smoke test
+        run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
       - name: MySQL fresh install and idempotent upgrade smoke test
-        working-directory: backend
         env:
-          APP_ENV: testing
-          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          CPANEL_SMOKE_MYSQL: '1'
           DB_CONNECTION: mysql
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
@@ -47,12 +51,12 @@ jobs:
           CACHE_STORE: file
           SESSION_DRIVER: file
           CPANEL_INSTALL_PENDING: 'true'
-        run: |
-          php artisan migrate --force
-          php artisan migrate --force
-          php artisan route:list --except-vendor
+        run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
       - uses: actions/upload-artifact@v4
         with:
           name: cpanel-package
-          path: cpanel-release/*.zip
+          path: |
+            cpanel-release/*.zip
+            cpanel-release/SHA256SUMS
+            cpanel-release/build-info.txt
           if-no-files-found: error

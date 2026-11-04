@@ -1,6 +1,6 @@
 # نصب cPanel با مسیر عمومی و خصوصی مستقل
 
-این بسته برای **Apache/LiteSpeed با mod_rewrite و AllowOverride** و PHP **8.2 یا بالاتر** طراحی شده است. MySQL 8 / MariaDB سازگار با Laravel لازم است. روی هاست Node، Composer، SSH، Redis یا symlink لازم نیست؛ ساخت بسته باید روی رایانه توسعه‌دهنده یا GitHub Actions انجام شود.
+این بسته برای **Apache/LiteSpeed با mod_rewrite و AllowOverride** و PHP **8.4.1 یا بالاتر سازگار** طراحی شده است. MySQL 8 / MariaDB سازگار با Laravel لازم است. روی هاست Node، Composer، SSH، Redis یا symlink لازم نیست؛ ساخت بسته باید روی رایانه توسعه‌دهنده یا GitHub Actions انجام شود.
 
 > **اصلاح پیش‌نیاز نسخه فعلی:** حداقل 8.2 مربوط به تعریف کلی پروژه است؛ `composer.lock` فعلی وابستگی‌هایی با نیاز **PHP >= 8.4.1** دارد. برای ساخت و اجرای همین lock از PHP 8.4 به‌روز روی ماشین ساخت و هاست استفاده کنید؛ `--ignore-platform-reqs` راه‌حل نیست.
 
@@ -22,7 +22,28 @@ bash deploy/cpanel/build.sh
 - `cpanel-public.zip`: فقط فایل‌های قابل انتشار در وب
 - `cpanel-private.zip`: Laravel، vendor، تنظیمات، دیتابیس و فایل‌های خصوصی
 
-ساخت بسته محیط توسعه را هم تغییر می‌دهد (`composer --no-dev` و build فرانت‌اند)؛ ترجیحاً در checkout تمیز یا CI اجرا کنید.
+ساخت جدید در پوشه موقت و مستقل انجام می‌شود و `.env`، vendor و node_modules سورس را تغییر نمی‌دهد. اطلاعات runtime و آپلودها کپی نمی‌شوند. قبل از ساخت، ابزارها، PHP 8.4.1+ و Node سازگار بررسی می‌شوند؛ در خطا خروجی ناقص جایگزین نسخه قبلی نمی‌شود.
+
+کنترل خروجی:
+```bash
+bash deploy/cpanel/verify-package.sh cpanel-release
+(cd cpanel-release && sha256sum -c SHA256SUMS)
+```
+
+آزمون بسته‌بندی بدون شبکه (با ابزارهای شبیه‌سازی‌شده):
+```bash
+python3 -m unittest discover -s deploy/cpanel/tests -v
+```
+
+آزمون واقعی Laravel روی بسته استخراج‌شده و SQLite موقت (نیازمند pdo_sqlite):
+```bash
+bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+```
+
+`build-info.txt` نسخه ابزارها و hash فایل‌های lock را ثبت می‌کند. مسیر خروجی دلخواه، حتی نسبی و دارای فاصله:
+```bash
+CPANEL_OUT_DIR="./my output/packages" bash deploy/cpanel/build.sh
+```
 
 ## ۲. مسیرها و استخراج
 

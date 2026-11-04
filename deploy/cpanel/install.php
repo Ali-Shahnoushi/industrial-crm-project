@@ -81,7 +81,7 @@ function installedState(string $envPath): array
 function checkEnvironment(string $baseDir): array
 {
     $checks = [];
-    $checks[] = ['نسخه PHP (حداقل 8.2)', version_compare(PHP_VERSION, '8.2.0', '>='), PHP_VERSION];
+    $checks[] = ['نسخه PHP (حداقل 8.4.1)', version_compare(PHP_VERSION, '8.4.1', '>='), PHP_VERSION];
     foreach (['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'dom', 'xmlreader', 'xmlwriter', 'zip', 'gd', 'intl', 'ctype', 'iconv', 'simplexml'] as $ext) {
         $checks[] = ['افزونه PHP: ' . $ext, extension_loaded($ext), extension_loaded($ext) ? 'فعال' : 'غیرفعال — از Select PHP Version فعال کنید'];
     }
