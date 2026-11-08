@@ -1,0 +1,79 @@
+name: cPanel package
+on:
+  pull_request:
+    paths: ["backend/**", "frontend/**", "deploy/cpanel/**", ".github/workflows/cpanel.yml"]
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: crm_test
+          MYSQL_ROOT_PASSWORD: test_password
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -ptest_password"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_sqlite, mbstring, intl, gd, zip, bcmath
+          tools: composer:v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: PHP syntax
+        run: find backend deploy/cpanel -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Offline packaging regression tests
+        run: python3 -m unittest discover -s deploy/cpanel/tests -v
+      - run: bash deploy/cpanel/build.sh
+      - name: SQLite extracted-package smoke test
+        run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+      - name: MySQL fresh install and idempotent upgrade smoke test
+        env:
+          CPANEL_SMOKE_MYSQL: '1'
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: crm_test
+          DB_USERNAME: root
+          DB_PASSWORD: test_password
+          CACHE_STORE: file
+          SESSION_DRIVER: file
+          CPANEL_INSTALL_PENDING: 'true'
+        run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+      - name: Real installer GET/POST, failure diagnostics and retry tests
+        env:
+          CPANEL_INSTALLER_HTTP: '1'
+          INSTALLER_TEST_DATABASE: crm_installer_http_test
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: test_password
+        run: |
+          set +e
+          python3 -m unittest discover -s deploy/cpanel/tests -p test_installer_http.py -v > installer-http-tests.log 2>&1
+          status=$?
+          cat installer-http-tests.log
+          if [ "$status" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; s=Path("installer-http-tests.log").read_text()[-20000:]; print("::error title=Installer HTTP test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          fi
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cpanel-package
+          path: |
+            cpanel-release/*.zip
+            cpanel-release/SHA256SUMS
+            cpanel-release/build-info.txt
+          if-no-files-found: error

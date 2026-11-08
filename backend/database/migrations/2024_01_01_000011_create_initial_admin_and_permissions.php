@@ -4,6 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use App\Models\User;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -38,17 +39,19 @@ return new class extends Migration
         }
 
         // 2. Create default system Administrator
-        $admin = User::firstOrCreate(
-            ['email' => 'admin@crm.local'],
-            [
-                'name' => 'مدیر ارشد سامانه',
-                'phone' => '09120000000',
-                'password' => Hash::make('Admin@123456'),
-                'email_verified_at' => now(),
-                'is_active' => true,
-                'user_type' => 'administrator',
-            ]
-        );
+        // Note: the user_type column is added by a later migration (2024_01_01_000013),
+        // so it is only set here when it already exists (e.g. incremental upgrades).
+        $adminData = [
+            'name' => 'مدیر ارشد سامانه',
+            'phone' => '09120000000',
+            'password' => Hash::make(env('CPANEL_INSTALL_PENDING') ? bin2hex(random_bytes(32)) : 'Admin@123456'),
+            'email_verified_at' => now(),
+            'is_active' => true,
+        ];
+        if (Schema::hasColumn('users', 'user_type')) {
+            $adminData['user_type'] = 'administrator';
+        }
+        $admin = User::firstOrCreate(['email' => 'admin@crm.local'], $adminData);
 
         // 3. Assign all permissions directly to the administrator (Pure ACL - NO ROLES)
         $permissions = Permission::where('guard_name', 'web')->get();

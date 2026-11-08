@@ -1,0 +1,43 @@
+Options -Indexes
+<FilesMatch "^(private-path|resolve-private)\.php$|^\.">
+    Require all denied
+</FilesMatch>
+# Never execute uploaded scripts, including double extensions.
+RewriteEngine On
+RewriteRule ^storage/.*\.(php[0-9]*|phtml|phar)(\.|/|$) - [F,L,NC]
+
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} (.+)/$
+    RewriteRule ^ %1 [L,R=301]
+
+    # ---- SPA fallback (React app lives in index.html) ----
+    # Any path that is not a real file/folder and is NOT handled by the Laravel
+    # backend (api / admin / docs / livewire / storage / backend assets)
+    # is served the single-page application shell so client-side routes
+    # like /customers or /settings/users work on hard refresh.
+    # The optional "public/" prefix keeps this working when the app lives inside
+    # public_html and a root .htaccess rewrites requests into public/.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_URI} !^/?(public/)?(api|admin|docs|livewire|storage|css|fonts|js|up)(/|$) [NC]
+    RewriteRule ^ index.html [L]
+
+    # Send Requests To Front Controller...
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>

@@ -25,15 +25,16 @@ class CustomerController extends Controller
 
         if ($request->filled('q')) {
             $term = trim($request->q);
-            $query->where(function ($q) use ($term) {
-                $q->where('first_name', 'ilike', "%{$term}%")
-                    ->orWhere('last_name', 'ilike', "%{$term}%")
-                    ->orWhere('company_name', 'ilike', "%{$term}%")
-                    ->orWhere('mobile', 'ilike', "%{$term}%")
-                    ->orWhere('national_code', 'ilike', "%{$term}%")
-                    ->orWhere('city', 'ilike', "%{$term}%")
-                    ->orWhere('province', 'ilike', "%{$term}%")
-                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) ILIKE ?", ["%{$term}%"]);
+            $op = $this->likeOp();
+            $query->where(function ($q) use ($term, $op) {
+                $q->where('first_name', $op, "%{$term}%")
+                    ->orWhere('last_name', $op, "%{$term}%")
+                    ->orWhere('company_name', $op, "%{$term}%")
+                    ->orWhere('mobile', $op, "%{$term}%")
+                    ->orWhere('national_code', $op, "%{$term}%")
+                    ->orWhere('city', $op, "%{$term}%")
+                    ->orWhere('province', $op, "%{$term}%")
+                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) {$op} ?", ["%{$term}%"]);
             });
         }
 

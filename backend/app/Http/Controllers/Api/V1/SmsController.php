@@ -63,14 +63,15 @@ class SmsController extends Controller
 
         if ($request->filled('q')) {
             $term = trim($request->q);
-            $query->where(function ($q) use ($term) {
-                $q->where('recipient_mobile', 'ilike', "%{$term}%")
-                    ->orWhere('pattern_code', 'ilike', "%{$term}%")
-                    ->orWhere('provider_message_id', 'ilike', "%{$term}%")
-                    ->orWhereHas('customer', function ($cq) use ($term) {
-                        $cq->where('first_name', 'ilike', "%{$term}%")
-                            ->orWhere('last_name', 'ilike', "%{$term}%")
-                            ->orWhere('company_name', 'ilike', "%{$term}%");
+            $op = $this->likeOp();
+            $query->where(function ($q) use ($term, $op) {
+                $q->where('recipient_mobile', $op, "%{$term}%")
+                    ->orWhere('pattern_code', $op, "%{$term}%")
+                    ->orWhere('provider_message_id', $op, "%{$term}%")
+                    ->orWhereHas('customer', function ($cq) use ($term, $op) {
+                        $cq->where('first_name', $op, "%{$term}%")
+                            ->orWhere('last_name', $op, "%{$term}%")
+                            ->orWhere('company_name', $op, "%{$term}%");
                     });
             });
         }
