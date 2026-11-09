@@ -1,15 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import {
-  AlertCircle,
   CheckCircle2,
   Clock,
-  HelpCircle,
   MessageSquare,
   Plus,
   Radio,
@@ -21,7 +19,8 @@ import { PageHeader } from '../components/ui/PageHeader'
 import { Field, TableSkeleton, EmptyState } from '../components/ui/Field'
 import { Can } from '../components/common/Can'
 import { smsApi, settingsApi } from '../services/api'
-import { cx, dateShort, dateTimeFa, num, relativeFa } from '../utils/format'
+import { useAuthStore } from '../store/useAuthStore'
+import { customerDisplayName, cx, dateTimeFa, num, relativeFa, toEnDigits } from '../utils/format'
 
 const schema = z.object({
   mobile: z.string().regex(/^09\d{9}$/, 'شماره موبایل معتبر نیست (مثال: 09121234567)'),
@@ -34,6 +33,9 @@ type SmsFormValues = z.infer<typeof schema>
 export default function SmsCenter() {
   const [params] = useSearchParams()
   const qc = useQueryClient()
+  const hasPermission = useAuthStore((s) => s.hasPermission)
+  const canSend = hasPermission('sms.send')
+  const canManageSettings = hasPermission('settings.manage')
 
   // Dynamic tokens for pattern
   const [tokens, setTokens] = useState<Array<{ key: string; value: string }>>([
@@ -59,14 +61,15 @@ export default function SmsCenter() {
   })
 
   useEffect(() => {
-    if (initialMobile) setValue('mobile', initialMobile)
+    if (initialMobile) setValue('mobile', toEnDigits(initialMobile))
     if (initialCustomerId) setValue('customer_id', initialCustomerId)
   }, [initialMobile, initialCustomerId, setValue])
 
-  // Get SMS settings to show Sandbox status
+  // Get SMS settings to show Sandbox status (only if authorized)
   const { data: smsSettings } = useQuery({
     queryKey: ['sms-settings'],
     queryFn: settingsApi.getSmsSettings,
+    enabled: canManageSettings,
   })
 
   // Get SMS logs
@@ -92,7 +95,6 @@ export default function SmsCenter() {
   }
 
   const onSubmit = async (values: SmsFormValues) => {
-    // Build tokens object
     const tokenPayload: Record<string, string> = {}
     tokens.forEach((t, i) => {
       if (t.value.trim()) {
@@ -102,8 +104,8 @@ export default function SmsCenter() {
 
     try {
       const res = await smsApi.sendPattern({
-        mobile: values.mobile,
-        pattern_code: values.pattern_code,
+        mobile: toEnDigits(values.mobile).trim(),
+        pattern_code: toEnDigits(values.pattern_code).trim(),
         tokens: tokenPayload,
         customer_id: values.customer_id || undefined,
       })
@@ -149,95 +151,111 @@ export default function SmsCenter() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Send Pattern SMS Form Card */}
-        <div className="lg:col-span-5 rounded-2xl border border-base-200 bg-base-100 p-5 shadow-xs space-y-4">
-          <div className="pb-3 border-b border-base-200">
-            <h3 className="font-bold text-base text-base-content flex items-center gap-2">
-              <Send className="size-4 text-primary" /> ارسال پیامک با الگو
-            </h3>
-            <p className="text-xs text-base-content/60 mt-0.5">
-              متغیرهای الگو را تکمیل کنید تا مستقیماً به شماره همراه ارسال شود.
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
-            <Field label="شماره موبایل گیرنده" required error={errors.mobile?.message}>
-              <input
-                dir="ltr"
-                className="input input-bordered w-full text-start font-mono"
-                placeholder="09121234567"
-                {...register('mobile')}
-              />
-            </Field>
-
-            <Field label="کد الگو (شناسه متن / BodyId در ملی‌پیامک)" required error={errors.pattern_code?.message}>
-              <input
-                dir="ltr"
-                className="input input-bordered w-full text-start font-mono"
-                placeholder="مثال: 123456"
-                {...register('pattern_code')}
-              />
-            </Field>
-
-            {/* Dynamic Pattern Tokens */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-base-content/70">متغیرهای الگو (Tokens)</label>
-                <button
-                  type="button"
-                  onClick={addTokenRow}
-                  className="btn btn-ghost btn-xs text-primary gap-1"
-                >
-                  <Plus className="size-3" /> افزودن متغیر
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {tokens.map((token, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      className="input input-bordered input-sm w-20 text-center font-mono text-xs"
-                      placeholder={`0`}
-                      value={token.key}
-                      onChange={(e) => updateToken(index, 'key', e.target.value)}
-                    />
-                    <input
-                      className="input input-bordered input-sm flex-1 text-xs"
-                      placeholder={`مقدار متغیر شماره ${index + 1}`}
-                      value={token.value}
-                      onChange={(e) => updateToken(index, 'value', e.target.value)}
-                    />
-                    {tokens.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeTokenRow(index)}
-                        className="btn btn-ghost btn-xs btn-square text-error"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-base-content/50">
-                در ملی‌پیامک، متغیرها به ترتیب با علامت سمی‌کالن (;) جدا می‌شوند.
+        {canSend && (
+          <div className="lg:col-span-5 rounded-2xl border border-base-200 bg-base-100 p-5 shadow-xs space-y-4">
+            <div className="pb-3 border-b border-base-200">
+              <h3 className="font-bold text-base text-base-content flex items-center gap-2">
+                <Send className="size-4 text-primary" /> ارسال پیامک با الگو
+              </h3>
+              <p className="text-xs text-base-content/60 mt-0.5">
+                متغیرهای الگو را تکمیل کنید تا مستقیماً به شماره همراه ارسال شود.
               </p>
             </div>
 
-            <Can permission="sms.send">
-              <button type="submit" className="btn btn-primary w-full gap-2 mt-4" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <span className="loading loading-spinner loading-xs" />
-                ) : (
-                  <Send className="size-4" />
-                )}
-                ارسال پیامک خدماتی
-              </button>
-            </Can>
-          </form>
-        </div>
+            <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
+              <Field label="شماره موبایل گیرنده" required error={errors.mobile?.message}>
+                <input
+                  dir="ltr"
+                  maxLength={11}
+                  className="input input-bordered w-full text-start font-mono"
+                  placeholder="09121234567"
+                  {...register('mobile', {
+                    onChange: (e) => {
+                      e.target.value = toEnDigits(e.target.value).replace(/\D/g, '').slice(0, 11)
+                    },
+                  })}
+                />
+              </Field>
+
+              <Field label="کد الگو (شناسه متن / BodyId در ملی‌پیامک)" required error={errors.pattern_code?.message}>
+                <input
+                  dir="ltr"
+                  className="input input-bordered w-full text-start font-mono"
+                  placeholder="مثال: 123456"
+                  {...register('pattern_code', {
+                    onChange: (e) => {
+                      e.target.value = toEnDigits(e.target.value)
+                    },
+                  })}
+                />
+              </Field>
+
+              {/* Dynamic Pattern Tokens */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-base-content/70">متغیرهای الگو (Tokens)</label>
+                  <button
+                    type="button"
+                    onClick={addTokenRow}
+                    className="btn btn-ghost btn-xs text-primary gap-1"
+                  >
+                    <Plus className="size-3" /> افزودن متغیر
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {tokens.map((token, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        className="input input-bordered input-sm w-20 text-center font-mono text-xs"
+                        placeholder="0"
+                        value={token.key}
+                        onChange={(e) => updateToken(index, 'key', toEnDigits(e.target.value))}
+                      />
+                      <input
+                        className="input input-bordered input-sm flex-1 text-xs"
+                        placeholder={`مقدار متغیر شماره ${index + 1}`}
+                        value={token.value}
+                        onChange={(e) => updateToken(index, 'value', e.target.value)}
+                      />
+                      {tokens.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeTokenRow(index)}
+                          className="btn btn-ghost btn-xs btn-square text-error"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-[11px] text-base-content/50">
+                  در ملی‌پیامک، متغیرها به ترتیب با علامت سمی‌کالن (;) جدا می‌شوند.
+                </p>
+              </div>
+
+              <Can permission="sms.send">
+                <button type="submit" className="btn btn-primary w-full gap-2 mt-4" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <span className="loading loading-spinner loading-xs" />
+                  ) : (
+                    <Send className="size-4" />
+                  )}
+                  ارسال پیامک خدماتی
+                </button>
+              </Can>
+            </form>
+          </div>
+        )}
 
         {/* SMS Logs Table Card */}
-        <div className="lg:col-span-7 rounded-2xl border border-base-200 bg-base-100 p-5 shadow-xs space-y-4">
+        <div
+          className={cx(
+            'rounded-2xl border border-base-200 bg-base-100 p-5 shadow-xs space-y-4',
+            canSend ? 'lg:col-span-7' : 'lg:col-span-12',
+          )}
+        >
           <div className="flex items-center justify-between pb-3 border-b border-base-200">
             <div>
               <h3 className="font-bold text-base text-base-content flex items-center gap-2">
@@ -247,7 +265,9 @@ export default function SmsCenter() {
                 وضعیت تحویل و کدهای پیگیری ارسال‌های ملی‌پیامک
               </p>
             </div>
-            <span className="badge badge-sm bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 text-xs">{num(logs.length)} رکورد</span>
+            <span className="badge badge-sm bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 text-xs">
+              {num(logs.length)} رکورد
+            </span>
           </div>
 
           {logsLoading ? (
@@ -255,7 +275,7 @@ export default function SmsCenter() {
           ) : !logs.length ? (
             <EmptyState
               title="پیامکی ارسال نشده است"
-              subtitle="از فرم روبه‌رو برای ارسال اولین پیامک آزمایشی با الگو استفاده کنید."
+              subtitle="از فرم ارسال پیامک برای ارسال اولین پیامک با الگو استفاده کنید."
             />
           ) : (
             <div className="overflow-x-auto">
@@ -273,10 +293,12 @@ export default function SmsCenter() {
                   {logs.map((log) => (
                     <tr key={log.id} className="transition-colors hover:bg-base-200/50">
                       <td>
-                        <span className="font-mono font-bold text-xs ltr-text text-start block">{log.recipient_mobile}</span>
+                        <span className="font-mono font-bold text-xs ltr-text text-start block">
+                          {log.recipient_mobile}
+                        </span>
                         {log.customer && (
                           <span className="text-[10px] text-base-content/50 block">
-                            {log.customer.first_name} {log.customer.last_name}
+                            {customerDisplayName(log.customer)}
                           </span>
                         )}
                       </td>

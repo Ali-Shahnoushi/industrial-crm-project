@@ -2,19 +2,17 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
-  BookOpen,
   ChevronDown,
   Cpu,
-  ExternalLink,
   Settings,
-  ShieldCheck,
   X,
 } from 'lucide-react'
 import { MAIN_NAV, SETTINGS_NAV } from './nav'
 import { useAuthStore } from '../store/useAuthStore'
 import { Avatar } from '../components/ui/Avatar'
 import { settingsApi } from '../services/api'
-import { cx } from '../utils/format'
+import { cx, digits } from '../utils/format'
+import { userTypeMeta } from '../utils/meta'
 
 export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
   const { data: companySettings } = useQuery({
@@ -23,8 +21,9 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
     staleTime: 5 * 60 * 1000,
   })
 
-  const companyName = companySettings?.company_name || 'سی‌آر‌ام قطعات'
+  const companyName = companySettings?.company_name || 'سی‌آر‌ام دستگاه‌ها'
   const logoUrl = companySettings?.company_logo_url
+  const appVersion = companySettings?.app_version || '2.0.0'
 
   return (
     <div className="flex items-center gap-3 min-w-0">
@@ -51,7 +50,9 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
         <p className={cx('font-extrabold tracking-tight truncate', size === 'lg' ? 'text-xl' : 'text-base')}>
           {companyName}
         </p>
-        <p className="text-[11px] text-base-content/50 truncate">مدیریت مشتریان و خدمات</p>
+        <p className="text-[11px] text-base-content/50 truncate">
+          مدیریت مشتریان و دستگاه‌ها • نسخه {digits(appVersion)}
+        </p>
       </div>
     </div>
   )
@@ -62,25 +63,39 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const location = useLocation()
 
-  // By default closed as requested in requirement 7
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const isSettingsActive = location.pathname.startsWith('/settings')
-
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
 
-  const visibleSettingsItems = SETTINGS_NAV.filter(
-    (item) => !item.permission || hasPermission(item.permission),
-  ).map((item) => {
+  const checkItemPermission = (perm?: string | string[]) => {
+    if (!perm) return true
+    return Array.isArray(perm) ? perm.some((p) => hasPermission(p)) : hasPermission(perm)
+  }
+
+  const visibleSettingsItems = SETTINGS_NAV.filter((item) => {
+    if (item.to === '/settings/system') {
+      return isAdministrator || hasPermission('settings.manage')
+    }
+    return checkItemPermission(item.permission)
+  }).map((item) => {
     if (item.to === '/settings/system' && !isAdministrator) {
       return { ...item, label: 'تنظیمات پوسته نمایشی' }
     }
     return item
   })
 
+  const roleInfo = user?.user_type ? userTypeMeta[user.user_type] : null
+
   return (
     <>
-      {open && <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={onClose} aria-hidden />}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          onClick={onClose}
+          aria-hidden
+        />
+      )}
       <aside
         className={cx(
           'fixed inset-y-0 right-0 z-50 flex w-72 flex-col border-l border-base-300/60 bg-base-100 transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0',
@@ -90,20 +105,25 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       >
         <div className="flex h-16 shrink-0 items-center justify-between px-5 border-b border-base-200">
           <Logo />
-          <button className="btn btn-ghost btn-sm btn-circle lg:hidden" onClick={onClose} aria-label="بستن منو">
+          <button
+            className="btn btn-ghost btn-sm btn-circle lg:hidden"
+            onClick={onClose}
+            aria-label="بستن منو"
+          >
             <X className="size-5" />
           </button>
         </div>
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
-          {/* Main Navigation Groups */}
           {MAIN_NAV.map((group) => {
-            const visibleItems = group.items.filter((item) => !item.permission || hasPermission(item.permission))
+            const visibleItems = group.items.filter((item) => checkItemPermission(item.permission))
             if (!visibleItems.length) return null
 
             return (
               <div key={group.title}>
-                <p className="mb-1.5 px-3 text-[11px] font-bold tracking-wide text-base-content/40 uppercase">{group.title}</p>
+                <p className="mb-1.5 px-3 text-[11px] font-bold tracking-wide text-base-content/40 uppercase">
+                  {group.title}
+                </p>
                 <ul className="space-y-1">
                   {visibleItems.map(({ to, label, icon: Icon, end }) => (
                     <li key={to}>
@@ -130,10 +150,11 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             )
           })}
 
-          {/* Settings Collapsible Accordion (Only visible if user has at least one settings item permitted) */}
           {visibleSettingsItems.length > 0 && (
             <div>
-              <p className="mb-1.5 px-3 text-[11px] font-bold tracking-wide text-base-content/40 uppercase">پیکربندی سیستم</p>
+              <p className="mb-1.5 px-3 text-[11px] font-bold tracking-wide text-base-content/40 uppercase">
+                پیکربندی سیستم
+              </p>
               <div className="space-y-1">
                 <button
                   type="button"
@@ -147,7 +168,12 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                   aria-expanded={settingsOpen}
                 >
                   <div className="flex items-center gap-3">
-                    <Settings className={cx('size-5 shrink-0 transition-transform duration-300', settingsOpen && 'rotate-45')} />
+                    <Settings
+                      className={cx(
+                        'size-5 shrink-0 transition-transform duration-300',
+                        settingsOpen && 'rotate-45',
+                      )}
+                    />
                     <span>تنظیمات سیستم</span>
                   </div>
                   <ChevronDown
@@ -158,7 +184,6 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                   />
                 </button>
 
-                {/* Accordion Sub-items */}
                 {settingsOpen && (
                   <ul className="ms-4 space-y-1 border-r-2 border-primary/30 pe-1 pt-1 animate-in fade-in duration-150">
                     {visibleSettingsItems.map(({ to, label, icon: Icon, end }) => (
@@ -188,7 +213,6 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           )}
         </nav>
 
-        {/* Current User Card */}
         {user && (
           <div className="p-3 border-t border-base-200">
             <NavLink
@@ -199,43 +223,21 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
             >
               <Avatar name={user.name} src={user.avatar_url} size="sm" presence="online" />
               <div className="flex-1 min-w-0 text-start">
-                <p className="font-bold text-xs text-base-content truncate">{user.name}</p>
-                <p className="text-[10px] text-base-content/50 truncate font-mono">{user.email}</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-xs text-base-content truncate">{user.name}</p>
+                  {roleInfo && (
+                    <span className={cx('badge badge-xs shrink-0', roleInfo.badgeClass)}>
+                      {roleInfo.label}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-base-content/50 truncate font-mono ltr-text">
+                  {user.email}
+                </p>
               </div>
             </NavLink>
           </div>
         )}
-
-        {/* External Links with solid high-contrast styling */}
-        {/* <div className="p-3 border-t border-base-200 space-y-2">
-          <a
-            href="/admin"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition-colors dark:border-amber-900/40 dark:bg-amber-950/40 dark:text-amber-300"
-          >
-            <ShieldCheck className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-            <div className="flex-1">
-              <p className="font-bold">پنل ادمین Filament</p>
-              <p className="text-[10px] text-amber-800/70 dark:text-amber-300/70">مدیریت مستقیم دیتابیس</p>
-            </div>
-            <ExternalLink className="size-3.5 opacity-60" />
-          </a>
-
-          <a
-            href="http://localhost:8000/docs/api"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs font-semibold text-blue-900 hover:bg-blue-100 transition-colors dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-300"
-          >
-            <BookOpen className="size-4 shrink-0 text-blue-600 dark:text-blue-400" />
-            <div className="flex-1">
-              <p className="font-bold">مستندات API (Scramble)</p>
-              <p className="text-[10px] text-blue-800/70 dark:text-blue-300/70">مشاهده و تست اندپوئینت‌ها</p>
-            </div>
-            <ExternalLink className="size-3.5 opacity-60" />
-          </a>
-        </div> */}
       </aside>
     </>
   )

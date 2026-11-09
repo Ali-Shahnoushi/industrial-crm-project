@@ -68,6 +68,9 @@ mkdir -p "$APP/public"
 for file in index.php private-path.php resolve-private.php; do
   cp "$ROOT/backend/public/$file" "$APP/public/$file"
 done
+for dir in css fonts; do
+  if [[ -d "$ROOT/backend/public/$dir" ]]; then cp -R "$ROOT/backend/public/$dir" "$APP/public/"; fi
+done
 (cd "$ROOT/frontend" && tar -cf - src index.html package.json package-lock.json tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts) | (cd "$FRONT" && tar -xf -)
 if [[ -d "$ROOT/frontend/public" ]]; then cp -R "$ROOT/frontend/public" "$FRONT/"; fi
 if [[ -n "$(find "$APP" "$FRONT" -type l -print -quit)" ]]; then
@@ -81,7 +84,7 @@ STEP='Composer install'
 echo '==> 2/7 Installing locked production PHP dependencies'
 # A deterministic local build environment: no production DB, no .env copied from the user.
 cat > "$APP/.env" <<'ENV'
-APP_NAME="Parts CRM Build"
+APP_NAME="Devices CRM Build"
 APP_ENV=local
 APP_DEBUG=false
 APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

@@ -3,15 +3,12 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\PartResource\Pages;
-use App\Filament\Resources\PartResource\RelationManagers;
 use App\Models\Part;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PartResource extends Resource
 {
@@ -19,35 +16,42 @@ class PartResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'قطعات';
+    protected static ?string $navigationLabel = 'دستگاه‌ها';
 
-    protected static ?string $modelLabel = 'قطعه';
+    protected static ?string $modelLabel = 'دستگاه';
 
-    protected static ?string $pluralModelLabel = 'قطعات';
+    protected static ?string $pluralModelLabel = 'دستگاه‌ها';
 
     public static function form(Form $form): Form
     {
         return $form
             ->schema([
                 Forms\Components\TextInput::make('name')
-                    ->label('نام قطعه')
+                    ->label('نام دستگاه')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(150),
                 Forms\Components\TextInput::make('code')
-                    ->label('کد فنی قطعه')
+                    ->label('کد فنی دستگاه')
                     ->required()
-                    ->maxLength(255),
-                Forms\Components\TextInput::make('periodic_service_months')
-                    ->label('دوره گارانتی/سرویس (ماه)')
-                    ->required()
+                    ->unique(ignoreRecord: true)
+                    ->maxLength(50),
+                Forms\Components\TextInput::make('stock_quantity')
+                    ->label('موجودی انبار')
                     ->numeric()
-                    ->default(12),
+                    ->default(0)
+                    ->minValue(0)
+                    ->required(),
+                Forms\Components\TextInput::make('periodic_service_months')
+                    ->label('بازه سرویس دوره‌ای (ماه)')
+                    ->numeric()
+                    ->default(6)
+                    ->minValue(1)
+                    ->required(),
                 Forms\Components\Toggle::make('is_active')
                     ->label('فعال در کاتالوگ')
-                    ->default(true)
-                    ->required(),
+                    ->default(true),
                 Forms\Components\Textarea::make('description')
-                    ->label('توضیحات و مشخصات فنی')
+                    ->label('توضیحات فنی')
                     ->columnSpanFull(),
             ]);
     }
@@ -56,47 +60,29 @@ class PartResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('شناسه')->sortable(),
                 Tables\Columns\TextColumn::make('name')
-                    ->label('نام قطعه')
+                    ->label('نام دستگاه')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('code')
                     ->label('کد فنی')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('periodic_service_months')
-                    ->label('دوره سرویس (ماه)')
-                    ->numeric()
+                    ->searchable()
+                    ->badge()
+                    ->color('gray'),
+                Tables\Columns\TextColumn::make('stock_quantity')
+                    ->label('موجودی انبار')
+                    ->suffix(' عدد')
                     ->sortable(),
+                Tables\Columns\TextColumn::make('periodic_service_months')
+                    ->label('دوره سرویس')
+                    ->suffix(' ماه'),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('وضعیت')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('تاریخ ایجاد')
-                    ->dateTime()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                //
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                Tables\Actions\DeleteAction::make(),
             ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
     }
 
     public static function getPages(): array

@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Part extends Model
 {
@@ -15,6 +15,7 @@ class Part extends Model
         'name',
         'code',
         'periodic_service_months',
+        'stock_quantity',
         'description',
         'is_active',
     ];
@@ -24,6 +25,7 @@ class Part extends Model
         return [
             'is_active' => 'boolean',
             'periodic_service_months' => 'integer',
+            'stock_quantity' => 'integer',
         ];
     }
 
@@ -32,10 +34,25 @@ class Part extends Model
         return $this->hasMany(CustomerPart::class);
     }
 
+    public function inventoryLogs(): HasMany
+    {
+        return $this->hasMany(PartInventoryLog::class)->latest();
+    }
+
     public function customers(): BelongsToMany
     {
         return $this->belongsToMany(Customer::class, 'customer_parts')
-            ->withPivot(['id', 'serial_number', 'installation_date', 'warranty_expire_date', 'status', 'notes'])
+            ->withPivot([
+                'id',
+                'serial_number',
+                'quantity',
+                'invoice_amount',
+                'invoice_number',
+                'installation_date',
+                'warranty_expire_date',
+                'status',
+                'notes',
+            ])
             ->withTimestamps();
     }
 }

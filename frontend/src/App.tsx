@@ -68,7 +68,7 @@ export default function App() {
             <Route
               path="sms"
               element={
-                <PermissionRoute permission="sms.send">
+                <PermissionRoute permission={['sms.send', 'sms.logs']}>
                   <SmsCenter />
                 </PermissionRoute>
               }

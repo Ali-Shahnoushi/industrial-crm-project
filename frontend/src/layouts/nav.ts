@@ -1,12 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  Boxes,
   Cpu,
-  FileCode2,
   LayoutDashboard,
   MessageSquare,
   Palette,
-  Settings,
   ShieldCheck,
   User,
   Users,
@@ -17,7 +14,7 @@ export interface NavItem {
   label: string
   icon: LucideIcon
   end?: boolean
-  permission?: string
+  permission?: string | string[]
   external?: boolean
 }
 
@@ -34,23 +31,23 @@ export const MAIN_NAV: NavGroup[] = [
     ],
   },
   {
-    title: 'مشتریان و قطعات',
+    title: 'مشتریان و دستگاه‌ها',
     items: [
       { to: '/customers', label: 'مدیریت مشتریان', icon: Users, permission: 'customers.view' },
-      { to: '/parts', label: 'کاتالوگ و تخصیص قطعات', icon: Cpu, permission: 'parts.view' },
+      { to: '/parts', label: 'کاتالوگ و انبار دستگاه‌ها', icon: Cpu, permission: 'parts.view' },
     ],
   },
   {
     title: 'ارتباطات و پیام‌رسانی',
     items: [
-      { to: '/sms', label: 'سامانه پیامک (ملی‌پیامک)', icon: MessageSquare, permission: 'sms.send' },
+      { to: '/sms', label: 'سامانه پیامک (ملی‌پیامک)', icon: MessageSquare, permission: ['sms.send', 'sms.logs'] },
     ],
   },
 ]
 
 export const SETTINGS_NAV: NavItem[] = [
   { to: '/settings/sms', label: 'سامانه ملی‌پیامک', icon: MessageSquare, permission: 'settings.manage' },
-  { to: '/settings/users', label: 'کاربران و دسترسی‌ها (ACL)', icon: ShieldCheck, permission: 'users.manage' },
+  { to: '/settings/users', label: 'کارمندان، نقش‌ها و دسترسی‌ها', icon: ShieldCheck, permission: 'users.manage' },
   { to: '/settings/profile', label: 'پروفایل کاربری من', icon: User },
-  { to: '/settings/system', label: 'تنظیمات پوسته و رنگ', icon: Palette },
+  { to: '/settings/system', label: 'تنظیمات سیستم و پوسته', icon: Palette },
 ]

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { MessageSquare, Save, ShieldCheck } from 'lucide-react'
+import { MessageSquare, Save } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { Field } from '../../components/ui/Field'
 import AccessDenied from '../AccessDenied'
 import { settingsApi } from '../../services/api'
 import { useAuthStore } from '../../store/useAuthStore'
+import { toEnDigits } from '../../utils/format'
 
 export default function SmsSettingsPage() {
   const qc = useQueryClient()
@@ -51,9 +52,9 @@ export default function SmsSettingsPage() {
   const handleSaveSms = (e: React.FormEvent) => {
     e.preventDefault()
     saveSmsMutation.mutate({
-      melipayamak_username: smsForm.username,
-      melipayamak_password: smsForm.password || undefined,
-      melipayamak_from: smsForm.from,
+      melipayamak_username: toEnDigits(smsForm.username.trim()),
+      melipayamak_password: smsForm.password ? toEnDigits(smsForm.password) : undefined,
+      melipayamak_from: toEnDigits(smsForm.from.trim()),
       melipayamak_sandbox: smsForm.sandbox,
     })
   }

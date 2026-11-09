@@ -3,23 +3,18 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
-  AlertTriangle,
   ArrowRight,
-  Boxes,
   Building2,
-  Calendar,
-  CheckCircle2,
-  Clock,
   Cpu,
+  Hash,
   History,
-  Mail,
   MapPin,
   MessageSquare,
   Pencil,
   Phone,
   Plus,
+  Receipt,
   Send,
-  ShieldCheck,
   Trash2,
   User,
   UserCheck,
@@ -32,8 +27,8 @@ import { CustomerFormModal } from '../components/customers/CustomerFormModal'
 import { AssignPartModal } from '../components/parts/AssignPartModal'
 import { ServiceHistoryModal } from '../components/parts/ServiceHistoryModal'
 import { Can } from '../components/common/Can'
-import { customerApi } from '../services/api'
-import { cx, dateFa, dateShort, num, relativeFa, toman } from '../utils/format'
+import { customerApi, partApi } from '../services/api'
+import { customerDisplayName, cx, dateFa, dateShort, num, relativeFa, toman } from '../utils/format'
 import type { CustomerPart } from '../types'
 
 type ActiveTab = 'parts' | 'audit' | 'sms' | 'profile'
@@ -47,6 +42,8 @@ export default function CustomerDetail() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [assignPartOpen, setAssignPartOpen] = useState(false)
+  const [editingAssignedPart, setEditingAssignedPart] = useState<CustomerPart | null>(null)
+  const [deletingAssignedPart, setDeletingAssignedPart] = useState<CustomerPart | null>(null)
   const [servicePart, setServicePart] = useState<CustomerPart | null>(null)
 
   const { data: customer, isLoading, error } = useQuery({
@@ -67,12 +64,28 @@ export default function CustomerDetail() {
     },
   })
 
+  const deleteAssignedPartMutation = useMutation({
+    mutationFn: (customerPartId: number | string) => partApi.deleteAssignedPart(customerPartId),
+    onSuccess: (res) => {
+      toast.success(res.message || 'دستگاه از پرونده حذف شد و موجودی به انبار بازگردانده شد')
+      qc.invalidateQueries({ queryKey: ['customer', id] })
+      qc.invalidateQueries({ queryKey: ['customers'] })
+      qc.invalidateQueries({ queryKey: ['parts-catalog'] })
+      qc.invalidateQueries({ queryKey: ['inventory-logs'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      setDeletingAssignedPart(null)
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'خطا در حذف دستگاه اختصاص‌یافته')
+    },
+  })
+
   if (isLoading) return <PageSkeleton />
   if (error || !customer) {
     return (
       <EmptyState
-        title="مشتری یافت نشد"
-        subtitle="ممکن است این مشتری حذف شده یا شناسه آن نامعتبر باشد."
+        title="پرونده مشتری یافت نشد"
+        subtitle="ممکن است این مشتری حذف شده باشد یا خارج از محدوده دسترسی حساب شما باشد."
         action={
           <Link to="/customers" className="btn btn-primary btn-sm">
             بازگشت به فهرست مشتریان
@@ -82,6 +95,7 @@ export default function CustomerDetail() {
     )
   }
 
+  const displayName = customerDisplayName(customer)
   const customerParts = customer.customer_parts ?? []
   const histories = customer.histories ?? []
   const smsLogs = customer.sms_logs ?? []
@@ -113,9 +127,7 @@ export default function CustomerDetail() {
 
             <div className="space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-black text-base-content">
-                  {customer.first_name} {customer.last_name}
-                </h1>
+                <h1 className="text-xl font-black text-base-content">{displayName}</h1>
                 {customer.customer_type === 'effective' ? (
                   <span className="badge badge-success badge-soft font-bold text-xs gap-1">
                     <UserCheck className="size-3" /> مشتری بالفعل
@@ -130,17 +142,18 @@ export default function CustomerDetail() {
                 </span>
               </div>
 
-              {customer.company_name && (
+              {customer.type === 'individual' && customer.company_name && (
                 <p className="text-xs font-semibold text-base-content/60">{customer.company_name}</p>
               )}
 
               <div className="flex flex-wrap items-center gap-4 text-xs text-base-content/60 pt-1 font-mono">
                 <span className="flex items-center gap-1 ltr-text">
-                  <Phone className="size-3.5 text-base-content/40" /> {customer.mobile}
+                  <Phone className="size-3.5 text-base-content/40" /> {customer.mobile || 'بدون شماره همراه'}
                 </span>
-                {customer.city && (
+                {(customer.city || customer.province) && (
                   <span className="flex items-center gap-1 font-sans">
-                    <MapPin className="size-3.5 text-base-content/40" /> {customer.province} - {customer.city}
+                    <MapPin className="size-3.5 text-base-content/40" />{' '}
+                    {[customer.province, customer.city].filter(Boolean).join(' - ')}
                   </span>
                 )}
               </div>
@@ -150,22 +163,34 @@ export default function CustomerDetail() {
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
             <Can permission="parts.assign">
-              <button className="btn btn-sm btn-primary gap-1.5" onClick={() => setAssignPartOpen(true)}>
-                <Plus className="size-4" /> تخصیص قطعه جدید
+              <button
+                className="btn btn-sm btn-primary gap-1.5"
+                onClick={() => {
+                  setEditingAssignedPart(null)
+                  setAssignPartOpen(true)
+                }}
+              >
+                <Plus className="size-4" /> تخصیص دستگاه جدید
               </button>
             </Can>
 
-            <Can permission="sms.send">
-              <Link
-                to={`/sms?mobile=${customer.mobile}&customer_id=${customer.id}`}
-                className="btn btn-sm btn-outline gap-1.5"
-              >
-                <Send className="size-4" /> ارسال پیامک
-              </Link>
-            </Can>
+            {customer.mobile && (
+              <Can permission="sms.send">
+                <Link
+                  to={`/sms?mobile=${customer.mobile}&customer_id=${customer.id}`}
+                  className="btn btn-sm btn-outline gap-1.5"
+                >
+                  <Send className="size-4" /> ارسال پیامک
+                </Link>
+              </Can>
+            )}
 
             <Can permission="customers.edit">
-              <button className="btn btn-sm btn-square btn-ghost" onClick={() => setEditOpen(true)} title="ویرایش پرونده">
+              <button
+                className="btn btn-sm btn-square btn-ghost"
+                onClick={() => setEditOpen(true)}
+                title="ویرایش پرونده"
+              >
                 <Pencil className="size-4" />
               </button>
             </Can>
@@ -192,7 +217,7 @@ export default function CustomerDetail() {
             onClick={() => setActiveTab('parts')}
           >
             <Cpu className="size-4" />
-            قطعات فیزیکی و سوابق خدمات ({num(customerParts.length)})
+            دستگاه‌ها، فاکتورها و سوابق خدمات ({num(customerParts.length)})
           </button>
           <button
             role="tab"
@@ -221,14 +246,20 @@ export default function CustomerDetail() {
         </div>
       </div>
 
-      {/* Tab 1: Customer Parts and Service History */}
+      {/* Tab 1: Customer Devices and Service History */}
       {activeTab === 'parts' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-base text-base-content">قطعات فیزیکی تخصیص‌یافته به مشتری</h2>
+            <h2 className="font-bold text-base text-base-content">دستگاه‌های تخصیص‌یافته به مشتری</h2>
             <Can permission="parts.assign">
-              <button className="btn btn-xs btn-primary gap-1" onClick={() => setAssignPartOpen(true)}>
-                <Plus className="size-3.5" /> تخصیص قطعه دیگر
+              <button
+                className="btn btn-xs btn-primary gap-1"
+                onClick={() => {
+                  setEditingAssignedPart(null)
+                  setAssignPartOpen(true)
+                }}
+              >
+                <Plus className="size-3.5" /> تخصیص دستگاه دیگر
               </button>
             </Can>
           </div>
@@ -236,13 +267,19 @@ export default function CustomerDetail() {
           {!customerParts.length ? (
             <div className="rounded-2xl border border-dashed border-base-300 p-8 text-center bg-base-100">
               <Cpu className="mx-auto size-12 text-base-content/30 mb-2" />
-              <p className="font-bold text-sm">هیچ قطعه‌ای برای این مشتری ثبت نشده است</p>
+              <p className="font-bold text-sm">هیچ دستگاهی برای این مشتری ثبت نشده است</p>
               <p className="text-xs text-base-content/60 mt-1 max-w-sm mx-auto">
-                با تخصیص اولین قطعه فیزیکی به همراه شماره سریال یکتا، وضعیت مشتری به طور خودکار به «بالفعل» تغییر خواهد یافت.
+                با تخصیص اولین دستگاه، تعداد آن از موجودی انبار کسر شده و وضعیت مشتری به طور خودکار به «بالفعل» تغییر خواهد یافت.
               </p>
               <Can permission="parts.assign">
-                <button className="btn btn-sm btn-primary mt-4" onClick={() => setAssignPartOpen(true)}>
-                  <Plus className="size-4" /> تخصیص اولین قطعه
+                <button
+                  className="btn btn-sm btn-primary mt-4"
+                  onClick={() => {
+                    setEditingAssignedPart(null)
+                    setAssignPartOpen(true)
+                  }}
+                >
+                  <Plus className="size-4" /> تخصیص اولین دستگاه
                 </button>
               </Can>
             </div>
@@ -256,9 +293,12 @@ export default function CustomerDetail() {
                         <Cpu className="size-6" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-sm text-base-content">{cp.part?.name ?? 'قطعه صنعتی'}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-bold text-sm text-base-content">{cp.part?.name ?? 'دستگاه'}</h3>
                           <span className="badge badge-primary font-mono text-xs">{cp.serial_number}</span>
+                          <span className="badge badge-primary badge-soft font-bold text-xs">
+                            تعداد: {num(cp.quantity ?? 1)} عدد
+                          </span>
                         </div>
                         <p className="text-xs text-base-content/60 mt-0.5">
                           کد کاتالوگ: <span className="font-mono">{cp.part?.code}</span> • دوره گارانتی/سرویس:{' '}
@@ -267,22 +307,24 @@ export default function CustomerDetail() {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <span
                         className={cx(
                           'badge badge-sm font-bold',
                           cp.status === 'active'
                             ? 'badge-success badge-soft'
                             : cp.status === 'under_repair'
-                            ? 'badge-warning badge-soft'
-                            : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700',
+                              ? 'badge-warning badge-soft'
+                              : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700',
                         )}
                       >
                         {cp.status === 'active'
                           ? 'فعال در محل مشتری'
                           : cp.status === 'under_repair'
-                          ? 'در دست تعمیر'
-                          : cp.status}
+                            ? 'در دست تعمیر'
+                            : cp.status === 'replaced'
+                              ? 'تعویض شده'
+                              : 'از رده خارج'}
                       </span>
 
                       <Can permission="parts.history">
@@ -293,44 +335,97 @@ export default function CustomerDetail() {
                           <Wrench className="size-3.5" /> ثبت اقدام / تعمیر
                         </button>
                       </Can>
+
+                      <Can permission="parts.assign">
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-ghost btn-square text-sky-600"
+                          title="ویرایش تعداد، مبلغ فاکتور یا سریال دستگاه"
+                          onClick={() => {
+                            setEditingAssignedPart(cp)
+                            setAssignPartOpen(true)
+                          }}
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-xs btn-ghost btn-square text-error hover:bg-error/10"
+                          title="حذف دستگاه از پرونده و بازگشت موجودی به انبار"
+                          onClick={() => setDeletingAssignedPart(cp)}
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      </Can>
                     </div>
                   </div>
+
+                  {/* Invoice & Financial Summary */}
+                  {((cp.invoice_amount !== null && cp.invoice_amount !== undefined) || cp.invoice_number) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs bg-primary/5 border border-primary/20 p-3.5 rounded-xl">
+                      <div>
+                        <span className="text-base-content/55 flex items-center gap-1">
+                          <Receipt className="size-3.5 text-primary" /> مبلغ فاکتور:
+                        </span>
+                        <span className="font-extrabold text-sm text-primary block mt-0.5">
+                          {cp.invoice_amount !== null && cp.invoice_amount !== undefined
+                            ? toman(Number(cp.invoice_amount))
+                            : '—'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-base-content/55 flex items-center gap-1">
+                          <Hash className="size-3.5 text-primary" /> شماره فاکتور:
+                        </span>
+                        <span className="font-bold font-mono ltr-text text-start block mt-0.5">
+                          {cp.invoice_number || '—'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Dates & Notes */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 border border-slate-200 p-3.5 rounded-xl dark:bg-slate-900/60 dark:border-slate-800">
                     <div>
                       <span className="text-base-content/50 block">تاریخ تحویل یا نصب:</span>
                       <span className="font-medium">
-                        {cp.installation_date ? `${dateFa(cp.installation_date)} (${dateShort(cp.installation_date)})` : '—'}
+                        {cp.installation_date
+                          ? `${dateFa(cp.installation_date)} (${dateShort(cp.installation_date)})`
+                          : '—'}
                       </span>
                     </div>
                     <div>
                       <span className="text-base-content/50 block">پوشش گارانتی تا:</span>
                       <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                        {cp.warranty_expire_date ? `${dateFa(cp.warranty_expire_date)} (${dateShort(cp.warranty_expire_date)})` : '—'}
+                        {cp.warranty_expire_date
+                          ? `${dateFa(cp.warranty_expire_date)} (${dateShort(cp.warranty_expire_date)})`
+                          : '—'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-base-content/50 block">توضیحات اختصاصی قطعه:</span>
+                      <span className="text-base-content/50 block">توضیحات اختصاصی دستگاه:</span>
                       <span className="font-medium">{cp.notes || 'بدون یادداشت'}</span>
                     </div>
                   </div>
 
-                  {/* Part Service / Repair Histories */}
+                  {/* Device Service / Repair Histories */}
                   <div className="space-y-2 pt-2">
                     <h4 className="text-xs font-bold text-base-content/70 flex items-center gap-1.5">
-                      <Wrench className="size-3.5" /> سوابق خدمات، بررسی و تعمیرات این قطعه (
+                      <Wrench className="size-3.5" /> سوابق خدمات، بررسی و تعمیرات این دستگاه (
                       {num(cp.service_histories?.length ?? 0)})
                     </h4>
 
                     {!cp.service_histories?.length ? (
                       <p className="text-xs text-base-content/40 italic py-2">
-                        تاکنون سابقه تعمیر یا اقدام سرویسی برای این قطعه ثبت نشده است.
+                        تاکنون سابقه تعمیر یا اقدام سرویسی برای این دستگاه ثبت نشده است.
                       </p>
                     ) : (
                       <div className="divide-y divide-base-200/60 rounded-xl border border-base-200/60 bg-base-100 overflow-hidden">
                         {cp.service_histories.map((sh) => (
-                          <div key={sh.id} className="p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div
+                            key={sh.id}
+                            className="p-3 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                          >
                             <div className="space-y-1">
                               <div className="flex items-center gap-2">
                                 <span
@@ -339,20 +434,23 @@ export default function CustomerDetail() {
                                     sh.service_type === 'periodic'
                                       ? 'badge-info badge-soft'
                                       : sh.service_type === 'repair'
-                                      ? 'badge-warning badge-soft'
-                                      : 'badge-error badge-soft',
+                                        ? 'badge-warning badge-soft'
+                                        : 'badge-error badge-soft',
                                   )}
                                 >
                                   {sh.service_type === 'periodic'
                                     ? 'سرویس دوره‌ای'
                                     : sh.service_type === 'repair'
-                                    ? 'تعمیر فنی'
-                                    : 'اورهال'}
+                                      ? 'تعمیر فنی'
+                                      : 'اورهال'}
                                 </span>
                                 <span className="font-medium">{sh.description}</span>
                               </div>
                               <p className="text-[11px] text-base-content/50">
-                                تاریخ اقدام: {sh.service_date ? `${dateFa(sh.service_date)} (${dateShort(sh.service_date)})` : '—'}
+                                تاریخ اقدام:{' '}
+                                {sh.service_date
+                                  ? `${dateFa(sh.service_date)} (${dateShort(sh.service_date)})`
+                                  : '—'}
                                 {sh.performed_by && ` • توسط: ${sh.performed_by.name}`}
                               </p>
                             </div>
@@ -406,19 +504,25 @@ export default function CustomerDetail() {
       {activeTab === 'sms' && (
         <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold text-base text-base-content">پیامک‌های ارسال شده به این مشتری (ملی‌پیامک)</h2>
-            <Can permission="sms.send">
-              <Link
-                to={`/sms?mobile=${customer.mobile}&customer_id=${customer.id}`}
-                className="btn btn-xs btn-primary gap-1"
-              >
-                <Send className="size-3" /> ارسال پیامک جدید
-              </Link>
-            </Can>
+            <h2 className="font-bold text-base text-base-content">
+              پیامک‌های ارسال شده به این مشتری (ملی‌پیامک)
+            </h2>
+            {customer.mobile && (
+              <Can permission="sms.send">
+                <Link
+                  to={`/sms?mobile=${customer.mobile}&customer_id=${customer.id}`}
+                  className="btn btn-xs btn-primary gap-1"
+                >
+                  <Send className="size-3" /> ارسال پیامک جدید
+                </Link>
+              </Can>
+            )}
           </div>
 
           {!smsLogs.length ? (
-            <p className="text-xs text-base-content/50 py-8 text-center">پیامکی برای این مشتری ثبت نشده است.</p>
+            <p className="text-xs text-base-content/50 py-8 text-center">
+              پیامکی برای این مشتری ثبت نشده است.
+            </p>
           ) : (
             <div className="divide-y divide-base-200/60">
               {smsLogs.map((s) => (
@@ -443,8 +547,8 @@ export default function CustomerDetail() {
                         s.status === 'sent'
                           ? 'badge-success badge-soft'
                           : s.status === 'pending'
-                          ? 'badge-warning badge-soft'
-                          : 'badge-error badge-soft',
+                            ? 'badge-warning badge-soft'
+                            : 'badge-error badge-soft',
                       )}
                     >
                       {s.status === 'sent' ? 'تحویل شد' : s.status === 'pending' ? 'در صف' : 'ناموفق'}
@@ -466,7 +570,7 @@ export default function CustomerDetail() {
             <div className="space-y-1 p-3.5 bg-slate-50 border border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 rounded-xl">
               <span className="text-base-content/50">نام و نام خانوادگی:</span>
               <p className="font-bold text-sm">
-                {customer.first_name} {customer.last_name}
+                {[customer.first_name, customer.last_name].filter(Boolean).join(' ') || '—'}
               </p>
             </div>
 
@@ -482,7 +586,7 @@ export default function CustomerDetail() {
 
             <div className="space-y-1 p-3.5 bg-slate-50 border border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 rounded-xl">
               <span className="text-base-content/50">شماره همراه:</span>
-              <p className="font-bold text-sm font-mono ltr-text text-start">{customer.mobile}</p>
+              <p className="font-bold text-sm font-mono ltr-text text-start">{customer.mobile || '—'}</p>
             </div>
 
             <div className="space-y-1 p-3.5 bg-slate-50 border border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 rounded-xl">
@@ -498,7 +602,7 @@ export default function CustomerDetail() {
             <div className="space-y-1 p-3.5 bg-slate-50 border border-slate-200 dark:bg-slate-900/60 dark:border-slate-800 rounded-xl sm:col-span-2">
               <span className="text-base-content/50">استان و شهر:</span>
               <p className="font-bold text-sm">
-                {customer.province || ''} {customer.city ? `- ${customer.city}` : ''}
+                {[customer.province, customer.city].filter(Boolean).join(' - ') || '—'}
               </p>
             </div>
 
@@ -529,13 +633,20 @@ export default function CustomerDetail() {
 
       <AssignPartModal
         open={assignPartOpen}
-        onClose={() => setAssignPartOpen(false)}
+        onClose={() => {
+          setAssignPartOpen(false)
+          setEditingAssignedPart(null)
+        }}
         customer={customer}
+        editingPart={editingAssignedPart}
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ['customer', id] })
           qc.invalidateQueries({ queryKey: ['customers'] })
+          qc.invalidateQueries({ queryKey: ['parts-catalog'] })
+          qc.invalidateQueries({ queryKey: ['inventory-logs'] })
           qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
           setAssignPartOpen(false)
+          setEditingAssignedPart(null)
         }}
       />
 
@@ -550,11 +661,32 @@ export default function CustomerDetail() {
       />
 
       <ConfirmDialog
+        open={Boolean(deletingAssignedPart)}
+        onClose={() => setDeletingAssignedPart(null)}
+        onConfirm={() =>
+          deletingAssignedPart && deleteAssignedPartMutation.mutate(deletingAssignedPart.id)
+        }
+        title="حذف دستگاه از پرونده مشتری و بازگشت به انبار"
+        message={
+          deletingAssignedPart
+            ? `آیا از حذف دستگاه «${deletingAssignedPart.part?.name ?? ''}» (تعداد: ${num(
+                deletingAssignedPart.quantity ?? 1,
+              )} عدد، سریال: ${deletingAssignedPart.serial_number}) از پرونده این مشتری اطمینان دارید؟ تعداد ${num(
+                deletingAssignedPart.quantity ?? 1,
+              )} عدد به صورت خودکار به موجودی انبار بازگردانده شده و در لاگ انبار ثبت می‌گردد.`
+            : ''
+        }
+        confirmText="بله، حذف و بازگشت به انبار"
+        tone="error"
+        loading={deleteAssignedPartMutation.isPending}
+      />
+
+      <ConfirmDialog
         open={deleteOpen}
         onClose={() => setDeleteOpen(false)}
         onConfirm={() => deleteMutation.mutate()}
         title="حذف پرونده مشتری"
-        message={`آیا از حذف مشتری «${customer.first_name} ${customer.last_name}» و کلیه قطعات و سوابق آن اطمینان دارید؟`}
+        message={`آیا از حذف مشتری «${displayName}» و کلیه سوابق آن اطمینان دارید؟`}
         confirmText="بله، حذف کن"
         tone="error"
         loading={deleteMutation.isPending}

@@ -27,26 +27,33 @@ Route::prefix('v1')->group(function () {
         // Dashboard statistics
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
-        // Customers
+        // Customers + Excel Import/Export + ACL Lookup
+        Route::get('/customers-lookup', [CustomerController::class, 'lookup']);
         Route::get('/customers/export', [CustomerController::class, 'export']);
         Route::post('/customers/import', [CustomerController::class, 'import']);
         Route::apiResource('customers', CustomerController::class);
 
-        // Parts & Assignments
+        // Devices Catalog, Warehouse Stock & Customer Device Assignments
+        Route::get('/inventory-logs', [PartController::class, 'inventoryLogs']);
+        Route::post('/parts/{part}/stock', [PartController::class, 'adjustStock']);
         Route::apiResource('parts', PartController::class);
         Route::post('/customers/{customer}/parts', [PartController::class, 'assign']);
+        Route::put('/customer-parts/{customerPart}', [PartController::class, 'updateAssignment']);
+        Route::delete('/customer-parts/{customerPart}', [PartController::class, 'deleteAssignment']);
         Route::post('/customer-parts/{customerPart}/history', [PartController::class, 'addServiceHistory']);
 
         // SMS (Melipayamak)
         Route::post('/sms/send-pattern', [SmsController::class, 'sendPattern']);
         Route::get('/sms/logs', [SmsController::class, 'logs']);
 
-        // System Settings
+        // System Settings & Web Upgrade Helper
         Route::get('/settings/sms', [SettingController::class, 'getSmsSettings']);
         Route::put('/settings/sms', [SettingController::class, 'updateSmsSettings']);
         Route::post('/settings/company', [SettingController::class, 'updateCompanySettings']);
+        Route::post('/settings/system/upgrade', [SettingController::class, 'upgradeSystem']);
 
-        // Users & Pure ACL Permissions
+        // Users, Roles & Granular ACL Permissions
+        Route::get('/roles', [UserController::class, 'availableRoles']);
         Route::get('/permissions', [UserController::class, 'availablePermissions']);
         Route::get('/users', [UserController::class, 'index']);
         Route::post('/users', [UserController::class, 'store']);

@@ -22,6 +22,17 @@ class SmsController extends Controller
     {
         $this->authorizePermission('sms.send');
 
+        if ($request->has('mobile')) {
+            $request->merge([
+                'mobile' => preg_replace('/[^\d]/', '', (string) $this->normalizeDigits((string) $request->input('mobile', ''))),
+            ]);
+        }
+        if ($request->has('pattern_code')) {
+            $request->merge([
+                'pattern_code' => trim((string) $this->normalizeDigits((string) $request->input('pattern_code', ''))),
+            ]);
+        }
+
         $validated = $request->validate([
             'mobile' => 'required|string|regex:/^09\d{9}$/',
             'pattern_code' => 'required|string',
@@ -32,6 +43,10 @@ class SmsController extends Controller
         $customer = isset($validated['customer_id'])
             ? Customer::find($validated['customer_id'])
             : null;
+
+        if ($customer) {
+            $this->authorizeCustomerAccess($customer);
+        }
 
         $result = $this->melipayamakService->sendPattern(
             $validated['mobile'],
@@ -55,19 +70,25 @@ class SmsController extends Controller
     {
         $this->authorizePermission('sms.logs');
 
+        $user = $request->user();
         $query = SmsLog::with('customer')->latest();
+
+        if ($user && $user->hasRestrictedCustomerScope()) {
+            $query->whereHas('customer', fn ($cq) => $cq->accessibleBy($user));
+        }
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         if ($request->filled('q')) {
-            $term = trim($request->q);
+            $term = trim((string) $request->q);
+            $normTerm = $this->normalizeDigits($term) ?? $term;
             $op = $this->likeOp();
-            $query->where(function ($q) use ($term, $op) {
-                $q->where('recipient_mobile', $op, "%{$term}%")
-                    ->orWhere('pattern_code', $op, "%{$term}%")
-                    ->orWhere('provider_message_id', $op, "%{$term}%")
+            $query->where(function ($q) use ($term, $normTerm, $op) {
+                $q->where('recipient_mobile', $op, "%{$normTerm}%")
+                    ->orWhere('pattern_code', $op, "%{$normTerm}%")
+                    ->orWhere('provider_message_id', $op, "%{$normTerm}%")
                     ->orWhereHas('customer', function ($cq) use ($term, $op) {
                         $cq->where('first_name', $op, "%{$term}%")
                             ->orWhere('last_name', $op, "%{$term}%")
@@ -80,13 +101,5 @@ class SmsController extends Controller
         $logs = $query->paginate($perPage);
 
         return response()->json($logs);
-    }
-
-    protected function authorizePermission(string $permission): void
-    {
-        $user = auth()->user();
-        if (!$user || !$user->hasPermissionTo($permission)) {
-            abort(403, "شما دسترسی لازم ({$permission}) برای این عملیات را ندارید.");
-        }
     }
 }

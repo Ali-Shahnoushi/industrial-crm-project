@@ -3,23 +3,20 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\UserResource\Pages;
-use App\Filament\Resources\UserResource\RelationManagers;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $navigationIcon = 'heroicon-o-user-group';
+    protected static ?string $navigationIcon = 'heroicon-o-shield-check';
 
-    protected static ?string $navigationLabel = 'کاربران و دسترسی‌ها';
+    protected static ?string $navigationLabel = 'کاربران و سطح دسترسی';
 
     protected static ?string $modelLabel = 'کاربر';
 
@@ -32,37 +29,45 @@ class UserResource extends Resource
                 Forms\Components\TextInput::make('name')
                     ->label('نام و نام خانوادگی')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(100),
                 Forms\Components\TextInput::make('email')
                     ->label('ایمیل')
                     ->email()
                     ->required()
-                    ->maxLength(255),
+                    ->unique(ignoreRecord: true),
                 Forms\Components\TextInput::make('phone')
-                    ->label('شماره همراه')
-                    ->tel()
-                    ->maxLength(255),
+                    ->label('شماره موبایل')
+                    ->maxLength(20),
+                Forms\Components\Select::make('user_type')
+                    ->label('نقش سازمانی')
+                    ->options([
+                        User::ROLE_SALESPERSON => 'کارمند فروش',
+                        User::ROLE_INSTALLER => 'نصاب',
+                        User::ROLE_MANAGER => 'مدیر / سرپرست',
+                        User::ROLE_ADMINISTRATOR => 'مدیر ارشد',
+                    ])
+                    ->default(User::ROLE_SALESPERSON)
+                    ->required(),
+                Forms\Components\Select::make('customer_scope')
+                    ->label('محدوده دسترسی به مشتریان')
+                    ->options([
+                        User::SCOPE_OWN => 'فقط مشتریان ثبت‌شده توسط خود کارمند',
+                        User::SCOPE_SELECTED => 'مشتریان خود + استثناهای انتخاب‌شده',
+                        User::SCOPE_ALL => 'همه مشتریان سیستم',
+                    ])
+                    ->default(User::SCOPE_OWN)
+                    ->required(),
                 Forms\Components\TextInput::make('password')
                     ->label('رمز عبور')
                     ->password()
                     ->dehydrateStateUsing(fn ($state) => filled($state) ? bcrypt($state) : null)
                     ->dehydrated(fn ($state) => filled($state))
-                    ->required(fn (string $operation): bool => $operation === 'create')
-                    ->maxLength(255),
-                Forms\Components\Select::make('user_type')
-                    ->label('نوع کاربر')
-                    ->options([
-                        'administrator' => 'مدیر ارشد (Administrator)',
-                        'manager' => 'مدیر (Manager)',
-                    ])
-                    ->default('manager')
-                    ->required(),
+                    ->required(fn (string $operation): bool => $operation === 'create'),
                 Forms\Components\Toggle::make('is_active')
-                    ->label('حساب کاربری فعال است')
-                    ->default(true)
-                    ->required(),
+                    ->label('وضعیت فعال')
+                    ->default(true),
                 Forms\Components\CheckboxList::make('permissions')
-                    ->label('مجوزهای مستقیم سیستمی (Pure ACL)')
+                    ->label('مجوزهای دسترسی عملیاتی (ACL)')
                     ->relationship('permissions', 'name')
                     ->columns(2)
                     ->columnSpanFull(),
@@ -73,56 +78,26 @@ class UserResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('شناسه')->sortable(),
                 Tables\Columns\TextColumn::make('name')
                     ->label('نام کاربر')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('email')
                     ->label('ایمیل')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('phone')
-                    ->label('شماره موبایل')
-                    ->searchable(),
-                Tables\Columns\BadgeColumn::make('user_type')
-                    ->label('نوع کاربر')
-                    ->formatStateUsing(fn (string $state): string => match ($state) {
-                        'administrator' => 'مدیر ارشد',
-                        default => 'مدیر',
-                    })
-                    ->colors([
-                        'warning' => 'administrator',
-                        'secondary' => 'manager',
-                    ]),
+                Tables\Columns\TextColumn::make('role_label')
+                    ->label('نقش سازمانی')
+                    ->badge(),
                 Tables\Columns\IconColumn::make('is_active')
                     ->label('فعال')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('created_at')
-                    ->label('تاریخ عضویت')
-                    ->dateTime()
-                    ->sortable(),
-                Tables\Columns\TextColumn::make('updated_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
-            ])
-            ->filters([
-                //
+                Tables\Columns\TextColumn::make('permissions.name')
+                    ->label('مجوزها')
+                    ->badge()
+                    ->limitList(4),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
-            ])
-            ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
             ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
     }
 
     public static function getPages(): array

@@ -7,6 +7,7 @@ import { Modal } from '../ui/Modal'
 import { Field } from '../ui/Field'
 import { DatePicker } from '../ui/DatePicker'
 import { partApi } from '../../services/api'
+import { formatNumericInput, toEnDigits } from '../../utils/format'
 import type { CustomerPart } from '../../types'
 
 const schema = z.object({
@@ -58,12 +59,13 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
 
   const onSubmit = async (values: FormValues) => {
     if (!customerPart) return
+    const rawCost = values.cost ? toEnDigits(values.cost).replace(/,/g, '').trim() : ''
     try {
       const res = await partApi.addServiceHistory(customerPart.id, {
         service_date: values.service_date,
         service_type: values.service_type,
         description: values.description,
-        cost: values.cost ? Number(values.cost) : undefined,
+        cost: rawCost ? Number(rawCost) : undefined,
       })
       toast.success(res.message)
       onSuccess()
@@ -80,7 +82,7 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
       open={open}
       onClose={onClose}
       size="md"
-      title={`ثبت سابقه اقدام/تعمیر برای سریال ${customerPart.serial_number}`}
+      title={`ثبت سابقه اقدام/تعمیر دستگاه — سریال ${customerPart.serial_number}`}
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSubmitting}>
@@ -88,7 +90,7 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
           </button>
           <button type="submit" form="service-history-form" className="btn btn-primary" disabled={isSubmitting}>
             {isSubmitting && <span className="loading loading-spinner loading-xs" />}
-            ثبت در سوابق
+            ثبت در سوابق دستگاه
           </button>
         </>
       }
@@ -111,22 +113,24 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
           </Field>
         </div>
 
-        <Field label="شرح خدمات انجام‌شده و قطعات مصرفی" required error={errors.description?.message}>
+        <Field label="شرح خدمات انجام‌شده بر روی دستگاه" required error={errors.description?.message}>
           <textarea
             rows={3}
             className="textarea textarea-bordered w-full"
-            placeholder="مثال: تعویض کاسه نمدها و سیل آب‌بندی، تست فشار هیدرولیک در ۴۰۰ بار..."
+            placeholder="مثال: تعویض سیل آب‌بندی، کالیبراسیون سنسور، تست فشار نهایی دستگاه..."
             {...register('description')}
           />
         </Field>
 
-        <Field label="هزینه سرویس / قطعه (تومان - در صورت شمول)">
+        <Field label="هزینه سرویس / تعمیر (تومان - در صورت شمول)">
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
             dir="ltr"
             className="input input-bordered w-full text-start font-mono"
-            placeholder="مثال: 1200000"
-            {...register('cost')}
+            placeholder="مثال: 1,200,000"
+            value={watch('cost') || ''}
+            onChange={(e) => setValue('cost', formatNumericInput(e.target.value))}
           />
         </Field>
       </form>

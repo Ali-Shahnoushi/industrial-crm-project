@@ -3,11 +3,22 @@
 namespace App\Exports;
 
 use Maatwebsite\Excel\Concerns\FromArray;
-use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithCustomCsvSettings;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithHeadings;
+use Maatwebsite\Excel\Events\AfterSheet;
 
-class CustomersTemplateExport implements FromArray, WithHeadings, ShouldAutoSize
+class CustomersTemplateExport implements FromArray, WithHeadings, ShouldAutoSize, WithCustomCsvSettings, WithEvents
 {
+    public function getCsvSettings(): array
+    {
+        return [
+            'use_bom' => true,
+            'output_encoding' => 'UTF-8',
+        ];
+    }
+
     public function headings(): array
     {
         return [
@@ -33,17 +44,17 @@ class CustomersTemplateExport implements FromArray, WithHeadings, ShouldAutoSize
             [
                 'بالفعل',
                 'حقوقی',
-                'سارا',
-                'افشار',
+                '',
+                '',
                 'شرکت فولاد فرایند',
                 '10103456789',
-                '09121112233',
+                '',
                 '02188776655',
                 'info@foulad.ir',
                 'تهران',
                 'تهران',
                 'خیابان مطهری، پلاک ۱۲',
-                'مشتری فعال خط تولید قطعات صنعتی',
+                'مشتری حقوقی فعال خط تولید دستگاه‌های صنعتی (ثبت فقط با نام شرکت)',
             ],
             [
                 'بالقوه',
@@ -58,8 +69,17 @@ class CustomersTemplateExport implements FromArray, WithHeadings, ShouldAutoSize
                 'اصفهان',
                 'نجف‌آباد',
                 'بلوار صنعت، کوچه امید',
-                'علاقه‌مند به تهیه قطعه پمپ هیدرولیک',
+                'علاقه‌مند به تهیه دستگاه پمپ هیدرولیک',
             ],
+        ];
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $event->sheet->getDelegate()->setRightToLeft(true);
+            },
         ];
     }
 }

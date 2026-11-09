@@ -78,25 +78,57 @@
 }
 
 @theme {
-  --font-sans: "Vazirmatn Variable", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Vazirmatn FD", "Vazirmatn", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Vazirmatn FD", "Vazirmatn", ui-monospace, monospace;
 }
 
 @layer base {
   html {
     font-family: var(--font-sans);
+    font-feature-settings: "ss01";
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
   }
+
+  body,
+  input,
+  button,
+  select,
+  textarea,
+  table,
+  th,
+  td,
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01";
+  }
+
   body {
     background-color: var(--color-base-200);
     min-height: 100dvh;
   }
-  /* Phone numbers, emails, SKUs etc. stay left-to-right inside RTL text */
+
+  table td,
+  table th,
+  input[dir="ltr"],
+  input[type="number"],
+  input[type="tel"],
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "ss01", "tnum";
+  }
+
+  /* Phone numbers, emails, SKUs etc. stay left-to-right inside RTL text while rendering Persian digits */
   .ltr-text {
     direction: ltr;
     unicode-bidi: isolate;
     display: inline-block;
   }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-thumb {
     background: color-mix(in oklab, var(--color-base-content) 20%, transparent);
@@ -120,21 +152,26 @@
   }
 }
 
-/* Recharts: keep tooltips/labels in Persian font */
-.recharts-text, .recharts-legend-item-text { font-family: var(--font-sans); }
+/* Recharts: keep tooltips/labels in Persian font with Persian digits */
+.recharts-text, .recharts-legend-item-text {
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01";
+}
 
 /* Tippy.js Tooltip Typography & Styling */
 .tippy-box {
   font-family: var(--font-sans) !important;
+  font-feature-settings: "ss01" !important;
   background-color: transparent !important;
   border-radius: 1rem;
 }
 .tippy-content {
   padding: 0 !important;
   font-family: var(--font-sans) !important;
+  font-feature-settings: "ss01" !important;
 }
 
-/* FilePond: enforce Vazirmatn font across all FilePond elements */
+/* FilePond: enforce Vazirmatn FD font across all FilePond elements */
 .filepond--root,
 .filepond--root *,
 .filepond--root label,
@@ -144,6 +181,7 @@
 .filepond--root .filepond--file-status,
 .filepond-vazir-label {
   font-family: var(--font-sans) !important;
+  font-feature-settings: "ss01" !important;
 }
 
 .filepond-custom-theme .filepond--drop-label {

@@ -3,13 +3,19 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Cpu, Search, User, X } from 'lucide-react'
 import { customerApi, partApi } from '../services/api'
+import { useAuthStore } from '../store/useAuthStore'
 import { Avatar } from '../components/ui/Avatar'
+import { customerDisplayName, digits, num } from '../utils/format'
 
 export function GlobalSearch() {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const nav = useNavigate()
+  const hasPermission = useAuthStore((s) => s.hasPermission)
+
+  const canViewCustomers = hasPermission('customers.view')
+  const canViewParts = hasPermission('parts.view')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -28,14 +34,14 @@ export function GlobalSearch() {
   const { data: customerData, isFetching: customersLoading } = useQuery({
     queryKey: ['global-search-customers', searchTerm],
     queryFn: () => customerApi.list({ q: searchTerm, per_page: 5 }),
-    enabled: searchTerm.length >= 2,
+    enabled: searchTerm.length >= 2 && canViewCustomers,
     staleTime: 1000 * 30,
   })
 
   const { data: partsData = [], isFetching: partsLoading } = useQuery({
     queryKey: ['global-search-parts', searchTerm],
     queryFn: () => partApi.list({ q: searchTerm }),
-    enabled: searchTerm.length >= 2,
+    enabled: searchTerm.length >= 2 && canViewParts,
     staleTime: 1000 * 30,
   })
 
@@ -65,7 +71,7 @@ export function GlobalSearch() {
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder="جستجوی مشتریان یا قطعات..."
+          placeholder="جستجوی مشتریان یا دستگاه‌ها..."
           aria-label="جستجوی سراسری"
           className="grow text-xs"
         />
@@ -102,26 +108,29 @@ export function GlobalSearch() {
                 <User className="size-3.5 text-primary" /> مشتریان
               </p>
               <div className="space-y-0.5">
-                {customers.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => go(`/customers/${c.id}`)}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-xs hover:bg-base-200 transition-colors"
-                  >
-                    <Avatar name={`${c.first_name} ${c.last_name}`} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-base-content truncate">
-                        {c.first_name} {c.last_name}
-                      </p>
-                      <p className="text-[10px] text-base-content/50 font-mono ltr-text">{c.mobile}</p>
-                    </div>
-                    <span className="badge badge-xs bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
-                      {c.customer_type === 'effective' ? 'بالفعل' : 'بالقوه'}
-                    </span>
-                  </button>
-                ))}
+                {customers.map((c) => {
+                  const title = customerDisplayName(c)
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => go(`/customers/${c.id}`)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-xs hover:bg-base-200 transition-colors"
+                    >
+                      <Avatar name={title} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-base-content truncate">{title}</p>
+                        <p className="text-[10px] text-base-content/50 font-mono ltr-text">
+                          {c.mobile ? digits(c.mobile) : 'بدون موبایل'}
+                        </p>
+                      </div>
+                      <span className="badge badge-xs bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
+                        {c.customer_type === 'effective' ? 'بالفعل' : 'بالقوه'}
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -129,7 +138,7 @@ export function GlobalSearch() {
           {parts.length > 0 && (
             <div>
               <p className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold text-base-content/50 uppercase">
-                <Cpu className="size-3.5 text-secondary" /> قطعات و کاتالوگ
+                <Cpu className="size-3.5 text-blue-600" /> کاتالوگ و انبار دستگاه‌ها
               </p>
               <div className="space-y-0.5">
                 {parts.map((p) => (
@@ -137,18 +146,17 @@ export function GlobalSearch() {
                     key={p.id}
                     type="button"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => go(`/parts?q=${encodeURIComponent(p.code)}`)}
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-xs hover:bg-base-200 transition-colors"
+                    onClick={() => go(`/parts?q=${encodeURIComponent(p.name)}`)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-start text-xs hover:bg-base-200 transition-colors"
                   >
-                    <div className="flex size-7 items-center justify-center rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800 shrink-0">
-                      <Cpu className="size-3.5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0">
                       <p className="font-bold text-base-content truncate">{p.name}</p>
-                      <p className="text-[10px] text-base-content/50 font-mono">کد: {p.code}</p>
+                      <p className="text-[10px] text-base-content/50 font-mono">
+                        کد: {p.code} • موجودی: {num(p.stock_quantity ?? 0)} عدد
+                      </p>
                     </div>
-                    <span className="badge badge-xs badge-ghost">
-                      سرویس {p.periodic_service_months} ماهه
+                    <span className="badge badge-xs badge-primary badge-soft font-semibold shrink-0">
+                      مشاهده دستگاه
                     </span>
                   </button>
                 ))}

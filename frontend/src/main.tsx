@@ -1,6 +1,7 @@
 import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@fontsource-variable/vazirmatn'
+import 'vazirmatn/misc/Farsi-Digits/Vazirmatn-FD-font-face.css'
+import 'vazirmatn/Vazirmatn-Variable-font-face.css'
 import './index.css'
 import App from './App.tsx'
 

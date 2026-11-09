@@ -22,7 +22,7 @@ import { Logo } from "../layouts/Sidebar";
 import { authApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
 import { useThemeStore } from "../store/useThemeStore";
-import { cx, digits } from "../utils/format";
+import { cx, digits, toEnDigits } from "../utils/format";
 
 const schema = z.object({
   login: z.string().min(3, "ایمیل یا شماره همراه را وارد کنید"),
@@ -30,18 +30,16 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-const DEFAULT_ADMIN = { login: "admin@crm.local", password: "Admin@123456" };
-
 const features = [
   {
     icon: Cpu,
-    title: "شناسه یکتای سریال برای هر قطعه",
-    text: "تخصیص قطعات تولیدی به مشتریان با بارکد و شماره سریال اختصاصی و گارانتی.",
+    title: "شناسه یکتای سریال و انبار هوشمند دستگاه‌ها",
+    text: "تخصیص دستگاه‌ها به مشتریان با ثبت تعداد، مبلغ فاکتور، شماره سریال و کسر خودکار از موجودی انبار.",
   },
   {
     icon: Wrench,
     title: "سوابق سرویس دوره‌ای و تعمیرات",
-    text: "پوشش اختیاری گارانتی و پیگیری تاریخچه کامل خدمات انجام‌شده برای هر قطعه.",
+    text: "پوشش گارانتی و پیگیری تاریخچه کامل خدمات و تعمیرات انجام‌شده برای هر دستگاه.",
   },
   {
     icon: MessageSquare,
@@ -82,11 +80,10 @@ export default function Login() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: DEFAULT_ADMIN,
+    defaultValues: { login: "", password: "" },
   });
 
   const isInitialized = useAuthStore((s) => s.isInitialized);
@@ -95,7 +92,7 @@ export default function Login() {
 
   const onSubmit = async (v: FormValues) => {
     setError("");
-    const res: any = await login(v.login, v.password);
+    const res = await login(toEnDigits(v.login).trim(), toEnDigits(v.password));
     if (res.ok) {
       toast.success("خوش آمدید 👋");
       nav(from, { replace: true });
@@ -107,13 +104,14 @@ export default function Login() {
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!/^09\d{9}$/.test(otpPhone)) {
+    const normalizedPhone = toEnDigits(otpPhone).trim();
+    if (!/^09\d{9}$/.test(normalizedPhone)) {
       setError("شماره همراه باید ۱۱ رقم عددی بوده و با 09 شروع شود.");
       return;
     }
     setOtpLoading(true);
     try {
-      const res = await authApi.sendOtp(otpPhone);
+      const res = await authApi.sendOtp(normalizedPhone);
       toast.success(res.message);
       setOtpStep("verify");
       setOtpCooldown(res.expires_in || 120);
@@ -134,13 +132,15 @@ export default function Login() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (otpCode.length < 5) {
+    const normalizedPhone = toEnDigits(otpPhone).trim();
+    const normalizedCode = toEnDigits(otpCode).trim();
+    if (normalizedCode.length < 5) {
       setError("لطفاً کد تایید ۵ رقمی را وارد کنید.");
       return;
     }
     setOtpLoading(true);
     try {
-      const res: any = await loginWithOtp(otpPhone, otpCode);
+      const res = await loginWithOtp(normalizedPhone, normalizedCode);
       if (res.ok) {
         toast.success("ورود موفقیت‌آمیز بود 👋");
         nav(from, { replace: true });
@@ -170,9 +170,9 @@ export default function Login() {
 
         <div className="mx-auto w-full max-w-md">
           <Logo size="lg" />
-          <h1 className="mt-8 text-2xl font-black">ورود به سامانه CRM قطعات</h1>
+          <h1 className="mt-8 text-2xl font-black">ورود به سامانه CRM دستگاه‌ها</h1>
           <p className="mt-1.5 text-xs text-base-content/60">
-            برای مدیریت مشتریان، کاتالوگ قطعات و سامانه پیامک وارد شوید.
+            برای مدیریت مشتریان، کاتالوگ و انبار دستگاه‌ها و سامانه پیامک وارد شوید.
           </p>
 
           {/* Auth Method Switcher Tabs */}
@@ -227,8 +227,12 @@ export default function Login() {
                     dir="ltr"
                     className="grow text-start font-mono text-sm"
                     autoComplete="username"
-                    placeholder="admin@crm.local"
-                    {...register("login")}
+                    placeholder="ایمیل یا شماره همراه خود را وارد کنید"
+                    {...register("login", {
+                      onChange: (e) => {
+                        e.target.value = toEnDigits(e.target.value);
+                      },
+                    })}
                   />
                 </label>
               </Field>
@@ -242,7 +246,11 @@ export default function Login() {
                     className="grow text-start font-mono text-sm"
                     autoComplete="current-password"
                     placeholder="••••••••"
-                    {...register("password")}
+                    {...register("password", {
+                      onChange: (e) => {
+                        e.target.value = toEnDigits(e.target.value);
+                      },
+                    })}
                   />
                   <button
                     type="button"
@@ -274,27 +282,6 @@ export default function Login() {
                 )}
                 ورود به سامانه
               </button>
-
-              {/* Quick Fill Admin Credentials */}
-              {/* <div className="rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900/60 p-3.5 text-xs space-y-1.5">
-                <p className="font-bold text-base-content/70">
-                  حساب پیش‌فرض مدیر ارشد (Administrator):
-                </p>
-                <div className="flex items-center justify-between text-[11px] font-mono">
-                  <span>نام کاربری: admin@crm.local</span>
-                  <span>رمز: Admin@123456</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setValue("login", DEFAULT_ADMIN.login);
-                    setValue("password", DEFAULT_ADMIN.password);
-                  }}
-                  className="text-xs text-primary font-bold hover:underline pt-1 block"
-                >
-                  تکمیل خودکار حساب مدیر
-                </button>
-              </div> */}
             </form>
           )}
 
@@ -314,7 +301,9 @@ export default function Login() {
                         placeholder="09121234567"
                         value={otpPhone}
                         onChange={(e) =>
-                          setOtpPhone(e.target.value.replace(/\D/g, ""))
+                          setOtpPhone(
+                            toEnDigits(e.target.value).replace(/\D/g, "").slice(0, 11),
+                          )
                         }
                         required
                         autoFocus
@@ -355,7 +344,7 @@ export default function Login() {
                     <span className="text-base-content/70">
                       ارسال‌شده به:{" "}
                       <span className="font-mono font-bold text-base-content">
-                        {otpPhone}
+                        {digits(otpPhone)}
                       </span>
                     </span>
                     <button
@@ -389,7 +378,9 @@ export default function Login() {
                       placeholder="• • • • •"
                       value={otpCode}
                       onChange={(e) =>
-                        setOtpCode(e.target.value.replace(/\D/g, ""))
+                        setOtpCode(
+                          toEnDigits(e.target.value).replace(/\D/g, "").slice(0, 5),
+                        )
                       }
                       required
                       autoFocus
@@ -445,13 +436,13 @@ export default function Login() {
       <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-tr from-slate-900 via-indigo-950 to-blue-950 p-12 text-white lg:flex">
         <div className="space-y-3">
           <span className="badge badge-primary font-mono text-xs">
-            نسخه ۱.۰ MVP
+            نسخه ۲.۰.۰
           </span>
           <h2 className="text-3xl font-black leading-tight">
-            سامانه تخصصی مدیریت قطعات صنعتی، سوابق سرویس و ارتباط با مشتریان
+            سامانه تخصصی مدیریت دستگاه‌ها، انبار، سوابق سرویس و ارتباط با مشتریان
           </h2>
           <p className="text-sm text-slate-300 leading-relaxed max-w-lg">
-            پوشش کامل چرخه از سرنخ بالقوه تا تحویل قطعه، صدور شماره سریال یکتا،
+            پوشش کامل چرخه از سرنخ بالقوه تا تحویل دستگاه، مدیریت موجودی انبار،
             ثبت سوابق گارانتی و ارسال پیامک با وب‌سرویس ملی‌پیامک.
           </p>
         </div>

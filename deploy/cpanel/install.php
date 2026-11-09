@@ -290,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $env = <<<ENV
-APP_NAME="Parts CRM"
+APP_NAME="Devices CRM"
 APP_ENV=production
 CPANEL_INSTALL_PENDING=true
 APP_DEBUG=false
@@ -383,7 +383,7 @@ ENV;
             ?? App\Models\User::where('email', $adminEmail)->where('user_type', 'administrator')->firstOrFail();
         $admin->fill(['email' => $adminEmail, 'phone' => $adminPhone,
             'password' => Illuminate\Support\Facades\Hash::make($adminPassword),
-            'user_type' => 'administrator', 'is_active' => true])->save();
+            'user_type' => 'administrator', 'customer_scope' => 'all', 'is_active' => true])->save();
         $admin->syncPermissions(Spatie\Permission\Models\Permission::all());
     });
     $installerStage = 'finalize';

@@ -1,11 +1,16 @@
-/** Locale-aware formatting helpers: Persian digits, Toman, Jalali dates. */
+/** Locale-aware formatting helpers: Persian digits, Toman, Jalali dates, Customer Display Names. */
 
 const nf = new Intl.NumberFormat('fa-IR')
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
 
 export const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' ')
 
-export const digits = (v: string | number) => String(v).replace(/\d/g, (d) => PERSIAN_DIGITS[+d])
+export const digits = (v: string | number | null | undefined) =>
+  v === null || v === undefined
+    ? ''
+    : String(v)
+        .replace(/[٠-٩]/g, (d) => PERSIAN_DIGITS[d.charCodeAt(0) - 1632])
+        .replace(/\d/g, (d) => PERSIAN_DIGITS[+d])
 
 /** Converts Persian (۰-۹) and Arabic (٠-٩) numerals to standard ASCII digits (0-9). */
 export function toEnDigits(str: string | number | null | undefined): string {
@@ -15,8 +20,25 @@ export function toEnDigits(str: string | number | null | undefined): string {
     .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 1632))
 }
 
-export const num = (n: number) => nf.format(n)
-export const toman = (n: number) => `${nf.format(Math.round(n))} تومان`
+export const num = (n: number | string | null | undefined) => {
+  if (n === null || n === undefined || n === '') return nf.format(0)
+  const parsed = typeof n === 'string' ? Number(toEnDigits(n).replace(/[,٬\s]/g, '')) : n
+  return Number.isNaN(parsed) ? nf.format(0) : nf.format(parsed)
+}
+
+export const toman = (n: number | string | null | undefined) => {
+  if (n === null || n === undefined || n === '') return '—'
+  const parsed = typeof n === 'string' ? Number(toEnDigits(n).replace(/[,٬\s]/g, '')) : n
+  if (Number.isNaN(parsed)) return '—'
+  return `${nf.format(Math.round(parsed))} تومان`
+}
+
+/** Formats live numeric/currency input with comma thousands separators (e.g. 12500000 -> "12,500,000"). */
+export function formatNumericInput(raw: string): string {
+  const en = toEnDigits(raw).replace(/[^\d]/g, '')
+  if (!en) return ''
+  return Number(en).toLocaleString('en-US')
+}
 
 /** 1_250_000_000 → "۱٫۲۵ میلیارد" */
 export function compact(n: number): string {
@@ -30,7 +52,8 @@ export function compact(n: number): string {
 }
 export const compactToman = (n: number) => `${compact(n)} تومان`
 
-export function phoneFa(p: string): string {
+export function phoneFa(p: string | null | undefined): string {
+  if (!p) return '—'
   return digits(p.replace(/^(\d{4})(\d{3})(\d{4})$/, '$1 $2 $3'))
 }
 
@@ -40,13 +63,11 @@ export function safeDate(val: string | Date | null | undefined): Date | null {
   if (typeof val === 'string') {
     const s = val.trim()
     if (!s) return null
-    // If standard YYYY-MM-DD
     const ymd = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
     if (ymd) {
       const d = new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 12, 0, 0)
       return isNaN(d.getTime()) ? null : d
     }
-    // If standard YYYY-MM-DD HH:mm(:ss)
     const d = new Date(s.includes(' ') && !s.includes('T') ? s.replace(' ', 'T') : s)
     return isNaN(d.getTime()) ? null : d
   }
@@ -102,8 +123,47 @@ export function relativeFa(iso: string | Date | null | undefined, now = Date.now
   return `${num(Math.floor(mo / 12))} سال ${suffix}`
 }
 
-export const fullName = (c: { firstName?: string; lastName?: string; first_name?: string; last_name?: string }) =>
-  c.first_name ? `${c.first_name} ${c.last_name || ''}`.trim() : `${c.firstName || ''} ${c.lastName || ''}`.trim()
+export const fullName = (c: {
+  firstName?: string | null
+  lastName?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  company_name?: string | null
+  company?: string | null
+}) => {
+  const person = c.first_name
+    ? `${c.first_name} ${c.last_name || ''}`.trim()
+    : `${c.firstName || ''} ${c.lastName || ''}`.trim()
+  return person || c.company_name?.trim() || c.company?.trim() || 'بدون نام'
+}
+
+/**
+ * Resolves primary display title for Real (individual) and Legal (company) customers,
+ * handling optional first_name / last_name gracefully.
+ */
+export function customerDisplayName(
+  c?: {
+    display_name?: string | null
+    full_name?: string | null
+    type?: string | null
+    company_name?: string | null
+    first_name?: string | null
+    last_name?: string | null
+  } | null,
+): string {
+  if (!c) return '—'
+  if (c.display_name && c.display_name.trim() !== '' && c.display_name !== 'بدون نام') {
+    return c.display_name
+  }
+  const person = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim()
+  if (c.type === 'company' && c.company_name?.trim()) {
+    return person ? `${c.company_name.trim()} (${person})` : c.company_name.trim()
+  }
+  if (person) return person
+  if (c.company_name?.trim()) return c.company_name.trim()
+  if (c.full_name?.trim()) return c.full_name.trim()
+  return 'بدون نام'
+}
 
 /** Stable pseudo-random hue from a string, used for avatar colours. */
 export function hueFrom(str: string): number {

@@ -7,11 +7,7 @@ import toast from 'react-hot-toast'
 import {
   Check,
   KeyRound,
-  Lock,
-  Mail,
-  Phone,
   Save,
-  ShieldCheck,
   User as UserIcon,
 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
@@ -21,8 +17,25 @@ import { PasswordRulesTooltip } from '../../components/ui/PasswordRulesTooltip'
 import { Avatar } from '../../components/ui/Avatar'
 import { authApi } from '../../services/api'
 import { useAuthStore } from '../../store/useAuthStore'
-import { roleLabel } from '../../utils/meta'
-import { num, toEnDigits } from '../../utils/format'
+import { customerScopeMeta, roleLabel, userTypeMeta } from '../../utils/meta'
+import { cx, num, toEnDigits } from '../../utils/format'
+
+const PERMISSION_LABELS_FA: Record<string, string> = {
+  'customers.view': 'مشاهده مشتریان',
+  'customers.create': 'ایجاد مشتری',
+  'customers.edit': 'ویرایش مشتری',
+  'customers.delete': 'حذف مشتری',
+  'customers.import': 'ورود گروهی مشتریان با اکسل',
+  'customers.export': 'خروجی اکسل مشتریان و دستگاه‌ها',
+  'parts.view': 'مشاهده کاتالوگ دستگاه‌ها و موجودی انبار',
+  'parts.manage': 'تعریف دستگاه و ثبت ورود/خروج انبار',
+  'parts.assign': 'تخصیص، ویرایش و حذف دستگاه مشتری',
+  'parts.history': 'ثبت سوابق نصب، سرویس و تعمیرات دستگاه‌ها',
+  'sms.send': 'ارسال پیامک الگو',
+  'sms.logs': 'مشاهده سوابق پیامک',
+  'users.manage': 'مدیریت کارمندان، نقش‌ها و دسترسی‌ها',
+  'settings.manage': 'مدیریت تنظیمات سیستم',
+}
 
 const schema = z.object({
   name: z.string().trim().min(2, 'نام و نام خانوادگی را حداقل در ۲ کاراکتر وارد کنید'),
@@ -70,7 +83,6 @@ export default function MyProfilePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
 
-  // Fetch the freshest user profile and ACL permissions directly from the backend API
   const { data: profileUser, isLoading } = useQuery({
     queryKey: ['my-profile'],
     queryFn: authApi.me,
@@ -128,7 +140,7 @@ export default function MyProfilePage() {
     const cleanedPhone = values.phone ? toEnDigits(values.phone.trim()) : ''
     formData.append('phone', cleanedPhone)
     if (values.password && values.password.trim()) {
-      formData.append('password', values.password.trim())
+      formData.append('password', toEnDigits(values.password.trim()))
     }
 
     if (avatarFile) {
@@ -148,11 +160,16 @@ export default function MyProfilePage() {
 
   if (!currentUser) return null
 
+  const uType = currentUser.user_type || 'manager'
+  const rMeta = userTypeMeta[uType]
+  const scopeKey = currentUser.customer_scope || (uType === 'administrator' ? 'all' : 'own')
+  const sMeta = customerScopeMeta[scopeKey]
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="حساب کاربری من"
-        subtitle="ویرایش مشخصات فردی، تصویر آواتار و مشاهده مجوزهای فعال اختصاص داده‌شده به شما"
+        subtitle="ویرایش مشخصات فردی، تصویر آواتار و مشاهده نقش و مجوزهای فعال اختصاص داده‌شده به شما"
       />
 
       {/* Profile Overview Card */}
@@ -163,8 +180,11 @@ export default function MyProfilePage() {
             <h2 className="text-xl font-bold text-base-content">{currentUser.name}</h2>
             <p className="text-xs text-base-content/60 font-mono ltr-text">{currentUser.email}</p>
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
-              <span className="badge badge-sm bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800">
-                {roleLabel[currentUser.role || 'admin']}
+              <span className={cx('badge badge-sm font-bold', rMeta?.badgeClass)}>
+                {currentUser.role_label || rMeta?.label || roleLabel[currentUser.role || 'admin']}
+              </span>
+              <span className="badge badge-sm bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
+                دامنه مشتریان: {sMeta.label}
               </span>
               <span className="badge badge-sm bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800">
                 حساب فعال
@@ -181,7 +201,6 @@ export default function MyProfilePage() {
               ویرایش اطلاعات حساب
             </h3>
 
-            {/* Avatar Upload with FilePond */}
             <FilePondAvatar
               label="آپلود یا تغییر تصویر آواتار"
               currentAvatarUrl={removeAvatar ? null : currentUser.avatar_url}
@@ -247,7 +266,7 @@ export default function MyProfilePage() {
               >
                 <PasswordRulesTooltip
                   value={watch('password') || ''}
-                  onChange={(val) => setValue('password', val, { shouldValidate: true })}
+                  onChange={(val) => setValue('password', toEnDigits(val), { shouldValidate: true })}
                   placeholder="رمز عبور جدید (حداقل ۸ کاراکتر)"
                   error={errors.password?.message}
                 />
@@ -277,26 +296,32 @@ export default function MyProfilePage() {
         <div className="flex items-center justify-between pb-3 border-b border-base-200">
           <div className="flex items-center gap-2">
             <KeyRound className="size-4 text-primary" />
-            <h3 className="font-bold text-sm text-base-content">مجوزهای فعال اختصاص‌یافته به حساب شما (ACL)</h3>
+            <h3 className="font-bold text-sm text-base-content">مجوزهای فعال اختصاص‌یافته به حساب شما</h3>
           </div>
           <span className="badge badge-sm bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700">
-            {num(currentUser.permissions?.length ?? 0)} دسترسی
+            {uType === 'administrator'
+              ? 'دسترسی کامل'
+              : `${num(currentUser.permissions?.length ?? 0)} دسترسی`}
           </span>
         </div>
 
         <p className="text-xs text-base-content/60 leading-relaxed">
-          دسترسی‌های زیر به صورت مستقیم توسط مدیر سیستم به حساب شما اختصاص داده شده و تعیین‌کننده بخش‌های مجاز برای شماست:
+          دسترسی‌های زیر تعیین‌کننده بخش‌های مجاز برای حساب کاربری شما در سامانه مدیریت مشتریان و دستگاه‌ها است:
         </p>
 
         <div className="flex flex-wrap gap-2 pt-1">
-          {currentUser.permissions && currentUser.permissions.length > 0 ? (
+          {uType === 'administrator' ? (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-800 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+              <Check className="size-3.5" /> دسترسی کامل مدیر ارشد به تمامی بخش‌های سامانه
+            </span>
+          ) : currentUser.permissions && currentUser.permissions.length > 0 ? (
             currentUser.permissions.map((p) => (
               <span
                 key={p}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 py-1.5 font-mono text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 shadow-2xs"
               >
                 <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                {p}
+                {PERMISSION_LABELS_FA[p] || p}
               </span>
             ))
           ) : (

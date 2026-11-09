@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Customer;
 use App\Models\Part;
+use App\Models\PartInventoryLog;
 use App\Models\User;
 use App\Services\Customers\CustomerService;
 use Illuminate\Database\Seeder;
@@ -25,17 +26,20 @@ class DatabaseSeeder extends Seeder
                 'phone' => '09120000000',
                 'password' => Hash::make('Admin@123456'),
                 'is_active' => true,
-                'user_type' => 'administrator',
+                'user_type' => User::ROLE_ADMINISTRATOR,
+                'customer_scope' => User::SCOPE_ALL,
             ]
         );
 
-        // Ensure existing admin always has user_type set to administrator
-        $admin->user_type = 'administrator';
+        $admin->user_type = User::ROLE_ADMINISTRATOR;
+        $admin->customer_scope = User::SCOPE_ALL;
         $admin->save();
 
         $admin->syncPermissions(Permission::all());
 
-        // 2. Sample Parts Catalog
+        $customerService = app(CustomerService::class);
+
+        // 2. Sample Devices Catalog
         $partsData = [
             [
                 'name' => 'پمپ پیستونی هیدرولیک فشار قوی',
@@ -65,16 +69,25 @@ class DatabaseSeeder extends Seeder
 
         $parts = [];
         foreach ($partsData as $item) {
-            $parts[$item['code']] = Part::firstOrCreate(['code' => $item['code']], $item);
+            $part = Part::firstOrCreate(['code' => $item['code']], $item);
+            if ((int) $part->stock_quantity === 0 && !$part->inventoryLogs()->exists()) {
+                $customerService->adjustStock(
+                    $part,
+                    PartInventoryLog::TYPE_IN,
+                    10,
+                    'موجودی اولیه انبار (داده‌های نمونه)',
+                    $admin->id
+                );
+                $part->refresh();
+            }
+            $parts[$item['code']] = $part;
         }
 
         // 3. Sample Customers (Potential & Effective)
-        $customerService = app(CustomerService::class);
-
         $c1 = Customer::firstOrCreate(
             ['mobile' => '09121112233'],
             [
-                'customer_type' => 'potential', // Will be converted automatically when part is assigned below!
+                'customer_type' => 'potential',
                 'type' => 'company',
                 'first_name' => 'سارا',
                 'last_name' => 'افشار',
@@ -85,11 +98,12 @@ class DatabaseSeeder extends Seeder
                 'province' => 'اصفهان',
                 'city' => 'اصفهان',
                 'address' => 'شهرک صنعتی جی، خیابان چهارم، پلاک ۲۴',
-                'notes' => 'دارای ۴ خط تولید فعال - خرید عمده قطعات',
+                'notes' => 'دارای ۴ خط تولید فعال - خرید عمده دستگاه‌های صنعتی',
+                'created_by_user_id' => $admin->id,
             ]
         );
 
-        $c2 = Customer::firstOrCreate(
+        Customer::firstOrCreate(
             ['mobile' => '09359876543'],
             [
                 'customer_type' => 'potential',
@@ -97,17 +111,18 @@ class DatabaseSeeder extends Seeder
                 'first_name' => 'کامران',
                 'last_name' => 'نادری',
                 'company_name' => 'کارگاه قالب‌سازی دقیق نادری',
-                'national_code' => '1289988776',
+                'national_code' => '12899887761',
                 'phone' => '03134445566',
                 'email' => 'naderi.precision@gmail.com',
                 'province' => 'اصفهان',
                 'city' => 'نجف‌آباد',
                 'address' => 'بلوار صنعت، کوی کارآفرینان ۳',
-                'notes' => 'مشتری بالقوه در حال مذاکره برای خرید قطعات هیدرولیک',
+                'notes' => 'مشتری بالقوه در حال مذاکره برای خرید دستگاه‌های هیدرولیک',
+                'created_by_user_id' => $admin->id,
             ]
         );
 
-        $c3 = Customer::firstOrCreate(
+        Customer::firstOrCreate(
             ['mobile' => '09191234567'],
             [
                 'customer_type' => 'potential',
@@ -120,21 +135,26 @@ class DatabaseSeeder extends Seeder
                 'province' => 'تهران',
                 'city' => 'تهران',
                 'address' => 'خیابان جمهوری، پاساژ حافظ',
-                'notes' => 'پرسش درباره دوره گارانتی و سرویس دوره‌ای پمپ‌ها',
+                'notes' => 'پرسش درباره دوره گارانتی و سرویس دوره‌ای دستگاه‌ها',
+                'created_by_user_id' => $admin->id,
             ]
         );
 
-        // 4. Assign part to Customer 1 to demonstrate automatic potential-to-effective conversion!
+        // 4. Assign device to Customer 1 to demonstrate automatic potential-to-effective conversion & stock deduction
         if ($c1->customerParts()->count() === 0) {
             $customerPart = $customerService->assignPart(
                 $c1,
                 $parts['PUMP-HYD-500'],
                 'SN-2026-HYD-00189',
-                ['notes' => 'تحویل حضوری با برگه ضمانت ۶ ماهه'],
+                [
+                    'quantity' => 2,
+                    'invoice_amount' => 185000000,
+                    'invoice_number' => 'INV-1405-101',
+                    'notes' => 'تحویل حضوری با برگه ضمانت ۶ ماهه',
+                ],
                 $admin->id
             );
 
-            // Record initial service history
             $customerService->recordServiceHistory($customerPart, [
                 'service_date' => now()->subDays(10)->toDateString(),
                 'service_type' => 'periodic',

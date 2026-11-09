@@ -3,15 +3,13 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\CustomerResource\Pages;
-use App\Filament\Resources\CustomerResource\RelationManagers;
 use App\Models\Customer;
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Forms\Get;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CustomerResource extends Resource
 {
@@ -32,56 +30,56 @@ class CustomerResource extends Resource
                 Forms\Components\Select::make('customer_type')
                     ->label('وضعیت مشتری')
                     ->options([
-                        'potential' => 'بالقوه (Potential)',
-                        'effective' => 'بالفعل (Effective)',
+                        'potential' => 'بالقوه (سرنخ)',
+                        'effective' => 'بالفعل (خریدار)',
                     ])
                     ->default('potential')
                     ->required(),
                 Forms\Components\Select::make('type')
                     ->label('نوع شخصیت')
                     ->options([
-                        'company' => 'حقوقی (شرکت/کارگاه)',
-                        'individual' => 'حقیقی (شخصی)',
+                        'individual' => 'حقیقی',
+                        'company' => 'حقوقی',
                     ])
-                    ->default('company')
+                    ->default('individual')
+                    ->live()
                     ->required(),
                 Forms\Components\TextInput::make('first_name')
                     ->label('نام')
-                    ->required()
-                    ->maxLength(255),
+                    ->required(fn (Get $get): bool => $get('type') !== 'company')
+                    ->maxLength(100),
                 Forms\Components\TextInput::make('last_name')
                     ->label('نام خانوادگی')
-                    ->required()
-                    ->maxLength(255),
+                    ->required(fn (Get $get): bool => $get('type') !== 'company')
+                    ->maxLength(100),
                 Forms\Components\TextInput::make('company_name')
                     ->label('نام شرکت / سازمان')
-                    ->maxLength(255),
+                    ->required(fn (Get $get): bool => $get('type') === 'company')
+                    ->maxLength(150),
                 Forms\Components\TextInput::make('national_code')
                     ->label('کد ملی / شناسه ملی')
                     ->maxLength(20),
                 Forms\Components\TextInput::make('mobile')
-                    ->label('شماره همراه')
-                    ->required()
+                    ->label('شماره موبایل')
                     ->maxLength(20),
                 Forms\Components\TextInput::make('phone')
                     ->label('تلفن ثابت')
-                    ->tel()
                     ->maxLength(20),
                 Forms\Components\TextInput::make('email')
                     ->label('ایمیل')
                     ->email()
-                    ->maxLength(255),
+                    ->maxLength(150),
                 Forms\Components\TextInput::make('province')
                     ->label('استان')
-                    ->maxLength(100),
+                    ->maxLength(50),
                 Forms\Components\TextInput::make('city')
                     ->label('شهر')
-                    ->maxLength(100),
+                    ->maxLength(50),
                 Forms\Components\Textarea::make('address')
-                    ->label('آدرس دقیق')
+                    ->label('نشانی پستی')
                     ->columnSpanFull(),
                 Forms\Components\Textarea::make('notes')
-                    ->label('توضیحات و یادداشت‌ها')
+                    ->label('یادداشت‌ها')
                     ->columnSpanFull(),
             ]);
     }
@@ -90,40 +88,35 @@ class CustomerResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('id')->label('شناسه')->sortable(),
-                Tables\Columns\TextColumn::make('customer_type')
-                    ->label('وضعیت')
-                    ->badge()
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'effective' => 'بالفعل',
-                        default => 'بالقوه',
-                    })
+                Tables\Columns\TextColumn::make('display_name')
+                    ->label('نام مشتری / شرکت')
+                    ->searchable(['first_name', 'last_name', 'company_name']),
+                Tables\Columns\BadgeColumn::make('customer_type')
+                    ->label('نوع مشتری')
                     ->colors([
-                        'success' => 'effective',
                         'warning' => 'potential',
-                    ]),
-                Tables\Columns\TextColumn::make('company_name')
-                    ->label('نام شرکت')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('first_name')
-                    ->label('نام')
-                    ->searchable(),
-                Tables\Columns\TextColumn::make('last_name')
-                    ->label('نام خانوادگی')
-                    ->searchable(),
+                        'success' => 'effective',
+                    ])
+                    ->formatStateUsing(fn (string $state): string => $state === 'effective' ? 'بالفعل' : 'بالقوه'),
                 Tables\Columns\TextColumn::make('mobile')
-                    ->label('موبایل')
+                    ->label('شماره موبایل')
+                    ->placeholder('—')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('city')
                     ->label('شهر')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label('تاریخ ثبت')
-                    ->dateTime()
+                    ->dateTime('Y-m-d')
                     ->sortable(),
             ])
             ->filters([
-                //
+                Tables\Filters\SelectFilter::make('customer_type')
+                    ->label('وضعیت مشتری')
+                    ->options([
+                        'potential' => 'بالقوه',
+                        'effective' => 'بالفعل',
+                    ]),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
@@ -133,13 +126,6 @@ class CustomerResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
     }
 
     public static function getPages(): array

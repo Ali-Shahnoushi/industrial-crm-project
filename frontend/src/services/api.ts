@@ -1,17 +1,23 @@
 import axios from 'axios'
 import type {
+  CompanySettings,
   Customer,
-  Part,
+  CustomerLookupItem,
   CustomerPart,
+  CustomerScope,
+  DashboardStats,
+  InventoryOperationType,
+  Part,
+  PartInventoryLog,
   PartServiceHistory,
+  ResourceName,
+  Resources,
+  RoleOption,
   SmsLog,
   SmsSettings,
   SystemPermission,
   User,
-  DashboardStats,
-  ResourceName,
-  Resources,
-  CompanySettings,
+  UserType,
 } from '../types'
 
 export const http = axios.create({
@@ -19,13 +25,12 @@ export const http = axios.create({
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    Accept: 'application/json',
   },
 })
 
 // Handle FormData Content-Type
 http.interceptors.request.use((config) => {
-  // When sending FormData, let the browser/runtime set Content-Type with multipart boundary
   if (config.data instanceof FormData && config.headers) {
     delete config.headers['Content-Type']
   }
@@ -43,7 +48,6 @@ http.interceptors.response.use(
   },
 )
 
-// API Services
 export const authApi = {
   login: async (login: string, password: string) => {
     const { data } = await http.post<{ user: any; token?: string }>('/auth/login', { login, password })
@@ -51,11 +55,17 @@ export const authApi = {
     return data as { user: User; token?: string }
   },
   sendOtp: async (phone: string) => {
-    const { data } = await http.post<{ message: string; expires_in: number; sandbox_code?: string }>('/auth/otp/send', { phone })
+    const { data } = await http.post<{ message: string; expires_in: number; sandbox_code?: string }>(
+      '/auth/otp/send',
+      { phone },
+    )
     return data
   },
   verifyOtp: async (phone: string, code: string) => {
-    const { data } = await http.post<{ user: any; token?: string; message: string }>('/auth/otp/verify', { phone, code })
+    const { data } = await http.post<{ user: any; token?: string; message: string }>('/auth/otp/verify', {
+      phone,
+      code,
+    })
     data.user.id = String(data.user.id)
     return data as { user: User; token?: string; message: string }
   },
@@ -83,7 +93,18 @@ export const dashboardApi = {
 
 export const customerApi = {
   list: async (params?: { customer_type?: string; q?: string; page?: number; per_page?: number }) => {
-    const { data } = await http.get<{ data: Customer[]; current_page: number; last_page: number; total: number }>('/customers', { params })
+    const { data } = await http.get<{
+      data: Customer[]
+      current_page: number
+      last_page: number
+      total: number
+    }>('/customers', { params })
+    return data
+  },
+  lookup: async (q?: string) => {
+    const { data } = await http.get<CustomerLookupItem[]>('/customers-lookup', {
+      params: q ? { q } : undefined,
+    })
     return data
   },
   get: async (id: number | string) => {
@@ -105,7 +126,10 @@ export const customerApi = {
   importExcel: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const { data } = await http.post<{ message: string; imported_count: number; errors: string[] }>('/customers/import', formData)
+    const { data } = await http.post<{ message: string; imported_count: number; errors: string[] }>(
+      '/customers/import',
+      formData,
+    )
     return data
   },
   exportExcelUrl: (customerType?: string) => {
@@ -127,16 +151,21 @@ export const customerApi = {
     a.remove()
     window.URL.revokeObjectURL(downloadUrl)
   },
-  downloadExport: async (customerType?: string) => {
-    const url = customerType ? `/customers/export?customer_type=${customerType}` : '/customers/export'
-    const response = await http.get(url, { responseType: 'blob' })
-    const blob = new Blob([response.data], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    })
+  downloadExport: async (customerType?: string, format: 'xlsx' | 'csv' = 'xlsx') => {
+    const params: Record<string, string> = { format }
+    if (customerType) {
+      params.customer_type = customerType
+    }
+    const response = await http.get('/customers/export', { params, responseType: 'blob' })
+    const mime =
+      format === 'csv'
+        ? 'text/csv;charset=utf-8;'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const blob = new Blob([response.data], { type: mime })
     const downloadUrl = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = downloadUrl
-    a.download = `customers-${new Date().toISOString().slice(0, 10)}.xlsx`
+    a.download = `customers-${new Date().toISOString().slice(0, 10)}.${format}`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -161,23 +190,113 @@ export const partApi = {
     const { data } = await http.delete<{ message: string }>(`/parts/${id}`)
     return data
   },
-  assignPart: async (customerId: number | string, body: { part_id: number | string; serial_number: string; installation_date?: string; notes?: string }) => {
-    const { data } = await http.post<{ message: string; customer_part: CustomerPart; customer_type: string }>(`/customers/${customerId}/parts`, body)
+  adjustStock: async (
+    partId: number | string,
+    body: {
+      type: InventoryOperationType
+      quantity: number
+      description?: string
+      customer_id?: number | null
+    },
+  ) => {
+    const { data } = await http.post<{ message: string; log: PartInventoryLog; part: Part }>(
+      `/parts/${partId}/stock`,
+      body,
+    )
     return data
   },
-  addServiceHistory: async (customerPartId: number | string, body: { service_date: string; service_type: string; description: string; cost?: number }) => {
-    const { data } = await http.post<{ message: string; history: PartServiceHistory }>(`/customer-parts/${customerPartId}/history`, body)
+  inventoryLogs: async (params?: {
+    part_id?: number | string
+    type?: string
+    customer_id?: number | string
+    q?: string
+    page?: number
+    per_page?: number
+  }) => {
+    const { data } = await http.get<{
+      data: PartInventoryLog[]
+      current_page: number
+      last_page: number
+      total: number
+    }>('/inventory-logs', { params })
+    return data
+  },
+  assignPart: async (
+    customerId: number | string,
+    body: {
+      part_id: number | string
+      serial_number: string
+      quantity: number
+      invoice_amount?: number | string | null
+      invoice_number?: string | null
+      installation_date?: string
+      notes?: string
+    },
+  ) => {
+    const { data } = await http.post<{
+      message: string
+      customer_part: CustomerPart
+      customer_type: string
+    }>(`/customers/${customerId}/parts`, body)
+    return data
+  },
+  updateAssignedPart: async (
+    customerPartId: number | string,
+    body: {
+      part_id?: number | string
+      serial_number?: string
+      quantity?: number
+      invoice_amount?: number | string | null
+      invoice_number?: string | null
+      installation_date?: string | null
+      status?: string
+      notes?: string | null
+    },
+  ) => {
+    const { data } = await http.put<{ message: string; customer_part: CustomerPart }>(
+      `/customer-parts/${customerPartId}`,
+      body,
+    )
+    return data
+  },
+  deleteAssignedPart: async (customerPartId: number | string) => {
+    const { data } = await http.delete<{ message: string }>(`/customer-parts/${customerPartId}`)
+    return data
+  },
+  addServiceHistory: async (
+    customerPartId: number | string,
+    body: { service_date: string; service_type: string; description: string; cost?: number },
+  ) => {
+    const { data } = await http.post<{ message: string; history: PartServiceHistory }>(
+      `/customer-parts/${customerPartId}/history`,
+      body,
+    )
     return data
   },
 }
 
 export const smsApi = {
-  sendPattern: async (body: { mobile: string; pattern_code: string; tokens: Record<string, any>; customer_id?: number | string }) => {
-    const { data } = await http.post<{ message: string; success: boolean; message_id: string; is_sandbox: boolean }>('/sms/send-pattern', body)
+  sendPattern: async (body: {
+    mobile: string
+    pattern_code: string
+    tokens: Record<string, any>
+    customer_id?: number | string
+  }) => {
+    const { data } = await http.post<{
+      message: string
+      success: boolean
+      message_id: string
+      is_sandbox: boolean
+    }>('/sms/send-pattern', body)
     return data
   },
   getLogs: async (params?: { status?: string; q?: string; page?: number }) => {
-    const { data } = await http.get<{ data: SmsLog[]; current_page: number; last_page: number; total: number }>('/sms/logs', { params })
+    const { data } = await http.get<{
+      data: SmsLog[]
+      current_page: number
+      last_page: number
+      total: number
+    }>('/sms/logs', { params })
     return data
   },
 }
@@ -196,12 +315,26 @@ export const settingsApi = {
     return data
   },
   updateCompanySettings: async (body: FormData) => {
-    const { data } = await http.post<{ message: string; company_name: string | null; company_logo_url: string | null }>('/settings/company', body)
+    const { data } = await http.post<{
+      message: string
+      company_name: string | null
+      company_logo_url: string | null
+    }>('/settings/company', body)
+    return data
+  },
+  upgradeSystem: async () => {
+    const { data } = await http.post<{ message: string; version: string; output: string }>(
+      '/settings/system/upgrade',
+    )
     return data
   },
 }
 
 export const usersApi = {
+  getRoles: async () => {
+    const { data } = await http.get<RoleOption[]>('/roles')
+    return data
+  },
   list: async () => {
     const { data } = await http.get<any[]>('/users')
     return data.map((u) => ({ ...u, id: String(u.id) })) as User[]
@@ -211,11 +344,25 @@ export const usersApi = {
     data.id = String(data.id)
     return data as User
   },
-  create: async (body: FormData | { name: string; email: string; phone?: string; password: string; permissions?: string[] }) => {
+  create: async (
+    body: FormData | { name: string; email: string; phone?: string; password: string; permissions?: string[] },
+  ) => {
     const { data } = await http.post<{ message: string; user: User }>('/users', body)
     return data
   },
-  update: async (id: number | string, body: FormData | { name: string; email: string; phone?: string; password?: string; permissions?: string[]; is_active?: boolean }) => {
+  update: async (
+    id: number | string,
+    body:
+      | FormData
+      | {
+          name: string
+          email: string
+          phone?: string
+          password?: string
+          permissions?: string[]
+          is_active?: boolean
+        },
+  ) => {
     const { data } = await http.post<{ message: string; user: User }>(`/users/${id}`, body)
     return data
   },
@@ -223,12 +370,29 @@ export const usersApi = {
     const { data } = await http.delete<{ message: string }>(`/users/${id}`)
     return data
   },
-  updatePermissions: async (userId: number | string, permissions: string[]) => {
-    const { data } = await http.put<{ message: string; permissions: string[] }>(`/users/${userId}/permissions`, { permissions })
+  updatePermissions: async (
+    userId: number | string,
+    payload:
+      | string[]
+      | {
+          permissions: string[]
+          user_type?: UserType
+          customer_scope?: CustomerScope
+          granted_staff_ids?: number[]
+          granted_customer_ids?: number[]
+        },
+  ) => {
+    const body = Array.isArray(payload) ? { permissions: payload } : payload
+    const { data } = await http.put<{ message: string; permissions: string[]; user?: User }>(
+      `/users/${userId}/permissions`,
+      body,
+    )
     return data
   },
   toggleActive: async (userId: number | string) => {
-    const { data } = await http.patch<{ message: string; is_active: boolean }>(`/users/${userId}/toggle-active`)
+    const { data } = await http.patch<{ message: string; is_active: boolean }>(
+      `/users/${userId}/toggle-active`,
+    )
     return data
   },
   getAvailablePermissions: async () => {

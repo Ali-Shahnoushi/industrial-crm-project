@@ -18,7 +18,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
 import { dashboardApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
-import { cx, dateFa, num, relativeFa, weekdayFa } from "../utils/format";
+import { customerDisplayName, cx, dateFa, num, relativeFa, weekdayFa } from "../utils/format";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
@@ -34,6 +34,7 @@ export default function Dashboard() {
     effective_customers: 0,
     potential_customers: 0,
     total_parts: 0,
+    total_stock_quantity: 0,
     assigned_parts: 0,
     total_sms_sent: 0,
   };
@@ -44,7 +45,7 @@ export default function Dashboard() {
     <div className="space-y-6">
       <PageHeader
         title={`سلام، ${user?.name || "کاربر گرامی"} 👋`}
-        subtitle={`${weekdayFa(today)}، ${dateFa(today)} — خلاصه وضعیت مدیریت قطعات و مشتریان`}
+        subtitle={`${weekdayFa(today)}، ${dateFa(today)} — خلاصه وضعیت مدیریت دستگاه‌ها و مشتریان`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Can permission="customers.create">
@@ -83,7 +84,7 @@ export default function Dashboard() {
           value={num(stats.effective_customers)}
           icon={UserCheck}
           tone="success"
-          hint="دارای قطعه فیزیکی"
+          hint="دارای دستگاه نصب‌شده"
           loading={isLoading}
           to="/customers?type=effective"
         />
@@ -97,20 +98,20 @@ export default function Dashboard() {
           to="/customers?type=potential"
         />
         <StatCard
-          title="مدل‌های قطعات"
+          title="کاتالوگ و انبار دستگاه‌ها"
           value={num(stats.total_parts)}
           icon={Cpu}
           tone="secondary"
-          hint="کاتالوگ محصولات"
+          hint={`موجودی کل انبار: ${num(stats.total_stock_quantity ?? 0)} عدد`}
           loading={isLoading}
           to="/parts"
         />
         <StatCard
-          title="قطعات تخصیص‌یافته"
+          title="دستگاه‌های تخصیص‌یافته"
           value={num(stats.assigned_parts)}
           icon={Boxes}
           tone="primary"
-          hint="دارای شماره سریال یکتا"
+          hint="تحویل‌شده به مشتریان"
           loading={isLoading}
           to="/parts"
         />
@@ -185,9 +186,7 @@ export default function Dashboard() {
                     </p>
                     <div className="flex items-center gap-2 mt-1 text-xs text-base-content/50">
                       <span>
-                        {act.customer
-                          ? `${act.customer.first_name} ${act.customer.last_name}`
-                          : "—"}
+                        {act.customer ? customerDisplayName(act.customer) : "—"}
                       </span>
                       <span>•</span>
                       <span>{relativeFa(act.created_at)}</span>
@@ -240,9 +239,7 @@ export default function Dashboard() {
                         </span>
                       </div>
                       <p className="text-base-content/60 truncate max-w-[200px]">
-                        {sms.customer
-                          ? `${sms.customer.first_name} ${sms.customer.last_name}`
-                          : "ارسال مستقیم"}
+                        {sms.customer ? customerDisplayName(sms.customer) : "ارسال مستقیم"}
                       </p>
                     </div>
 
@@ -273,17 +270,16 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Quick Info Box on Periodic Service Policy with Solid High Contrast */}
+          {/* Quick Info Box on Periodic Service Policy */}
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 dark:border-indigo-900/40 dark:bg-indigo-950/40">
             <h4 className="font-bold text-sm text-indigo-950 dark:text-indigo-200 flex items-center gap-2">
               <ShieldCheck className="size-4 text-indigo-600 dark:text-indigo-400" />
-              خط‌مشی گارانتی و سرویس دوره‌ای
+              خط‌مشی گارانتی و سرویس دوره‌ای دستگاه‌ها
             </h4>
             <p className="mt-2 text-xs text-indigo-900 leading-relaxed dark:text-indigo-300">
-              سرویس‌های دوره‌ای قطعات اجباری نبوده و به عنوان پوشش گارانتی
-              اختیاری شرکت برای مشتریان در نظر گرفته می‌شود. هر زمان مشتری
-              نیازمند تعمیر یا بررسی قطعه باشد، سابقه آن در پرونده قطعه با کد
-              رهگیری ثبت می‌گردد.
+              سرویس‌های دوره‌ای دستگاه‌ها اختیاری بوده و به عنوان پوشش گارانتی
+              شرکت برای مشتریان در نظر گرفته می‌شود. هر زمان مشتری نیازمند تعمیر
+              یا بازبینی دستگاه باشد، سابقه آن در پرونده دستگاه با کد رهگیری ثبت می‌گردد.
             </p>
           </div>
         </div>

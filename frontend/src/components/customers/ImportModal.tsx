@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload, XCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Download, FileSpreadsheet, Upload } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { customerApi } from '../../services/api'
 import { cx, num } from '../../utils/format'
@@ -79,7 +79,7 @@ export function ImportModal({ open, onClose, onSuccess }: ImportModalProps) {
       open={open}
       onClose={close}
       size="lg"
-      title="ورود گروهی مشتریان با فایل اکسل (Excel)"
+      title="ورود گروهی مشتریان با فایل اکسل / CSV"
       footer={
         <>
           <button className="btn btn-ghost" onClick={close} disabled={busy}>
@@ -117,9 +117,9 @@ export function ImportModal({ open, onClose, onSuccess }: ImportModalProps) {
                 <Upload className="size-7" />
               </span>
               <div>
-                <p className="font-bold text-base">فایل اکسل (.xlsx) را اینجا رها کنید یا کلیک نمایید</p>
+                <p className="font-bold text-base">فایل اکسل (.xlsx) یا CSV را اینجا رها کنید یا کلیک نمایید</p>
                 <p className="text-xs text-base-content/60 mt-1">
-                  ستون‌های فایل: نوع مشتری (بالقوه/بالفعل)، نام، نام خانوادگی، شماره همراه، شرکت، شهر و...
+                  پشتیبانی از مشتریان حقیقی (نام + نام خانوادگی الزامی) و حقوقی (نام شرکت الزامی)؛ شماره همراه اختیاری است
                 </p>
               </div>
               <input
@@ -141,7 +141,7 @@ export function ImportModal({ open, onClose, onSuccess }: ImportModalProps) {
                 <FileSpreadsheet className="size-8 text-emerald-600" />
                 <div>
                   <p className="text-xs font-bold">فایل نمونه اکسل استاندارد</p>
-                  <p className="text-[11px] text-base-content/60">دارای ستون‌های استاندارد و نمونه ردیف‌های بالفعل و بالقوه</p>
+                  <p className="text-[11px] text-base-content/60">دارای ستون‌های استاندارد و نمونه ردیف‌های مشتریان حقیقی و حقوقی</p>
                 </div>
               </div>
               <button

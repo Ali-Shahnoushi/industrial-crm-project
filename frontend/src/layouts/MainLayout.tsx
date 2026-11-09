@@ -37,7 +37,12 @@ function ThemeToggle() {
   const { theme, toggle } = useThemeStore()
   const dark = theme === 'nikan-dark'
   return (
-    <button className="btn btn-ghost btn-circle" onClick={toggle} aria-label={dark ? 'حالت روشن' : 'حالت تاریک'} title={dark ? 'حالت روشن' : 'حالت تاریک'}>
+    <button
+      className="btn btn-ghost btn-circle"
+      onClick={toggle}
+      aria-label={dark ? 'حالت روشن' : 'حالت تاریک'}
+      title={dark ? 'حالت روشن' : 'حالت تاریک'}
+    >
       {dark ? <Sun className="size-5" /> : <Moon className="size-5" />}
     </button>
   )
@@ -47,7 +52,13 @@ function UserMenu() {
   const user = useAuthStore((s) => s.user)!
   const logout = useAuthStore((s) => s.logout)
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const isAdministrator = useAuthStore((s) => s.isAdministrator)()
   const nav = useNavigate()
+
+  const displayRole =
+    user.role_label ||
+    (user.user_type ? roleLabel[user.user_type] : undefined) ||
+    roleLabel[user.role || 'admin']
 
   return (
     <div className="dropdown dropdown-end shrink-0">
@@ -58,38 +69,65 @@ function UserMenu() {
         aria-label="منوی کاربر"
       >
         <span className="hidden text-end leading-tight whitespace-nowrap lg:block">
-          <span className="block text-xs font-bold truncate max-w-[110px] xl:max-w-[150px]">{user.name}</span>
-          <span className="block text-[10px] text-base-content/60 truncate max-w-[110px] xl:max-w-[150px]">{roleLabel[user.role || 'admin']}</span>
+          <span className="block text-xs font-bold truncate max-w-[110px] xl:max-w-[150px]">
+            {user.name}
+          </span>
+          <span className="block text-[10px] text-base-content/60 truncate max-w-[110px] xl:max-w-[150px]">
+            {displayRole}
+          </span>
         </span>
         <Avatar name={user.name} src={user.avatar_url} size="md" presence="online" />
       </div>
-      <ul tabIndex={0} className="dropdown-content menu z-50 mt-2 w-56 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-xl">
+      <ul
+        tabIndex={0}
+        className="dropdown-content menu z-50 mt-2 w-56 rounded-2xl border border-base-300 bg-base-100 p-2 shadow-xl"
+      >
         <li className="menu-title px-3 pb-1">
           <span className="block truncate">{user.email}</span>
         </li>
         <li>
-          <button onClick={() => { closeDropdown(); nav('/settings/profile') }}>
+          <button
+            onClick={() => {
+              closeDropdown()
+              nav('/settings/profile')
+            }}
+          >
             <User className="size-4" /> پروفایل من
           </button>
         </li>
         {hasPermission('settings.manage') && (
           <li>
-            <button onClick={() => { closeDropdown(); nav('/settings/sms') }}>
+            <button
+              onClick={() => {
+                closeDropdown()
+                nav('/settings/sms')
+              }}
+            >
               <MessageSquare className="size-4" /> تنظیمات ملی‌پیامک
             </button>
           </li>
         )}
         {hasPermission('users.manage') && (
           <li>
-            <button onClick={() => { closeDropdown(); nav('/settings/users') }}>
-              <ShieldCheck className="size-4" /> کاربران و دسترسی‌ها
+            <button
+              onClick={() => {
+                closeDropdown()
+                nav('/settings/users')
+              }}
+            >
+              <ShieldCheck className="size-4" /> کارمندان و دسترسی‌ها
             </button>
           </li>
         )}
-        {hasPermission('settings.manage') && (
+        {(isAdministrator || hasPermission('settings.manage')) && (
           <li>
-            <button onClick={() => { closeDropdown(); nav('/settings/system') }}>
-              <Palette className="size-4" /> پوسته و رنگ
+            <button
+              onClick={() => {
+                closeDropdown()
+                nav('/settings/system')
+              }}
+            >
+              <Palette className="size-4" /> تنظیمات سیستم و پوسته
             </button>
           </li>
         )}
@@ -121,13 +159,16 @@ export function MainLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-base-300/60 bg-base-100/80 px-3 backdrop-blur-md sm:gap-3 sm:px-6">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 max-w-md">
-            <button className="btn btn-ghost btn-circle lg:hidden shrink-0" onClick={() => setOpen(true)} aria-label="باز کردن منو">
+            <button
+              className="btn btn-ghost btn-circle lg:hidden shrink-0"
+              onClick={() => setOpen(true)}
+              aria-label="باز کردن منو"
+            >
               <Menu className="size-5" />
             </button>
             <GlobalSearch />
           </div>
           <div className="ms-auto flex items-center gap-1.5 sm:gap-2.5 md:gap-3 shrink-0">
-            {/* Realtime Jalali Date & Time Clock */}
             <RealtimeClock />
             <ThemeToggle />
             <NotificationsMenu />
@@ -135,7 +176,13 @@ export function MainLayout() {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
-          <motion.div key={pathname} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }} className="mx-auto max-w-[1500px]">
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="mx-auto max-w-[1500px]"
+          >
             <Suspense fallback={<PageSkeleton />}>
               <Outlet />
             </Suspense>

@@ -9,25 +9,44 @@ use App\Models\CustomerPart;
 use App\Models\Part;
 use App\Models\SmsLog;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
-    public function stats(): JsonResponse
+    public function stats(Request $request): JsonResponse
     {
-        $totalCustomers = Customer::count();
-        $effectiveCustomers = Customer::where('customer_type', 'effective')->count();
-        $potentialCustomers = Customer::where('customer_type', 'potential')->count();
+        $user = $request->user();
+
+        $accessibleCustomers = Customer::accessibleBy($user);
+        $accessibleParts = CustomerPart::whereHas('customer', fn ($q) => $q->accessibleBy($user));
+
+        $totalCustomers = (clone $accessibleCustomers)->count();
+        $effectiveCustomers = (clone $accessibleCustomers)->where('customer_type', 'effective')->count();
+        $potentialCustomers = (clone $accessibleCustomers)->where('customer_type', 'potential')->count();
 
         $totalParts = Part::count();
-        $assignedParts = CustomerPart::count();
-        $totalSmsSent = SmsLog::where('status', 'sent')->count();
+        $totalStockQuantity = (int) Part::sum('stock_quantity');
+        $assignedParts = (int) (clone $accessibleParts)->sum('quantity');
+
+        $smsQuery = SmsLog::where(function ($q) use ($user) {
+            if ($user && $user->hasRestrictedCustomerScope()) {
+                $q->whereHas('customer', fn ($cq) => $cq->accessibleBy($user));
+            }
+        });
+        $totalSmsSent = (clone $smsQuery)->where('status', 'sent')->count();
 
         $recentActivities = CustomerHistory::with(['customer', 'user'])
+            ->whereHas('customer', fn ($q) => $q->accessibleBy($user))
             ->latest()
             ->take(8)
             ->get();
 
         $recentSms = SmsLog::with('customer')
+            ->where(function ($q) use ($user) {
+                if ($user && $user->hasRestrictedCustomerScope()) {
+                    $q->whereHas('customer', fn ($cq) => $cq->accessibleBy($user));
+                }
+            })
             ->latest()
             ->take(6)
             ->get();
@@ -38,6 +57,7 @@ class DashboardController extends Controller
                 'effective_customers' => $effectiveCustomers,
                 'potential_customers' => $potentialCustomers,
                 'total_parts' => $totalParts,
+                'total_stock_quantity' => $totalStockQuantity,
                 'assigned_parts' => $assignedParts,
                 'total_sms_sent' => $totalSmsSent,
             ],

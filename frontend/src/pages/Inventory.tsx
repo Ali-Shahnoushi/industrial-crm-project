@@ -13,8 +13,8 @@ import { cx, num, toman } from '../utils/format'
 import type { Product, StockMovement } from '../types'
 
 const PAGE_SIZE = 10
-const CATEGORIES = ['الکترونیک', 'لوازم جانبی', 'قطعات', 'خدمات', 'نرم‌افزار']
-const WAREHOUSES = ['انبار مرکزی', 'انبار غرب', 'انبار قطعات']
+const CATEGORIES = ['الکترونیک', 'لوازم جانبی', 'دستگاه‌ها', 'خدمات', 'نرم‌افزار']
+const WAREHOUSES = ['انبار مرکزی', 'انبار غرب', 'انبار دستگاه‌ها']
 
 export default function Inventory() {
   const { data: products, isLoading } = useList('products')

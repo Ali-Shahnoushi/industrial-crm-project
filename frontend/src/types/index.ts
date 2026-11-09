@@ -1,5 +1,8 @@
 export type Role = 'admin' | 'manager' | 'sales' | 'support' | 'warehouse' | 'finance' | 'marketing'
 export type Presence = 'online' | 'away' | 'offline'
+export type UserType = 'administrator' | 'manager' | 'salesperson' | 'installer'
+export type CustomerScope = 'own' | 'selected' | 'all'
+export type InventoryOperationType = 'in' | 'out_manual' | 'out_assign' | 'return'
 
 export interface User {
   id: string
@@ -15,12 +18,27 @@ export interface User {
   is_active?: boolean
   permissions: string[]
   created_at?: string
-  user_type?: 'administrator' | 'manager'
+  user_type?: UserType
+  role_label?: string
+  customer_scope?: CustomerScope
+  granted_staff_ids?: number[]
+  granted_staff?: Array<{ id: number; name: string }>
+  granted_customer_ids?: number[]
+  granted_customers?: Array<{ id: number; display_name: string; type: CustomerPersonType }>
+}
+
+export interface RoleOption {
+  key: UserType
+  label: string
+  description: string
+  default_customer_scope: CustomerScope
+  default_permissions: string[]
 }
 
 export interface CompanySettings {
   company_name: string | null
   company_logo_url: string | null
+  app_version?: string
 }
 
 export type CustomerType = 'potential' | 'effective'
@@ -31,21 +49,25 @@ export interface Customer {
   id: number | string
   customer_type: CustomerType // potential (بالقوه) | effective (بالفعل)
   type: CustomerPersonType    // individual (حقیقی) | company (حقوقی)
-  first_name: string
-  last_name: string
+  first_name?: string | null
+  last_name?: string | null
   full_name?: string
-  company_name?: string
-  national_code?: string
-  mobile: string
-  phone?: string
-  email?: string
-  province?: string
-  city?: string
-  address?: string
-  notes?: string
+  display_name?: string
+  company_name?: string | null
+  national_code?: string | null
+  mobile?: string | null
+  phone?: string | null
+  email?: string | null
+  province?: string | null
+  city?: string | null
+  address?: string | null
+  notes?: string | null
+  created_by_user_id?: number | null
+  creator?: { id: number; name: string } | null
   created_at?: string
   updated_at?: string
   customer_parts_count?: number
+  total_devices_qty?: number | string | null
   customer_parts?: CustomerPart[]
   histories?: CustomerHistory[]
   sms_logs?: SmsLog[]
@@ -65,16 +87,56 @@ export interface Customer {
   ordersCount?: number
 }
 
+export interface CustomerLookupItem {
+  id: number
+  display_name: string
+  type: CustomerPersonType
+  mobile?: string | null
+  creator_name?: string | null
+}
+
 export interface Part {
   id: number | string
   name: string
   code: string
   periodic_service_months: number
-  description?: string
+  stock_quantity?: number
+  description?: string | null
   is_active: boolean
   customer_parts_count?: number
+  assigned_quantity_sum?: number | string | null
   customer_parts?: CustomerPart[]
   created_at?: string
+}
+
+export interface PartInventoryLog {
+  id: number
+  part_id: number
+  customer_part_id?: number | null
+  customer_id?: number | null
+  user_id?: number | null
+  type: InventoryOperationType
+  type_label?: string
+  quantity: number
+  balance_after: number
+  description?: string | null
+  created_at: string
+  part?: Pick<Part, 'id' | 'name' | 'code' | 'stock_quantity'>
+  user?: {
+    id: number
+    name: string
+    email?: string
+    user_type?: UserType
+  } | null
+  customer?: {
+    id: number
+    first_name?: string | null
+    last_name?: string | null
+    company_name?: string | null
+    type?: CustomerPersonType
+    full_name?: string
+    display_name?: string
+  } | null
 }
 
 export type CustomerPartStatus = 'active' | 'under_repair' | 'replaced' | 'retired'
@@ -84,10 +146,13 @@ export interface CustomerPart {
   customer_id: number | string
   part_id: number | string
   serial_number: string
-  installation_date?: string
-  warranty_expire_date?: string
+  quantity?: number
+  invoice_amount?: number | string | null
+  invoice_number?: string | null
+  installation_date?: string | null
+  warranty_expire_date?: string | null
   status: CustomerPartStatus
-  notes?: string
+  notes?: string | null
   part?: Part
   service_histories?: PartServiceHistory[]
   created_at?: string
@@ -100,7 +165,7 @@ export interface PartServiceHistory {
   service_date: string
   service_type: 'periodic' | 'repair' | 'overhaul'
   description: string
-  cost?: number | string
+  cost?: number | string | null
   performed_by?: User
   created_at?: string
 }
@@ -148,6 +213,7 @@ export interface DashboardStats {
     effective_customers: number
     potential_customers: number
     total_parts: number
+    total_stock_quantity?: number
     assigned_parts: number
     total_sms_sent: number
   }

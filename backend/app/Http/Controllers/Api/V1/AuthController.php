@@ -4,14 +4,17 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\Sms\MelipayamakService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function __construct(protected \App\Services\Sms\MelipayamakService $melipayamakService)
+    public function __construct(protected MelipayamakService $melipayamakService)
     {
     }
 
@@ -20,6 +23,12 @@ class AuthController extends Controller
      */
     public function sendOtp(Request $request): JsonResponse
     {
+        if ($request->has('phone')) {
+            $request->merge([
+                'phone' => trim((string) $this->normalizeDigits((string) $request->input('phone', ''))),
+            ]);
+        }
+
         $validated = $request->validate([
             'phone' => ['required', 'string', 'regex:/^09\d{9}$/'],
         ], [
@@ -42,20 +51,17 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Rate limit: 60 seconds cooldown
         $cooldownKey = 'otp_cooldown_' . $phone;
-        if (\Illuminate\Support\Facades\Cache::has($cooldownKey)) {
+        if (Cache::has($cooldownKey)) {
             return response()->json([
                 'message' => 'کد تایید اخیراً ارسال شده است. لطفاً ۶۰ ثانیه صبر نمایید.',
             ], 429);
         }
 
-        // Generate 5-digit OTP
         $otpCode = strval(random_int(10000, 99999));
-        \Illuminate\Support\Facades\Cache::put('otp_' . $phone, $otpCode, now()->addMinutes(2));
-        \Illuminate\Support\Facades\Cache::put($cooldownKey, true, now()->addSeconds(60));
+        Cache::put('otp_' . $phone, $otpCode, now()->addMinutes(2));
+        Cache::put($cooldownKey, true, now()->addSeconds(60));
 
-        // Send normal SMS via Melipayamak
         $smsText = "کد تأیید ورود شما به سامانه مدیریت ارتباط با مشتری: {$otpCode}\nاعتبار: ۲ دقیقه";
         $smsResult = $this->melipayamakService->sendNormalSms($phone, $smsText);
 
@@ -77,6 +83,11 @@ class AuthController extends Controller
      */
     public function verifyOtp(Request $request): JsonResponse
     {
+        $request->merge([
+            'phone' => trim((string) $this->normalizeDigits((string) $request->input('phone', ''))),
+            'code' => trim((string) $this->normalizeDigits((string) $request->input('code', ''))),
+        ]);
+
         $validated = $request->validate([
             'phone' => ['required', 'string', 'regex:/^09\d{9}$/'],
             'code' => ['required', 'string'],
@@ -88,7 +99,7 @@ class AuthController extends Controller
         $phone = $validated['phone'];
         $code = trim($validated['code']);
 
-        $cachedCode = \Illuminate\Support\Facades\Cache::get('otp_' . $phone);
+        $cachedCode = Cache::get('otp_' . $phone);
 
         if (!$cachedCode || $cachedCode !== $code) {
             throw ValidationException::withMessages([
@@ -96,7 +107,7 @@ class AuthController extends Controller
             ]);
         }
 
-        \Illuminate\Support\Facades\Cache::forget('otp_' . $phone);
+        Cache::forget('otp_' . $phone);
 
         $user = User::where('phone', $phone)->firstOrFail();
 
@@ -107,21 +118,11 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('api-token')->plainTextToken;
-        $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
         $cookie = $this->createAuthCookie($token);
 
         return response()->json([
             'message' => 'ورود با موفقیت انجام شد.',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'avatar' => $user->avatar,
-                'avatar_url' => $user->avatar_url,
-                'permissions' => $permissions,
-                'user_type' => $user->user_type,
-            ],
+            'user' => $user->serializeForApi(),
             'token' => $token,
         ])->withCookie($cookie);
     }
@@ -136,11 +137,18 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        $loginField = filter_var($validated['login'], FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
+        $normalizedLogin = trim((string) $this->normalizeDigits($validated['login']));
+        $normalizedPassword = (string) $this->normalizeDigits($validated['password']);
+        $loginField = filter_var($normalizedLogin, FILTER_VALIDATE_EMAIL) ? 'email' : 'phone';
 
-        $user = User::where($loginField, $validated['login'])->first();
+        $user = User::where($loginField, $normalizedLogin)->first();
 
-        if (!$user || !Hash::check($validated['password'], $user->password)) {
+        $passwordMatches = $user && (
+            Hash::check($validated['password'], $user->password) ||
+            ($normalizedPassword !== $validated['password'] && Hash::check($normalizedPassword, $user->password))
+        );
+
+        if (!$user || !$passwordMatches) {
             throw ValidationException::withMessages([
                 'login' => ['اطلاعات ورود (نام کاربری/رمز عبور) نادرست است.'],
             ]);
@@ -153,43 +161,24 @@ class AuthController extends Controller
         }
 
         $token = $user->createToken('api-token')->plainTextToken;
-        $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
         $cookie = $this->createAuthCookie($token);
 
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'avatar' => $user->avatar,
-                'avatar_url' => $user->avatar_url,
-                'permissions' => $permissions,
-                'user_type' => $user->user_type,
-            ],
+            'user' => $user->serializeForApi(),
             'token' => $token,
         ])->withCookie($cookie);
     }
 
     /**
-     * Get the authenticated user with direct permissions.
+     * Get the authenticated user with direct permissions and customer ACL scope.
      */
     public function me(Request $request): JsonResponse
     {
+        /** @var User $user */
         $user = $request->user();
-        $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
 
         return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'avatar' => $user->avatar,
-                'avatar_url' => $user->avatar_url,
-                'permissions' => $permissions,
-                'user_type' => $user->user_type,
-            ],
+            'user' => $user->serializeForApi(),
         ]);
     }
 
@@ -198,7 +187,13 @@ class AuthController extends Controller
      */
     public function updateProfile(Request $request): JsonResponse
     {
+        /** @var User $user */
         $user = $request->user();
+
+        if ($request->has('phone')) {
+            $normPhone = trim((string) $this->normalizeDigits((string) $request->input('phone', '')));
+            $request->merge(['phone' => $normPhone !== '' ? $normPhone : null]);
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:100',
@@ -225,33 +220,22 @@ class AuthController extends Controller
         }
 
         if ($request->boolean('remove_avatar') || $request->input('remove_avatar') === '1') {
-            if ($user->avatar && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->avatar)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar);
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
             }
             $user->avatar = null;
         } elseif ($request->hasFile('avatar')) {
-            if ($user->avatar && \Illuminate\Support\Facades\Storage::disk('public')->exists($user->avatar)) {
-                \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar);
+            if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
+                Storage::disk('public')->delete($user->avatar);
             }
             $user->avatar = $request->file('avatar')->store('avatars', 'public');
         }
 
         $user->save();
 
-        $permissions = $user->getAllPermissions()->pluck('name')->values()->all();
-
         return response()->json([
             'message' => 'پروفایل شما با موفقیت بروزرسانی شد.',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'phone' => $user->phone,
-                'avatar' => $user->avatar,
-                'avatar_url' => $user->avatar_url,
-                'permissions' => $permissions,
-                'user_type' => $user->user_type,
-            ],
+            'user' => $user->fresh()->serializeForApi(),
         ]);
     }
 
@@ -276,10 +260,10 @@ class AuthController extends Controller
         return cookie(
             name: 'crm_token',
             value: $token,
-            minutes: 60 * 24 * 7, // 7 days
+            minutes: 60 * 24 * 7,
             path: '/',
             domain: null,
-            secure: false, // allow http in local/docker environment
+            secure: false,
             httpOnly: true,
             raw: false,
             sameSite: 'Lax'

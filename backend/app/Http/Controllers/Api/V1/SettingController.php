@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
+use Spatie\Permission\PermissionRegistrar;
 
 class SettingController extends Controller
 {
@@ -59,7 +61,6 @@ class SettingController extends Controller
 
     public function getCompanySettings(): JsonResponse
     {
-        // Accessible by any authenticated user (sidebar always visible when logged in)
         $companyName = Setting::get('company_name');
         $companyLogoPath = Setting::get('company_logo');
         $companyLogoUrl = null;
@@ -71,6 +72,7 @@ class SettingController extends Controller
         return response()->json([
             'company_name' => $companyName ?: null,
             'company_logo_url' => $companyLogoUrl,
+            'app_version' => config('app.version', '2.0.0'),
         ]);
     }
 
@@ -92,7 +94,6 @@ class SettingController extends Controller
             Setting::set('company_name', $validated['company_name'] ?? '');
         }
 
-        // Remove existing logo if requested
         if ($request->input('remove_logo') === '1') {
             $existingLogo = Setting::get('company_logo');
             if ($existingLogo && Storage::disk('public')->exists($existingLogo)) {
@@ -100,7 +101,6 @@ class SettingController extends Controller
             }
             Setting::set('company_logo', '');
         } elseif ($request->hasFile('company_logo')) {
-            // Delete old logo before storing new one
             $existingLogo = Setting::get('company_logo');
             if ($existingLogo && Storage::disk('public')->exists($existingLogo)) {
                 Storage::disk('public')->delete($existingLogo);
@@ -109,7 +109,6 @@ class SettingController extends Controller
             Setting::set('company_logo', $logoPath);
         }
 
-        // Build updated logo URL for response
         $companyLogoPath = Setting::get('company_logo');
         $companyLogoUrl = null;
         if ($companyLogoPath && Storage::disk('public')->exists($companyLogoPath)) {
@@ -120,15 +119,31 @@ class SettingController extends Controller
             'message' => 'تنظیمات برندینگ شرکت با موفقیت ذخیره شد.',
             'company_name' => Setting::get('company_name') ?: null,
             'company_logo_url' => $companyLogoUrl,
+            'app_version' => config('app.version', '2.0.0'),
         ]);
     }
 
-    protected function authorizePermission(string $permission): void
+    /**
+     * Run safe pending database migrations & clear caches directly from Web UI (cPanel no-SSH helper).
+     */
+    public function upgradeSystem(): JsonResponse
     {
-        $user = auth()->user();
-        if (!$user || !$user->hasPermissionTo($permission)) {
-            abort(403, "شما دسترسی لازم ({$permission}) برای این عملیات را ندارید.");
+        $callingUser = auth()->user();
+        if (!$callingUser || !$callingUser->isAdministrator()) {
+            abort(403, 'فقط مدیر ارشد سامانه مجاز به اجرای عملیات ارتقای پایگاه داده است.');
         }
+
+        Artisan::call('migrate', ['--force' => true]);
+        $migrateOutput = trim(Artisan::output());
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+        Setting::set('app_version', config('app.version', '2.0.0'));
+        Artisan::call('optimize:clear');
+
+        return response()->json([
+            'message' => 'ارتقای ساختار پایگاه داده (Zero Data Loss) و پاکسازی کش سامانه با موفقیت انجام شد.',
+            'version' => config('app.version', '2.0.0'),
+            'output' => $migrateOutput,
+        ]);
     }
 }
-

@@ -1,13 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Building2, Check, Moon, Palette, Save, Sun } from 'lucide-react'
+import {
+  Building2,
+  Check,
+  CheckCircle2,
+  DatabaseZap,
+  Moon,
+  Palette,
+  RefreshCw,
+  Save,
+  Sun,
+} from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { FilePondLogo } from '../../components/ui/FilePondLogo'
 import { useThemeStore, type ThemeColor } from '../../store/useThemeStore'
 import { useAuthStore } from '../../store/useAuthStore'
 import { settingsApi } from '../../services/api'
-import { cx } from '../../utils/format'
+import { cx, digits } from '../../utils/format'
 
 interface ColorOption {
   id: ThemeColor
@@ -53,29 +63,26 @@ export default function SystemSettingsPage() {
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
   const qc = useQueryClient()
 
-  const [companyName, setCompanyName] = useState('')
-  const [logoFile, setLogoFile] = useState<File | null>(null)
-  const [removeLogo, setRemoveLogo] = useState(false)
-
-  // Fetch company settings (admin only)
   const { data: companySettings } = useQuery({
     queryKey: ['company-settings'],
     queryFn: settingsApi.getCompanySettings,
     enabled: isAdministrator,
   })
 
-  useEffect(() => {
-    if (companySettings) {
-      setCompanyName(companySettings.company_name || '')
-    }
-  }, [companySettings])
+  const [companyNameDraft, setCompanyNameDraft] = useState<string | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [removeLogo, setRemoveLogo] = useState(false)
+  const [upgradeOutput, setUpgradeOutput] = useState<string | null>(null)
 
-  // Save company settings mutation
+  const companyName =
+    companyNameDraft !== null ? companyNameDraft : companySettings?.company_name || ''
+
   const saveCompanyMutation = useMutation({
     mutationFn: (formData: FormData) => settingsApi.updateCompanySettings(formData),
     onSuccess: (res) => {
       toast.success(res.message)
       qc.invalidateQueries({ queryKey: ['company-settings'] })
+      setCompanyNameDraft(null)
       setLogoFile(null)
       setRemoveLogo(false)
     },
@@ -84,7 +91,6 @@ export default function SystemSettingsPage() {
     },
   })
 
-  // Remove logo mutation
   const removeLogoMutation = useMutation({
     mutationFn: () => {
       const fd = new FormData()
@@ -102,6 +108,19 @@ export default function SystemSettingsPage() {
     },
   })
 
+  const upgradeSystemMutation = useMutation({
+    mutationFn: () => settingsApi.upgradeSystem(),
+    onSuccess: (res) => {
+      setUpgradeOutput(res.output || 'بروزرسانی دیتابیس و پاکسازی کش با موفقیت انجام شد.')
+      qc.invalidateQueries({ queryKey: ['company-settings'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      toast.success(res.message || 'بروزرسانی پایگاه‌داده و کش سرور با موفقیت انجام شد')
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'خطا در اجرای بروزرسانی پایگاه‌داده')
+    },
+  })
+
   const handleSaveCompany = () => {
     const fd = new FormData()
     fd.append('company_name', companyName.trim())
@@ -115,15 +134,21 @@ export default function SystemSettingsPage() {
   }
 
   const currentLogoUrl = removeLogo ? null : companySettings?.company_logo_url
+  const appVersion = companySettings?.app_version || '2.0.0'
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
-        title={isAdministrator ? 'تنظیمات سیستم، برندینگ و ظاهر' : 'تنظیمات پوسته نمایشی'}
+        title={isAdministrator ? 'تنظیمات سیستم، برندینگ و نگهداری' : 'تنظیمات پوسته نمایشی'}
         subtitle={
           isAdministrator
-            ? 'مدیریت مشخصات شرکت، پالت رنگی اصلی و حالت روز/شب (Light/Dark) سامانه'
+            ? 'مدیریت مشخصات شرکت، پالت رنگی، حالت روز/شب و بروزرسانی یک‌کلیکی پایگاه‌داده در هاست اشتراکی (cPanel)'
             : 'شخصی‌سازی حالت روز یا شب (Light/Dark) سامانه متناسب با نور محیط کار'
+        }
+        actions={
+          <span className="badge badge-primary badge-soft font-bold px-3 py-3 text-xs">
+            نسخه سامانه: {digits(appVersion)}
+          </span>
         }
       />
 
@@ -136,12 +161,11 @@ export default function SystemSettingsPage() {
               مشخصات شرکت و برندینگ
             </h3>
             <p className="text-xs text-base-content/60 mt-1">
-              نام شرکت و لوگو در نوار کناری سامانه نمایش داده می‌شوند.
+              نام شرکت و لوگو در نوار کناری سامانه و صفحه ورود نمایش داده می‌شوند.
             </p>
           </div>
 
           <div className="space-y-5">
-            {/* Company Name */}
             <div>
               <label className="block text-xs font-bold text-base-content mb-1.5">
                 نام شرکت یا سازمان
@@ -151,11 +175,10 @@ export default function SystemSettingsPage() {
                 className="input input-bordered w-full text-sm"
                 placeholder="نام شرکت یا سازمان"
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
+                onChange={(e) => setCompanyNameDraft(e.target.value)}
               />
             </div>
 
-            {/* Company Logo using FilePond */}
             <FilePondLogo
               label="لوگوی رسمی شرکت (جهت نمایش در نوار کناری)"
               currentLogoUrl={currentLogoUrl}
@@ -173,7 +196,6 @@ export default function SystemSettingsPage() {
               disabled={saveCompanyMutation.isPending || removeLogoMutation.isPending}
             />
 
-            {/* Save button */}
             <div className="flex justify-end pt-2">
               <button
                 type="button"
@@ -190,6 +212,49 @@ export default function SystemSettingsPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* One-Click Database Migration & Cache Clear Card (cPanel Shared Hosting Friendly) */}
+      {isAdministrator && (
+        <div className="card-surface p-6 sm:p-8 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-base-content flex items-center gap-2">
+                <DatabaseZap className="size-5 text-emerald-600" />
+                بروزرسانی خودکار پایگاه‌داده و پاکسازی کش سرور
+              </h3>
+              <p className="text-xs text-base-content/60 leading-relaxed">
+                مخصوص هاست اشتراکی و cPanel بدون نیاز به دسترسی SSH/Terminal — با کلیک روی این دکمه، جداول جدید دیتابیس (نسخه{' '}
+                {digits(appVersion)}) با حفظ ۱۰۰٪ داده‌های قبلی ایجاد/ارتقا یافته و کش سیستم پاکسازی می‌شود.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={upgradeSystemMutation.isPending}
+              onClick={() => upgradeSystemMutation.mutate()}
+              className="btn btn-success text-white gap-2 shrink-0 font-bold"
+            >
+              {upgradeSystemMutation.isPending ? (
+                <span className="loading loading-spinner loading-xs" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              اجرای بروزرسانی و پاکسازی کش
+            </button>
+          </div>
+
+          {upgradeOutput && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-3.5 text-xs space-y-1.5">
+              <p className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                <CheckCircle2 className="size-4" /> نتیجه اجرای عملیات در سرور:
+              </p>
+              <pre className="whitespace-pre-wrap font-mono text-[11px] ltr-text text-start bg-base-100 rounded-lg p-3 border border-base-200">
+                {upgradeOutput}
+              </pre>
+            </div>
+          )}
         </div>
       )}
 

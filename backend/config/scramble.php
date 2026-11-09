@@ -12,16 +12,16 @@ return [
      * The title and info of the API.
      */
     'info' => [
-        'version' => '1.0.0',
-        'title' => 'سامانه مدیریت مشتریان و قطعات صنعتی (Parts CRM API)',
-        'description' => 'مستندات کامل اندپوئینت‌های احراز هویت، مدیریت مشتریان، کاتالوگ قطعات، تخصیص شماره سریال، سوابق سرویس و پیامک‌های الگو.',
+        'version' => '2.0.0',
+        'title' => 'سامانه مدیریت مشتریان و دستگاه‌های صنعتی (Industrial Devices CRM API)',
+        'description' => 'مستندات کامل اندپوئینت‌های احراز هویت، مدیریت مشتریان، کاتالوگ دستگاه‌ها، کنترل موجودی انبار، تخصیص شماره سریال، سوابق سرویس و پیامک‌های الگو.',
     ],
 
     /*
      * Customize Scramble UI.
      */
     'ui' => [
-        'title' => 'Parts CRM - OpenAPI Documentation',
+        'title' => 'Industrial CRM v2.0.0 - OpenAPI Documentation',
         'theme' => 'light',
         'hide_try_it' => false,
     ],
