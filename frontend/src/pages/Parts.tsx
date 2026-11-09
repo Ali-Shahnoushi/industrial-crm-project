@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -61,7 +61,7 @@ export default function Parts() {
   const qc = useQueryClient()
 
   const [activeTab, setActiveTab] = useState<'catalog' | 'logs'>('catalog')
-  const [q, setQ] = useState(params.get('q') || '')
+  const q = params.get('q') || ''
 
   // Create / Edit Catalog Modal
   const [modalOpen, setModalOpen] = useState(false)
@@ -79,13 +79,6 @@ export default function Parts() {
   const [logTypeFilter, setLogTypeFilter] = useState<InventoryOperationType | ''>('')
   const [logPartFilter, setLogPartFilter] = useState<string>('')
   const [logSearch, setLogSearch] = useState('')
-
-  const urlQuery = params.get('q')
-  useEffect(() => {
-    if (urlQuery !== null && urlQuery !== q) {
-      setQ(urlQuery)
-    }
-  }, [urlQuery, q])
 
   const { data: parts = [], isLoading } = useQuery({
     queryKey: ['parts-catalog', q],
@@ -305,7 +298,6 @@ export default function Parts() {
                 value={q}
                 onChange={(val) => {
                   const normalized = toEnDigits(val)
-                  setQ(normalized)
                   const next = new URLSearchParams(params)
                   if (normalized) next.set('q', normalized)
                   else next.delete('q')

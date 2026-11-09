@@ -10,8 +10,6 @@ import type {
   Part,
   PartInventoryLog,
   PartServiceHistory,
-  ResourceName,
-  Resources,
   RoleOption,
   SmsLog,
   SmsSettings,
@@ -399,14 +397,4 @@ export const usersApi = {
     const { data } = await http.get<SystemPermission[]>('/permissions')
     return data
   },
-}
-
-// Legacy demo helpers for backward compatibility
-export const getAll = async <K extends ResourceName>(r: K) => (await http.get<Resources[K][]>(`/${r}`)).data
-export const createOne = async <K extends ResourceName>(r: K, body: Partial<Resources[K]>) =>
-  (await http.post<Resources[K]>(`/${r}`, body)).data
-export const patchOne = async <K extends ResourceName>(r: K, id: string, body: Partial<Resources[K]>) =>
-  (await http.patch<Resources[K]>(`/${r}/${id}`, body)).data
-export const deleteOne = async (r: ResourceName, id: string) => {
-  await http.delete(`/${r}/${id}`)
 }

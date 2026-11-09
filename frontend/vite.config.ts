@@ -9,31 +9,7 @@ const apiProxy = {
     target: backendTarget,
     changeOrigin: true,
   },
-  '/docs': {
-    target: backendTarget,
-    changeOrigin: true,
-  },
   '/storage': {
-    target: backendTarget,
-    changeOrigin: true,
-  },
-  '/admin': {
-    target: backendTarget,
-    changeOrigin: true,
-  },
-  '/livewire': {
-    target: backendTarget,
-    changeOrigin: true,
-  },
-  '/css': {
-    target: backendTarget,
-    changeOrigin: true,
-  },
-  '/fonts': {
-    target: backendTarget,
-    changeOrigin: true,
-  },
-  '/js/filament': {
     target: backendTarget,
     changeOrigin: true,
   },

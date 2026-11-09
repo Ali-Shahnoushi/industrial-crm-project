@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { MessageSquare, Save } from 'lucide-react'
@@ -19,28 +19,29 @@ export default function SmsSettingsPage() {
     enabled: hasPermission('settings.manage'),
   })
 
-  const [smsForm, setSmsForm] = useState({
-    username: '',
-    password: '',
-    from: '',
-    sandbox: true,
-  })
+  const [overrides, setOverrides] = useState<{
+    username?: string
+    password?: string
+    from?: string
+    sandbox?: boolean
+  }>({})
 
-  useEffect(() => {
-    if (smsSettings) {
-      setSmsForm({
-        username: smsSettings.melipayamak_username || '',
-        password: '',
-        from: smsSettings.melipayamak_from || '',
-        sandbox: smsSettings.melipayamak_sandbox ?? true,
-      })
-    }
-  }, [smsSettings])
+  const smsForm = {
+    username: overrides.username ?? smsSettings?.melipayamak_username ?? '',
+    password: overrides.password ?? '',
+    from: overrides.from ?? smsSettings?.melipayamak_from ?? '',
+    sandbox: overrides.sandbox ?? smsSettings?.melipayamak_sandbox ?? true,
+  }
+
+  const updateSmsForm = (patch: Partial<typeof overrides>) => {
+    setOverrides((prev) => ({ ...prev, ...patch }))
+  }
 
   const saveSmsMutation = useMutation({
     mutationFn: (body: any) => settingsApi.updateSmsSettings(body),
     onSuccess: (res) => {
       toast.success(res.message)
+      setOverrides({})
       qc.invalidateQueries({ queryKey: ['settings-sms'] })
       qc.invalidateQueries({ queryKey: ['sms-settings'] })
     },
@@ -87,7 +88,7 @@ export default function SmsSettingsPage() {
               dir="ltr"
               className="input input-bordered w-full text-start font-mono text-sm"
               value={smsForm.username}
-              onChange={(e) => setSmsForm({ ...smsForm, username: e.target.value })}
+              onChange={(e) => updateSmsForm({ username: e.target.value })}
               placeholder="مثال: 09121234567"
               required
             />
@@ -105,7 +106,7 @@ export default function SmsSettingsPage() {
               dir="ltr"
               className="input input-bordered w-full text-start font-mono text-sm"
               value={smsForm.password}
-              onChange={(e) => setSmsForm({ ...smsForm, password: e.target.value })}
+              onChange={(e) => updateSmsForm({ password: e.target.value })}
               placeholder={smsSettings?.melipayamak_has_password ? '••••••••' : 'رمز عبور پنل پیامک'}
             />
           </Field>
@@ -115,7 +116,7 @@ export default function SmsSettingsPage() {
               dir="ltr"
               className="input input-bordered w-full text-start font-mono text-sm"
               value={smsForm.from}
-              onChange={(e) => setSmsForm({ ...smsForm, from: e.target.value })}
+              onChange={(e) => updateSmsForm({ from: e.target.value })}
               placeholder="مثال: 5000..."
             />
           </Field>
@@ -133,7 +134,7 @@ export default function SmsSettingsPage() {
                 type="checkbox"
                 className="toggle toggle-primary toggle-sm shrink-0"
                 checked={smsForm.sandbox}
-                onChange={(e) => setSmsForm({ ...smsForm, sandbox: e.target.checked })}
+                onChange={(e) => updateSmsForm({ sandbox: e.target.checked })}
               />
             </label>
           </div>

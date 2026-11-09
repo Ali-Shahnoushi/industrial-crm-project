@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -38,14 +38,35 @@ export default function Customers() {
   const qc = useQueryClient()
 
   const [q, setQ] = useState('')
-  const [customerType, setCustomerType] = useState<CustomerType | 'all'>('all')
   const [page, setPage] = useState(1)
+
+  const typeParam = params.get('type')
+  const customerType: CustomerType | 'all' =
+    typeParam === 'effective' || typeParam === 'potential' ? typeParam : 'all'
+  const isNewFromUrl = Boolean(params.get('new'))
+
+  const selectCustomerType = (nextType: CustomerType | 'all') => {
+    setPage(1)
+    const nextParams = new URLSearchParams(params)
+    if (nextType === 'all') nextParams.delete('type')
+    else nextParams.set('type', nextType)
+    setParams(nextParams, { replace: true })
+  }
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | undefined>()
   const [importOpen, setImportOpen] = useState(false)
   const [deleting, setDeleting] = useState<Customer | null>(null)
   const [exportingFormat, setExportingFormat] = useState<'xlsx' | 'csv' | null>(null)
+
+  const closeFormModal = () => {
+    setFormOpen(false)
+    if (params.get('new')) {
+      const nextParams = new URLSearchParams(params)
+      nextParams.delete('new')
+      setParams(nextParams, { replace: true })
+    }
+  }
 
   const handleExport = async (format: 'xlsx' | 'csv') => {
     setExportingFormat(format)
@@ -62,25 +83,6 @@ export default function Customers() {
       setExportingFormat(null)
     }
   }
-
-  useEffect(() => {
-    const typeParam = params.get('type')
-    if (typeParam === 'effective' || typeParam === 'potential') {
-      setCustomerType(typeParam)
-      setPage(1)
-    } else if (typeParam === 'all') {
-      setCustomerType('all')
-      setPage(1)
-    }
-
-    if (params.get('new')) {
-      setEditing(undefined)
-      setFormOpen(true)
-      const nextParams = new URLSearchParams(params)
-      nextParams.delete('new')
-      setParams(nextParams, { replace: true })
-    }
-  }, [params, setParams])
 
   const { data, isLoading } = useQuery({
     queryKey: ['customers', customerType, q, page],
@@ -193,10 +195,7 @@ export default function Customers() {
           <button
             role="tab"
             className={cx('tab gap-2 text-xs font-bold', customerType === 'all' && 'tab-active')}
-            onClick={() => {
-              setCustomerType('all')
-              setPage(1)
-            }}
+            onClick={() => selectCustomerType('all')}
           >
             <Users className="size-3.5" />
             همه مشتریان
@@ -204,10 +203,7 @@ export default function Customers() {
           <button
             role="tab"
             className={cx('tab gap-2 text-xs font-bold', customerType === 'effective' && 'tab-active')}
-            onClick={() => {
-              setCustomerType('effective')
-              setPage(1)
-            }}
+            onClick={() => selectCustomerType('effective')}
           >
             <UserCheck className="size-3.5 text-emerald-600" />
             مشتریان بالفعل (خریدار دستگاه)
@@ -215,10 +211,7 @@ export default function Customers() {
           <button
             role="tab"
             className={cx('tab gap-2 text-xs font-bold', customerType === 'potential' && 'tab-active')}
-            onClick={() => {
-              setCustomerType('potential')
-              setPage(1)
-            }}
+            onClick={() => selectCustomerType('potential')}
           >
             <UserPlus className="size-3.5 text-amber-600" />
             مشتریان بالقوه (سرنخ)
@@ -392,13 +385,13 @@ export default function Customers() {
 
       {/* Modals */}
       <CustomerFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        customer={editing}
+        open={formOpen || isNewFromUrl}
+        onClose={closeFormModal}
+        customer={isNewFromUrl ? undefined : editing}
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ['customers'] })
           qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
-          setFormOpen(false)
+          closeFormModal()
         }}
       />
 

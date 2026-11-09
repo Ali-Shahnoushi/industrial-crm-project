@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -93,7 +93,7 @@ function EditUserLoadedForm({ targetUser }: { targetUser: User }) {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<EditUserFormValues>({
@@ -106,6 +106,9 @@ function EditUserLoadedForm({ targetUser }: { targetUser: User }) {
       is_active: targetUser.is_active ?? true,
     },
   })
+
+  const phoneVal = useWatch({ control, name: 'phone' })
+  const passwordVal = useWatch({ control, name: 'password' })
 
   useEffect(() => {
     reset({
@@ -267,7 +270,7 @@ function EditUserLoadedForm({ targetUser }: { targetUser: User }) {
                 maxLength={11}
                 className="input input-bordered w-full text-start font-mono text-sm"
                 placeholder="09121234567"
-                value={watch('phone') || ''}
+                value={phoneVal || ''}
                 onChange={(e) => {
                   const cleaned = toEnDigits(e.target.value).replace(/\D/g, '').slice(0, 11)
                   setValue('phone', cleaned, { shouldValidate: true })
@@ -292,7 +295,7 @@ function EditUserLoadedForm({ targetUser }: { targetUser: User }) {
               error={errors.password?.message}
             >
               <PasswordRulesTooltip
-                value={watch('password') || ''}
+                value={passwordVal || ''}
                 onChange={(val) => setValue('password', toEnDigits(val), { shouldValidate: true })}
                 placeholder="رمز عبور جدید (حداقل ۸ کاراکتر)"
                 error={errors.password?.message}

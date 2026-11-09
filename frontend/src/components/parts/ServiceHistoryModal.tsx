@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { useForm } from 'react-hook-form'
+import { useEffect, useState } from 'react'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -27,13 +27,13 @@ interface ServiceHistoryModalProps {
 }
 
 export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: ServiceHistoryModalProps) {
-  const today = new Date().toISOString().slice(0, 10)
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
 
   const {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
@@ -45,6 +45,9 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
       cost: '',
     },
   })
+
+  const serviceDateVal = useWatch({ control, name: 'service_date' })
+  const costVal = useWatch({ control, name: 'cost' })
 
   useEffect(() => {
     if (open) {
@@ -99,7 +102,7 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="تاریخ انجام سرویس/تعمیر" required error={errors.service_date?.message}>
             <DatePicker
-              value={watch('service_date')}
+              value={serviceDateVal}
               onChange={(val) => setValue('service_date', val || '', { shouldValidate: true })}
             />
           </Field>
@@ -129,7 +132,7 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
             dir="ltr"
             className="input input-bordered w-full text-start font-mono"
             placeholder="مثال: 1,200,000"
-            value={watch('cost') || ''}
+            value={costVal || ''}
             onChange={(e) => setValue('cost', formatNumericInput(e.target.value))}
           />
         </Field>

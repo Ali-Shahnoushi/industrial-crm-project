@@ -5,6 +5,7 @@ namespace App\Exports;
 use App\Models\Customer;
 use App\Models\CustomerPart;
 use App\Models\User;
+use App\Support\JalaliDate;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -235,7 +236,7 @@ class CustomersSummarySheet implements
             $invoiceAmounts,
             $totalInvoiceSum,
             $customer->notes ?? '',
-            $customer->created_at?->format('Y/m/d H:i') ?? '',
+            JalaliDate::formatDateTime($customer->created_at),
         ];
     }
 
@@ -333,8 +334,8 @@ class CustomerDevicesDetailSheet implements
             max(1, (int) ($cp->quantity ?: 1)),
             $cp->invoice_number ?? '',
             $cp->invoice_amount !== null ? (int) $cp->invoice_amount : '',
-            $cp->installation_date?->format('Y/m/d') ?? '',
-            $cp->warranty_expire_date?->format('Y/m/d') ?? '',
+            JalaliDate::format($cp->installation_date),
+            JalaliDate::format($cp->warranty_expire_date),
             $statusLabel,
             $cp->notes ?? '',
         ];

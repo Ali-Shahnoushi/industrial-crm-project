@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,7 +11,7 @@ use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable
 {
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
@@ -79,11 +77,6 @@ class User extends Authenticatable implements FilamentUser
             'parts.history',
         ],
     ];
-
-    public function canAccessPanel(Panel $panel): bool
-    {
-        return (bool) ($this->is_active && $this->isAdministrator() && ($this->email === 'admin@crm.local' || $this->can('users.manage')));
-    }
 
     public function isAdministrator(): bool
     {

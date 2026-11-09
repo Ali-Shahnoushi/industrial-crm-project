@@ -63,13 +63,10 @@ echo '==> 1/7 Copying application sources into an isolated workspace'
 for dir in lang; do
   if [[ -d "$ROOT/backend/$dir" ]]; then cp -R "$ROOT/backend/$dir" "$APP/"; fi
 done
-# Public vendor assets are freshly published by filament:upgrade below.
+# Public entrypoints only (secondary Filament/Livewire admin panel is removed & hardened).
 mkdir -p "$APP/public"
 for file in index.php private-path.php resolve-private.php; do
   cp "$ROOT/backend/public/$file" "$APP/public/$file"
-done
-for dir in css fonts; do
-  if [[ -d "$ROOT/backend/public/$dir" ]]; then cp -R "$ROOT/backend/public/$dir" "$APP/public/"; fi
 done
 (cd "$ROOT/frontend" && tar -cf - src index.html package.json package-lock.json tsconfig.json tsconfig.app.json tsconfig.node.json vite.config.ts) | (cd "$FRONT" && tar -xf -)
 if [[ -d "$ROOT/frontend/public" ]]; then cp -R "$ROOT/frontend/public" "$FRONT/"; fi
@@ -115,6 +112,7 @@ echo '==> 3/7 Compiling frontend in isolation'
 
 STEP='prepare release'
 echo '==> 4/7 Preparing separated public and private trees'
+rm -rf "$APP/public/css/filament" "$APP/public/js/filament" "$APP/public/vendor/livewire"
 cp -R "$APP/public/." "$PUBLIC/"
 cp -R "$FRONT/dist/." "$PUBLIC/"
 rm -rf "$APP/public"
@@ -141,7 +139,10 @@ done
 for file in index.php index.html .htaccess resolve-private.php private-path.php install.php; do
   [[ -s "$PUBLIC/$file" ]] || fail "Missing public release file: $file"
 done
-[[ -d "$PUBLIC/css/filament" && -d "$PUBLIC/js/filament" ]] || fail 'Filament assets were not published by Composer scripts.'
+[[ -d "$PUBLIC/assets" ]] || fail 'Frontend SPA assets were not copied to public release.'
+if [[ -d "$PUBLIC/css/filament" || -d "$PUBLIC/js/filament" ]]; then
+  fail 'Disabled Filament assets must not be present in public release.'
+fi
 if [[ -n "$(find "$APP" "$PUBLIC" -type l -print -quit)" ]]; then fail 'Release contains a symlink.'; fi
 
 STEP='ZIP verification'

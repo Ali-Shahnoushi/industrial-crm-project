@@ -21,19 +21,27 @@ jobs:
           --health-cmd="mysqladmin ping -ptest_password"
           --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: pdo_mysql, pdo_sqlite, mbstring, intl, gd, zip, bcmath
           tools: composer:v2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: PHP syntax
         run: find backend deploy/cpanel -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Frontend zero-warning lint gate
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run lint
+      - name: Backend PHPUnit test suite (Unit + Feature)
+        run: |
+          composer --working-dir=backend install --no-interaction --prefer-dist
+          php backend/artisan test
       - name: Offline packaging regression tests
         run: python3 -m unittest discover -s deploy/cpanel/tests -v
       - run: bash deploy/cpanel/build.sh
@@ -69,7 +77,7 @@ jobs:
             python3 -c 'from pathlib import Path; s=Path("installer-http-tests.log").read_text()[-20000:]; print("::error title=Installer HTTP test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$status"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: cpanel-package
           path: |

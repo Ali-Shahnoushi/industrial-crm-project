@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Calendar, Clock } from 'lucide-react'
 
 export function RealtimeClock() {
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
     const timer = setInterval(() => {

@@ -38,18 +38,11 @@ export function DatePicker({
   })
 
   const selectedDate = safeDate(value)
-  const today = new Date()
+  const [today] = useState(() => new Date())
   const todayJ = toJ(today)
   const baseJ = selectedDate ? toJ(selectedDate) : todayJ
 
-  const [view, setView] = useState({ jy: baseJ.jy, jm: baseJ.jm })
-
-  useEffect(() => {
-    if (selectedDate) {
-      const j = toJ(selectedDate)
-      setView({ jy: j.jy, jm: j.jm })
-    }
-  }, [value])
+  const [view, setView] = useState(() => ({ jy: baseJ.jy, jm: baseJ.jm }))
 
   const updatePosition = useCallback(() => {
     const el = containerRef.current
@@ -287,7 +280,15 @@ export function DatePicker({
             'input input-bordered w-full flex items-center justify-between text-start cursor-pointer hover:border-primary/50 transition-colors',
             open && 'border-primary ring-2 ring-primary/20',
           )}
-          onClick={() => setOpen((o) => !o)}
+          onClick={() => {
+            setOpen((prev) => {
+              if (!prev) {
+                const target = selectedDate ? toJ(selectedDate) : todayJ
+                setView({ jy: target.jy, jm: target.jm })
+              }
+              return !prev
+            })
+          }}
           aria-expanded={open}
         >
           <div className="flex items-center gap-2.5 min-w-0">

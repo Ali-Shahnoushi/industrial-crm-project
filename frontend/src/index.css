@@ -152,12 +152,6 @@
   }
 }
 
-/* Recharts: keep tooltips/labels in Persian font with Persian digits */
-.recharts-text, .recharts-legend-item-text {
-  font-family: var(--font-sans);
-  font-feature-settings: "ss01";
-}
-
 /* Tippy.js Tooltip Typography & Styling */
 .tippy-box {
   font-family: var(--font-sans) !important;

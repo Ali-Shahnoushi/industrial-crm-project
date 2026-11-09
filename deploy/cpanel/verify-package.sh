@@ -28,9 +28,12 @@ fi
 if grep -q '^public/' "$WORK/private.list"; then
   echo 'Unexpected public tree in private ZIP' >&2; exit 1
 fi
-for prefix in assets/ css/filament/ js/filament/; do
+for prefix in assets/; do
   grep -q "^$prefix" "$WORK/public.list" || { echo "Missing assets: $prefix" >&2; exit 1; }
 done
+if grep -Eq '^(css/filament|js/filament|vendor/livewire)/' "$WORK/public.list"; then
+  echo 'Disabled Filament/Livewire assets must not be shipped in public ZIP' >&2; exit 1
+fi
 # Runtime directories must exist, but must contain no user data.
 for prefix in storage/framework/cache/data/ storage/framework/sessions/ storage/framework/views/ storage/logs/; do
   grep -Fxq "$prefix" "$WORK/private.list" || { echo "Missing runtime directory: $prefix" >&2; exit 1; }

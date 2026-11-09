@@ -1,7 +1,7 @@
 <?php
 /**
  * ═════════════════════════════════════════════════════════════════════
- *  🔄 Industrial CRM v2.0.0 — به‌روزرسانی دیتابیس و پاکسازی کش بدون SSH
+ *  🔄 Industrial CRM v2.1.0 — به‌روزرسانی دیتابیس و پاکسازی کش بدون SSH
  *
  *  این فایل توسط build به داخل public/ اضافه می‌شود.
  *
@@ -86,11 +86,11 @@ if ($appKey === '' || $appKey === 'base64:') {
 $provided = isset($_POST['key']) ? trim((string) $_POST['key']) : '';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || $provided === '') {
-    echo page('به‌روزرسانی بدون SSH (نسخه ۲.۰.۰)',
+    echo page('به‌روزرسانی بدون SSH (نسخه ۲.۱.۰)',
         '<div class="note">۱. ابتدا از دیتابیس فعلی در <b>phpMyAdmin → Export</b> یک نسخه پشتیبان بگیرید.<br>'
         . '۲. مقدار دقیق <code>APP_KEY</code> از داخل فایل <code>.env</code> سرور را در کادر زیر وارد کنید تا تمام مایگریشن‌های جدید با حفظ ۱۰۰٪ داده‌ها اجرا و کش سامانه پاکسازی شود.</div>'
         . '<form method="post"><input type="password" name="key" placeholder="base64:..." required autocomplete="off">'
-        . '<button type="submit">▶ اجرای مایگریشن‌ها و پاکسازی کش (نسخه ۲.۰.۰)</button></form>');
+        . '<button type="submit">▶ اجرای مایگریشن‌ها و پاکسازی کش (نسخه ۲.۱.۰)</button></form>');
     exit;
 }
 
@@ -114,7 +114,7 @@ try {
         app(Spatie\Permission\PermissionRegistrar::class)->forgetCachedPermissions();
     }
     if (class_exists(App\Models\Setting::class)) {
-        App\Models\Setting::set('app_version', '2.0.0');
+        App\Models\Setting::set('app_version', '2.1.0');
     }
     $out = "=== migrate --force ===\n" . $migrateOut . "\n\n=== optimize:clear ===\n" . $clearOut;
 } catch (Throwable $e) {
@@ -126,6 +126,6 @@ $selfDeleted = @unlink(__FILE__);
 
 echo page('بروزرسانی انجام شد ✅',
     '<pre>' . e($out) . '</pre>'
-    . '<p class="ok">✅ دیتابیس و کش سامانه با موفقیت به نسخه ۲.۰.۰ به‌روزرسانی شدند.</p>'
+    . '<p class="ok">✅ دیتابیس و کش سامانه با موفقیت به نسخه ۲.۱.۰ به‌روزرسانی شدند.</p>'
     . '<div class="note">فایل update.php ' . ($selfDeleted ? 'خودکار حذف شد ✓' : 'خودکار حذف نشد — لطفاً دستی از پوشه public حذفش کن') . '.</div>'
     . '<p><a href="' . e((string) envValue($envPath, 'APP_URL')) . '">← بازگشت به برنامه</a></p>');

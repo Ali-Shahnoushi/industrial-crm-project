@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -74,7 +74,7 @@ export default function CreateUserPage() {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<CreateUserFormValues>({
@@ -87,6 +87,9 @@ export default function CreateUserPage() {
       is_active: true,
     },
   })
+
+  const phoneVal = useWatch({ control, name: 'phone' })
+  const passwordVal = useWatch({ control, name: 'password' })
 
   const createMutation = useMutation({
     mutationFn: (formData: FormData) => usersApi.create(formData),
@@ -200,7 +203,7 @@ export default function CreateUserPage() {
                 maxLength={11}
                 className="input input-bordered w-full text-start font-mono text-sm"
                 placeholder="09121234567"
-                value={watch('phone') || ''}
+                value={phoneVal || ''}
                 onChange={(e) => {
                   const cleaned = toEnDigits(e.target.value).replace(/\D/g, '').slice(0, 11)
                   setValue('phone', cleaned, { shouldValidate: true })
@@ -222,7 +225,7 @@ export default function CreateUserPage() {
 
             <Field label="کلمه عبور ورود به سامانه" required error={errors.password?.message}>
               <PasswordRulesTooltip
-                value={watch('password')}
+                value={passwordVal}
                 onChange={(val) => setValue('password', toEnDigits(val), { shouldValidate: true })}
                 placeholder="حداقل ۸ کاراکتر شامل حروف و اعداد"
                 error={errors.password?.message}

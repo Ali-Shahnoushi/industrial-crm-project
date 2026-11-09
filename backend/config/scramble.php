@@ -12,7 +12,7 @@ return [
      * The title and info of the API.
      */
     'info' => [
-        'version' => '2.0.0',
+        'version' => '2.1.0',
         'title' => 'سامانه مدیریت مشتریان و دستگاه‌های صنعتی (Industrial Devices CRM API)',
         'description' => 'مستندات کامل اندپوئینت‌های احراز هویت، مدیریت مشتریان، کاتالوگ دستگاه‌ها، کنترل موجودی انبار، تخصیص شماره سریال، سوابق سرویس و پیامک‌های الگو.',
     ],
@@ -21,7 +21,7 @@ return [
      * Customize Scramble UI.
      */
     'ui' => [
-        'title' => 'Industrial CRM v2.0.0 - OpenAPI Documentation',
+        'title' => 'Industrial CRM v2.1.0 - OpenAPI Documentation',
         'theme' => 'light',
         'hide_try_it' => false,
     ],

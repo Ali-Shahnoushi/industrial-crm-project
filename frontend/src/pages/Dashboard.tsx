@@ -12,6 +12,7 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Can } from "../components/common/Can";
 import { PageHeader } from "../components/ui/PageHeader";
@@ -39,7 +40,7 @@ export default function Dashboard() {
     total_sms_sent: 0,
   };
 
-  const today = new Date();
+  const [today] = useState(() => new Date());
 
   return (
     <div className="space-y-6">

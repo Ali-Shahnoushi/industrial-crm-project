@@ -9,7 +9,7 @@ import 'filepond/dist/filepond.min.css'
 import 'filepond-plugin-image-preview/dist/filepond-plugin-image-preview.min.css'
 import { User, X } from 'lucide-react'
 
-import { normalizeAvatarUrl } from './Avatar'
+import { normalizeAvatarUrl } from '../../utils/format'
 
 // Register plugins
 registerPlugin(FilePondPluginImagePreview, FilePondPluginFileValidateType, FilePondPluginFileValidateSize)

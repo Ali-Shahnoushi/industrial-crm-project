@@ -102,6 +102,8 @@ class BuildTest(unittest.TestCase):
         with zipfile.ZipFile(self.out/'cpanel-public.zip') as z:
             self.assertIn('index.html', z.namelist())
             self.assertNotIn('storage/customer.txt', z.namelist())
+            self.assertNotIn('css/filament/test.css', z.namelist())
+            self.assertNotIn('js/filament/test.js', z.namelist())
         check=subprocess.run(['sha256sum', '-c', 'SHA256SUMS'], cwd=self.out, capture_output=True)
         self.assertEqual(check.returncode, 0)
         self.assert_clean()
@@ -165,7 +167,7 @@ class BuildTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         archive=self.out/'cpanel-public.zip'
         original=archive.read_bytes()
-        for name in ['.env', '../escape', '/absolute', 'storage/customer.txt', 'app/secret.php']:
+        for name in ['.env', '../escape', '/absolute', 'storage/customer.txt', 'app/secret.php', 'css/filament/leak.css']:
             with self.subTest(name=name):
                 archive.write_bytes(original)
                 with zipfile.ZipFile(archive, 'a') as z: z.writestr(name, 'sensitive')

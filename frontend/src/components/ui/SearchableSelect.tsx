@@ -70,8 +70,8 @@ export function SearchableSelect({
   // Focus search input when dropdown opens
   useEffect(() => {
     if (open) {
-      setQuery('')
-      setTimeout(() => searchInputRef.current?.focus(), 50)
+      const timer = setTimeout(() => searchInputRef.current?.focus(), 50)
+      return () => clearTimeout(timer)
     }
   }, [open])
 
@@ -121,7 +121,14 @@ export function SearchableSelect({
           id={id}
           type="button"
           disabled={disabled}
-          onClick={() => !disabled && setOpen((prev) => !prev)}
+          onClick={() => {
+            if (!disabled) {
+              setOpen((prev) => {
+                if (!prev) setQuery('')
+                return !prev
+              })
+            }
+          }}
           className={cx(
             'input input-bordered w-full flex items-center justify-between text-start text-sm transition-all focus:outline-none focus:border-primary',
             disabled && 'input-disabled cursor-not-allowed opacity-60',

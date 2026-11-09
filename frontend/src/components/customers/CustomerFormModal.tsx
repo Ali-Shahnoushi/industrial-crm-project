@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -115,7 +115,7 @@ export function CustomerFormModal({ open, onClose, customer, onSuccess }: Custom
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     reset,
     setValue,
     formState: { errors, isSubmitting },
@@ -176,10 +176,10 @@ export function CustomerFormModal({ open, onClose, customer, onSuccess }: Custom
     }
   }, [open, customer, reset])
 
-  const type = watch('type')
-  const customerType = watch('customer_type')
-  const province = watch('province')
-  const city = watch('city')
+  const type = useWatch({ control, name: 'type' })
+  const customerType = useWatch({ control, name: 'customer_type' })
+  const province = useWatch({ control, name: 'province' })
+  const city = useWatch({ control, name: 'city' })
   const isCompany = type === 'company'
 
   const availableCities = useMemo(() => {

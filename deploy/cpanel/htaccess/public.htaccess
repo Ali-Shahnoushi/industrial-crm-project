@@ -2,9 +2,21 @@ Options -Indexes
 <FilesMatch "^(private-path|resolve-private)\.php$|^\.">
     Require all denied
 </FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "DENY"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+    Header always set X-Permitted-Cross-Domain-Policies "none"
+</IfModule>
+
 # Never execute uploaded scripts, including double extensions.
 RewriteEngine On
 RewriteRule ^storage/.*\.(php[0-9]*|phtml|phar)(\.|/|$) - [F,L,NC]
+
+# Hard-block removed secondary admin/livewire/filament surfaces and production OpenAPI docs
+RewriteRule ^/?(public/)?(admin|livewire|filament|docs)(/|$) - [R=404,L,NC]
 
 DirectoryIndex index.html index.php
 
@@ -17,7 +29,7 @@ DirectoryIndex index.html index.php
 
     # Handle Authorization Header
     RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP_AUTHORIZATION}]
 
     # Redirect Trailing Slashes If Not A Folder...
     RewriteCond %{REQUEST_FILENAME} !-d
@@ -26,14 +38,11 @@ DirectoryIndex index.html index.php
 
     # ---- SPA fallback (React app lives in index.html) ----
     # Any path that is not a real file/folder and is NOT handled by the Laravel
-    # backend (api / admin / docs / livewire / storage / backend assets)
-    # is served the single-page application shell so client-side routes
-    # like /customers or /settings/users work on hard refresh.
-    # The optional "public/" prefix keeps this working when the app lives inside
-    # public_html and a root .htaccess rewrites requests into public/.
+    # backend (api / storage / up) is served the single-page application shell
+    # so client-side routes like /customers or /settings/users work on hard refresh.
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} !^/?(public/)?(api|admin|docs|livewire|storage|css|fonts|js|up)(/|$) [NC]
+    RewriteCond %{REQUEST_URI} !^/?(public/)?(api|storage|up)(/|$) [NC]
     RewriteRule ^ index.html [L]
 
     # Send Requests To Front Controller...

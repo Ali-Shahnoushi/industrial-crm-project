@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
@@ -19,7 +19,7 @@ const schema = z.object({
     .string()
     .trim()
     .min(2, 'شماره سریال یکتای دستگاه را وارد کنید')
-    .regex(/^[a-zA-Z0-9\-_\/]+$/, 'شماره سریال فقط می‌تواند شامل حروف انگلیسی، اعداد و خط تیره باشد'),
+    .regex(/^[a-zA-Z0-9\-_/]+$/, 'شماره سریال فقط می‌تواند شامل حروف انگلیسی، اعداد و خط تیره باشد'),
   quantity: z
     .string()
     .min(1, 'تعداد دستگاه الزامی است')
@@ -59,13 +59,13 @@ export function AssignPartModal({
     enabled: open,
   })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
 
   const {
     register,
     handleSubmit,
     reset,
-    watch,
+    control,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
@@ -82,8 +82,10 @@ export function AssignPartModal({
     },
   })
 
-  const partId = watch('part_id')
-  const qtyStr = watch('quantity')
+  const partId = useWatch({ control, name: 'part_id' })
+  const qtyStr = useWatch({ control, name: 'quantity' })
+  const invoiceAmountVal = useWatch({ control, name: 'invoice_amount' })
+  const installationDateVal = useWatch({ control, name: 'installation_date' })
 
   const partOptions = useMemo(() => {
     return parts
@@ -297,7 +299,7 @@ export function AssignPartModal({
               placeholder="مثال: SN-2026-8821"
               {...register('serial_number', {
                 onChange: (e) => {
-                  e.target.value = toEnDigits(e.target.value).replace(/[^a-zA-Z0-9\-_\/]/g, '')
+                  e.target.value = toEnDigits(e.target.value).replace(/[^a-zA-Z0-9\-_/]/g, '')
                 },
               })}
             />
@@ -317,7 +319,7 @@ export function AssignPartModal({
                 dir="ltr"
                 className="input input-bordered input-sm h-10 w-full text-start font-mono font-bold"
                 placeholder="مثال: 25,000,000"
-                value={watch('invoice_amount') || ''}
+                value={invoiceAmountVal || ''}
                 onChange={(e) => setValue('invoice_amount', formatNumericInput(e.target.value))}
               />
             </Field>
@@ -345,7 +347,7 @@ export function AssignPartModal({
             className={!isEdit ? 'sm:col-span-2' : ''}
           >
             <DatePicker
-              value={watch('installation_date')}
+              value={installationDateVal}
               onChange={(val) => setValue('installation_date', val || '', { shouldValidate: true })}
             />
           </Field>

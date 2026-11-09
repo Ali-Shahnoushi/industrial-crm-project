@@ -171,3 +171,12 @@ export function hueFrom(str: string): number {
   for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360
   return h
 }
+
+export function normalizeAvatarUrl(url?: string | null): string | null {
+  if (!url) return null
+  const storageIdx = url.indexOf('/storage/')
+  if (storageIdx !== -1) {
+    return url.slice(storageIdx)
+  }
+  return url
+}

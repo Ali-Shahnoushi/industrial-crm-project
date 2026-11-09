@@ -4,6 +4,36 @@
 
 ---
 
+## [2.1.0] — ۱۴۰۵/۰۸/۱۸ (2026-11-09)
+
+### ۱. سند اهداف مهندسی و مجموعه تست‌های خودکار (TDD: Unit + Feature + Security)
+- تدوین سند جامع مهندسی اهداف و نقشه تست (`docs/GOALS_AND_TEST_PLAN_v2.1.0.md`) پیش از پیاده‌سازی قابلیت‌های نسخه `2.1.0`.
+- افزودن مجموعه تست‌های خودکار PHPUnit روی دیتابیس مجزای `SQLite :memory:` شامل:
+  - `JalaliDateTest` (تبدیل دقیق تقویم میلادی به شمسی در سال‌های کبیسه و عادی).
+  - `RbacAndCustomerVisibilityTest` (بررسی کامل ۴ نقش سازمانی، مجوزها و سه سطح `customer_scope`: `own` / `selected` / `all` و مسدودسازی IDOR).
+  - `DeviceInventoryAndAssignmentTest` (بررسی کسر خودکار موجودی انبار، برگرداندن موجودی هنگام کاهش/حذف، ارتقای خودکار مشتری بالقوه به بالفعل و جلوگیری از سریال تکراری یا موجودی منفی).
+  - `CustomerValidationAndExportTest` (اعتبارسنجی مشتریان حقیقی/حقوقی، اختیاری بودن موبایل، نرمال‌سازی اعداد فارسی/عربی، خروجی‌های اکسل/CSV شمسی و مجوز `customers.import`).
+  - `SecurityHardeningAndAdminLockdownTest` (تأیید مسدود بودن کامل `/admin`، `/livewire`، `/filament` و اعمال هدرهای امنیتی HTTP).
+- اتصال مستقیم گیت تست‌های PHPUnit و گیت بدون هشدار فرانت‌اند (`oxlint --deny-warnings`) به پایپ‌لاین GitHub Actions CI.
+
+### ۲. تاریخ شمسی (جلالی) در خروجی‌های اکسل (`.xlsx`) و CSV
+- افزودن مبدل خالص و بدون وابستگی `App\Support\JalaliDate` و تبدیل ستون‌های **«تاریخ ثبت پرونده»**، **«تاریخ نصب»** و **«انقضای گارانتی»** در هر دو شیت خروجی اکسل و فایل CSV به فرمت استاندارد شمسی (`YYYY/MM/DD` و `YYYY/MM/DD HH:MM`).
+
+### ۳. حذف کامل پنل فرعی Filament (`/admin`) و هاردنینگ امنیتی چندلایه (Defense-in-Depth)
+- حذف کامل کدها و منابع پنل ادمین فرعی Filament (`app/Filament`, `AdminPanelProvider`, متد `canAccessPanel` در مدل `User` و اسکریپت `filament:upgrade`).
+- افزودن میان‌افزار سراسری `SecurityHeadersAndLockdown` برای مسدودسازی قطعی مسیرهای `/admin*`، `/livewire*` و `/filament*` (و `/docs*` در محیط `production`) با پاسخ `404` پیش از مسیریابی، همراه با هدرهای امنیتی استاندارد (`X-Frame-Options: DENY`، `X-Content-Type-Options: nosniff`، `Referrer-Policy`، `Permissions-Policy` و `X-Permitted-Cross-Domain-Policies`).
+- مسدودسازی مسیرهای مذکور در سطح وب‌سرور (`.htaccess` آپاچی/لایت‌اسپید و `nginx.conf`)، حذف پروکسی‌های اضافی Vite و جلوگیری از انتشار فایل‌های استاتیک Filament/Livewire در اسکریپت‌های بسته‌بندی و راستی‌آزمایی cPanel (`build.sh` و `verify-package.sh`).
+
+### ۴. پاکسازی کامل کدهای مرده فرانت‌اند و صفر کردن هشدارهای Linter
+- بازنویسی منوی اعلان‌ها (`NotificationsMenu.tsx`) بر پایه رویدادهای واقعی داشبورد با ذخیره وضعیت مطالعه‌شده در مرورگر و حذف درخواست‌های کاذب `/api/v1/notifications`.
+- حذف ۱۴ فایل دمو و غیرقابل‌دسترس باقی‌مانده از قالب اولیه (`Calendar`, `Chat`, `Inventory`, `Pipeline`, `Reports`, `Sales`, `Settings`, `Tasks`, `Tickets`, `useData`, `Chart`, `StatusBadge`, `analytics`, `csv`) و پکیج‌های بلااستفاده (`json-server`, `recharts`, `papaparse`, `@hello-pangea/dnd`, `concurrently`).
+- رفع کامل تمام هشدارهای React Compiler و ESLint/Oxlint در کل پروژه و فعال‌سازی فلگ سخت‌گیرانه `oxlint --deny-warnings` (۰ خطا و ۰ هشدار).
+
+### ۵. ارتقای GitHub Actions به نسخه Node 24 (`@v7`)
+- ارتقای اکشن‌های پایپ‌لاین CI (`.github/workflows/cpanel.yml`) به نسخه‌های جدید مبتنی بر Node 24 (`actions/checkout@v7`، `actions/setup-node@v7` با Node 24 و `actions/upload-artifact@v7`) جهت حذف کامل هشدار منسوخ شدن Node 20 در GitHub Actions.
+
+---
+
 ## [2.0.0] — ۱۴۰۵/۰۸/۱۸ (2026-11-09)
 
 ### ۱. سیستم چندسطحی نقش‌ها، مجوزها و تفکیک دسترسی به مشتریان (RBAC v2)
