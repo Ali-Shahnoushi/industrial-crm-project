@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\PartController;
@@ -51,6 +52,12 @@ Route::prefix('v1')->group(function () {
         Route::put('/settings/sms', [SettingController::class, 'updateSmsSettings']);
         Route::post('/settings/company', [SettingController::class, 'updateCompanySettings']);
         Route::post('/settings/system/upgrade', [SettingController::class, 'upgradeSystem']);
+
+        // System Backup & JSON Restore (Customers, Devices, Full DB)
+        Route::get('/backup/status', [BackupController::class, 'status']);
+        Route::get('/backup/customers-json', [BackupController::class, 'exportCustomersJson']);
+        Route::post('/backup/customers-restore-json', [BackupController::class, 'restoreCustomersJson']);
+        Route::get('/backup/database-dump', [BackupController::class, 'exportDatabaseDump']);
 
         // Users, Roles & Granular ACL Permissions
         Route::get('/roles', [UserController::class, 'availableRoles']);

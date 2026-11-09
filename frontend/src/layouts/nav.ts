@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Cpu,
+  Database,
   LayoutDashboard,
   MessageSquare,
   Palette,
@@ -48,6 +49,7 @@ export const MAIN_NAV: NavGroup[] = [
 export const SETTINGS_NAV: NavItem[] = [
   { to: '/settings/sms', label: 'سامانه ملی‌پیامک', icon: MessageSquare, permission: 'settings.manage' },
   { to: '/settings/users', label: 'کارمندان، نقش‌ها و دسترسی‌ها', icon: ShieldCheck, permission: 'users.manage' },
+  { to: '/settings/backup', label: 'پشتیبان‌گیری و بازیابی داده‌ها', icon: Database, permission: 'settings.manage' },
   { to: '/settings/profile', label: 'پروفایل کاربری من', icon: User },
   { to: '/settings/system', label: 'تنظیمات سیستم و پوسته', icon: Palette },
 ]

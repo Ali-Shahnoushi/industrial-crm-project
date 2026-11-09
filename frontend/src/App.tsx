@@ -19,6 +19,7 @@ const CreateUserPage = lazy(() => import('./pages/settings/CreateUserPage'))
 const EditUserPage = lazy(() => import('./pages/settings/EditUserPage'))
 const MyProfilePage = lazy(() => import('./pages/settings/MyProfilePage'))
 const SystemSettingsPage = lazy(() => import('./pages/settings/SystemSettingsPage'))
+const BackupPage = lazy(() => import('./pages/settings/BackupPage'))
 import AccessDenied from './pages/AccessDenied'
 const NotFound = lazy(() => import('./pages/NotFound'))
 
@@ -117,6 +118,15 @@ export default function App() {
                 </PermissionRoute>
               }
             />
+            <Route
+              path="settings/backup"
+              element={
+                <PermissionRoute permission="settings.manage">
+                  <BackupPage />
+                </PermissionRoute>
+              }
+            />
+            <Route path="backup" element={<Navigate to="/settings/backup" replace />} />
             <Route path="profile" element={<Navigate to="/settings/profile" replace />} />
 
             <Route path="403" element={<AccessDenied />} />

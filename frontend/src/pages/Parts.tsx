@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -6,8 +6,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import {
+  ArrowDown,
   ArrowDownCircle,
+  ArrowUp,
   ArrowUpCircle,
+  ArrowUpDown,
   Boxes,
   Cpu,
   ExternalLink,
@@ -80,10 +83,54 @@ export default function Parts() {
   const [logPartFilter, setLogPartFilter] = useState<string>('')
   const [logSearch, setLogSearch] = useState('')
 
+  // Catalog Sorting
+  type PartSortField = 'name' | 'code' | 'stock' | 'warranty' | 'assigned' | 'status'
+  const [sortField, setSortField] = useState<PartSortField>('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+
+  const handleSort = (field: PartSortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+  }
+
   const { data: parts = [], isLoading } = useQuery({
     queryKey: ['parts-catalog', q],
     queryFn: () => partApi.list({ q: toEnDigits(q).trim() || undefined }),
   })
+
+  const sortedParts = useMemo(() => {
+    return [...parts].sort((a, b) => {
+      let comparison = 0
+      switch (sortField) {
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '', 'fa')
+          break
+        case 'code':
+          comparison = (a.code || '').localeCompare(b.code || '')
+          break
+        case 'stock':
+          comparison = (Number(a.stock_quantity) || 0) - (Number(b.stock_quantity) || 0)
+          break
+        case 'warranty':
+          comparison = (Number(a.periodic_service_months) || 0) - (Number(b.periodic_service_months) || 0)
+          break
+        case 'assigned': {
+          const aAssigned = Number(a.assigned_quantity_sum ?? a.customer_parts_count ?? 0)
+          const bAssigned = Number(b.assigned_quantity_sum ?? b.customer_parts_count ?? 0)
+          comparison = aAssigned - bAssigned
+          break
+        }
+        case 'status':
+          comparison = a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1
+          break
+      }
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+  }, [parts, sortField, sortOrder])
 
   const { data: logsData, isLoading: logsLoading } = useQuery({
     queryKey: ['inventory-logs', logPage, logTypeFilter, logPartFilter, logSearch],
@@ -336,17 +383,89 @@ export default function Parts() {
                 <table className="table table-hover">
                   <thead>
                     <tr className="bg-slate-50 dark:bg-slate-900/60 text-xs font-bold text-base-content/75 border-b border-base-200">
-                      <th>نام و مشخصات دستگاه</th>
-                      <th>کد فنی (SKU)</th>
-                      <th>موجودی انبار</th>
-                      <th>دوره پوشش گارانتی</th>
-                      <th>تعداد تحویل‌شده به مشتریان</th>
-                      <th>وضعیت</th>
+                      <th
+                        onClick={() => handleSort('name')}
+                        className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>نام و مشخصات دستگاه</span>
+                          {sortField === 'name' ? (
+                            sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
+                          ) : (
+                            <ArrowUpDown className="size-3 text-base-content/30 group-hover:text-base-content/70" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('code')}
+                        className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>کد فنی (SKU)</span>
+                          {sortField === 'code' ? (
+                            sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
+                          ) : (
+                            <ArrowUpDown className="size-3 text-base-content/30 group-hover:text-base-content/70" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('stock')}
+                        className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>موجودی انبار</span>
+                          {sortField === 'stock' ? (
+                            sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
+                          ) : (
+                            <ArrowUpDown className="size-3 text-base-content/30 group-hover:text-base-content/70" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('warranty')}
+                        className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>دوره پوشش گارانتی</span>
+                          {sortField === 'warranty' ? (
+                            sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
+                          ) : (
+                            <ArrowUpDown className="size-3 text-base-content/30 group-hover:text-base-content/70" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('assigned')}
+                        className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>تعداد تحویل‌شده به مشتریان</span>
+                          {sortField === 'assigned' ? (
+                            sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
+                          ) : (
+                            <ArrowUpDown className="size-3 text-base-content/30 group-hover:text-base-content/70" />
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        onClick={() => handleSort('status')}
+                        className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span>وضعیت</span>
+                          {sortField === 'status' ? (
+                            sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
+                          ) : (
+                            <ArrowUpDown className="size-3 text-base-content/30 group-hover:text-base-content/70" />
+                          )}
+                        </div>
+                      </th>
                       <th className="text-end">عملیات انبار و ویرایش</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-base-200/80">
-                    {parts.map((p) => {
+                    {sortedParts.map((p) => {
                       const stock = p.stock_quantity ?? 0
                       const assignedSum = Number(p.assigned_quantity_sum ?? p.customer_parts_count ?? 0)
                       return (

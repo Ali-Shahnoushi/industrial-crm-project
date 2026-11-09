@@ -18,8 +18,10 @@ const schema = z.object({
   serial_number: z
     .string()
     .trim()
-    .min(2, 'شماره سریال یکتای دستگاه را وارد کنید')
-    .regex(/^[a-zA-Z0-9\-_/]+$/, 'شماره سریال فقط می‌تواند شامل حروف انگلیسی، اعداد و خط تیره باشد'),
+    .optional()
+    .refine((v) => !v || /^[a-zA-Z0-9\-_/]+$/.test(v), {
+      message: 'شماره سریال فقط می‌تواند شامل حروف انگلیسی، اعداد و خط تیره باشد',
+    }),
   quantity: z
     .string()
     .min(1, 'تعداد دستگاه الزامی است')
@@ -154,7 +156,7 @@ export function AssignPartModal({
     const rawAmount = toEnDigits(values.invoice_amount || '').replace(/,/g, '').trim()
     const parsedAmount = rawAmount !== '' ? Number(rawAmount) : null
     const cleanInvoiceNo = toEnDigits(values.invoice_number || '').trim() || null
-    const cleanSerial = toEnDigits(values.serial_number).trim()
+    const cleanSerial = toEnDigits(values.serial_number || '').trim() || undefined
 
     try {
       if (isEdit && editingPart) {
@@ -290,13 +292,13 @@ export function AssignPartModal({
 
           <Field
             label="شناسه یکتای سریال (Serial Number)"
-            required
+            hint="اختیاری"
             error={errors.serial_number?.message}
           >
             <input
               dir="ltr"
               className="input input-bordered w-full text-start font-mono"
-              placeholder="مثال: SN-2026-8821"
+              placeholder="اختیاری (مثال: SN-2026-8821)"
               {...register('serial_number', {
                 onChange: (e) => {
                   e.target.value = toEnDigits(e.target.value).replace(/[^a-zA-Z0-9\-_/]/g, '')

@@ -306,7 +306,7 @@ class PartController extends Controller
 
         $validated = $request->validate([
             'part_id' => 'required|exists:parts,id',
-            'serial_number' => ['required', 'string', 'max:100', 'regex:/^[a-zA-Z0-9\-_\/]+$/', 'unique:customer_parts,serial_number'],
+            'serial_number' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9\-_\/]+$/', 'unique:customer_parts,serial_number'],
             'quantity' => 'required|integer|min:1',
             'invoice_amount' => 'nullable|numeric|min:0',
             'invoice_number' => 'nullable|string|max:100',
@@ -315,7 +315,6 @@ class PartController extends Controller
             'notes' => 'nullable|string',
         ], [
             'part_id.required' => 'انتخاب مدل دستگاه الزامی است.',
-            'serial_number.required' => 'وارد کردن شماره سریال یا کد یکتای دستگاه الزامی است.',
             'serial_number.regex' => 'شماره سریال فقط می‌تواند شامل حروف انگلیسی، اعداد و خط تیره باشد.',
             'serial_number.unique' => 'این شماره سریال قبلاً به مشتری دیگری تخصیص داده شده است.',
             'quantity.required' => 'تعداد دستگاه را وارد کنید.',
@@ -329,7 +328,7 @@ class PartController extends Controller
         $customerPart = $this->customerService->assignPart(
             $customer,
             $part,
-            $validated['serial_number'],
+            $validated['serial_number'] ?? null,
             $validated,
             $request->user()->id
         );
@@ -360,7 +359,7 @@ class PartController extends Controller
             'part_id' => 'sometimes|required|exists:parts,id',
             'serial_number' => [
                 'sometimes',
-                'required',
+                'nullable',
                 'string',
                 'max:100',
                 'regex:/^[a-zA-Z0-9\-_\/]+$/',

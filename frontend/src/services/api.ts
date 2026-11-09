@@ -90,7 +90,18 @@ export const dashboardApi = {
 }
 
 export const customerApi = {
-  list: async (params?: { customer_type?: string; q?: string; page?: number; per_page?: number }) => {
+  list: async (params?: {
+    customer_type?: string
+    type?: string
+    province?: string
+    city?: string
+    has_devices?: string
+    sort_by?: string
+    sort_direction?: string
+    q?: string
+    page?: number
+    per_page?: number
+  }) => {
     const { data } = await http.get<{
       data: Customer[]
       current_page: number
@@ -223,7 +234,7 @@ export const partApi = {
     customerId: number | string,
     body: {
       part_id: number | string
-      serial_number: string
+      serial_number?: string | null
       quantity: number
       invoice_amount?: number | string | null
       invoice_number?: string | null
@@ -396,5 +407,61 @@ export const usersApi = {
   getAvailablePermissions: async () => {
     const { data } = await http.get<SystemPermission[]>('/permissions')
     return data
+  },
+}
+
+export interface BackupStatus {
+  database_driver: string
+  database_name: string
+  database_size: string
+  total_customers: number
+  total_devices: number
+  total_parts: number
+  total_users: number
+  server_time: string
+}
+
+export const backupApi = {
+  status: async () => {
+    const { data } = await http.get<BackupStatus>('/backup/status')
+    return data
+  },
+  downloadCustomersJson: async () => {
+    const res = await http.get('/backup/customers-json', { responseType: 'blob' })
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/json' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `crm-customers-devices-${new Date().toISOString().slice(0, 10)}.json`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  },
+  restoreCustomersJson: async (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    const { data } = await http.post<{
+      message: string
+      stats: {
+        created_customers: number
+        updated_customers: number
+        restored_devices: number
+      }
+    }>('/backup/customers-restore-json', fd)
+    return data
+  },
+  downloadDatabaseDump: async () => {
+    const res = await http.get('/backup/database-dump', { responseType: 'blob' })
+    const contentType = String(res.headers['content-type'] ?? '')
+    const isSqlite = contentType.includes('sqlite')
+    const ext = isSqlite ? 'sqlite' : 'sql'
+    const url = window.URL.createObjectURL(new Blob([res.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `crm-database-backup-${new Date().toISOString().slice(0, 10)}.${ext}`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   },
 }

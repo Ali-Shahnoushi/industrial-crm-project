@@ -217,7 +217,7 @@ export default function UsersAclPage() {
 
                       <td>
                         {isAdminUser ? (
-                          <span className="badge badge-warning badge-soft font-bold text-xs gap-1">
+                          <span className="badge badge-warning badge-soft font-bold text-xs gap-1 whitespace-nowrap inline-flex items-center">
                             <ShieldCheck className="size-3.5" /> دسترسی کامل
                           </span>
                         ) : (
@@ -225,7 +225,7 @@ export default function UsersAclPage() {
                             onClick={() => canManageThisUser && openPermModal(u)}
                             disabled={!canManageThisUser}
                             className={cx(
-                              'badge badge-primary badge-soft font-bold text-xs gap-1 py-1 px-2.5',
+                              'badge badge-primary badge-soft font-bold text-xs gap-1 py-1 px-2.5 whitespace-nowrap inline-flex items-center',
                               canManageThisUser
                                 ? 'cursor-pointer hover:opacity-85 transition-opacity'
                                 : 'cursor-default opacity-80',

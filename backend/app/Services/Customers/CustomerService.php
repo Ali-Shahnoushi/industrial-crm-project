@@ -20,11 +20,11 @@ class CustomerService
     public function assignPart(
         Customer $customer,
         Part $part,
-        string $serialNumber,
+        ?string $serialNumber = null,
         array $attributes = [],
         ?int $userId = null
     ): CustomerPart {
-        $serialNumber = trim($serialNumber);
+        $serialNumber = !empty($serialNumber) ? trim((string) $serialNumber) : null;
         $quantity = max(1, (int) ($attributes['quantity'] ?? 1));
         $invoiceAmount = isset($attributes['invoice_amount']) && $attributes['invoice_amount'] !== '' && $attributes['invoice_amount'] !== null
             ? (float) $attributes['invoice_amount']
@@ -34,7 +34,7 @@ class CustomerService
             : null;
 
         return DB::transaction(function () use ($customer, $part, $serialNumber, $quantity, $invoiceAmount, $invoiceNumber, $attributes, $userId) {
-            if (CustomerPart::where('serial_number', $serialNumber)->lockForUpdate()->exists()) {
+            if ($serialNumber !== null && CustomerPart::where('serial_number', $serialNumber)->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages([
                     'serial_number' => ["شماره سریال {$serialNumber} قبلاً برای دستگاه دیگری ثبت شده است."],
                 ]);
@@ -83,15 +83,17 @@ class CustomerService
                 'quantity' => $quantity,
                 'balance_before' => $beforeBalance,
                 'balance_after' => $newBalance,
-                'description' => "تخصیص دستگاه به مشتری «{$customer->display_name}» (سریال: {$serialNumber})"
+                'description' => "تخصیص دستگاه به مشتری «{$customer->display_name}»"
+                    . ($serialNumber ? " (سریال: {$serialNumber})" : '')
                     . ($invoiceNumber ? " - شماره فاکتور: {$invoiceNumber}" : ''),
             ]);
 
             $invoiceSummary = $invoiceAmount !== null ? ' - مبلغ فاکتور: ' . number_format((float) $invoiceAmount) . ' تومان' : '';
+            $serialSummary = $serialNumber ? "، شماره سریال: {$serialNumber}" : '';
             $customer->histories()->create([
                 'user_id' => $userId,
                 'action' => 'part_assigned',
-                'description' => "دستگاه «{$lockedPart->name}» (تعداد: {$quantity} عدد، شماره سریال: {$serialNumber}{$invoiceSummary}) به مشتری تخصیص داده شد.",
+                'description' => "دستگاه «{$lockedPart->name}» (تعداد: {$quantity} عدد{$serialSummary}{$invoiceSummary}) به مشتری تخصیص داده شد.",
                 'metadata' => [
                     'part_id' => $lockedPart->id,
                     'part_name' => $lockedPart->name,
@@ -141,11 +143,11 @@ class CustomerService
             $oldQty = max(1, (int) ($lockedCp->quantity ?: 1));
             $newQty = isset($attributes['quantity']) ? max(1, (int) $attributes['quantity']) : $oldQty;
 
-            $newSerial = isset($attributes['serial_number'])
-                ? trim((string) $attributes['serial_number'])
+            $newSerial = array_key_exists('serial_number', $attributes)
+                ? (!empty($attributes['serial_number']) ? trim((string) $attributes['serial_number']) : null)
                 : $lockedCp->serial_number;
 
-            if ($newSerial !== $lockedCp->serial_number) {
+            if ($newSerial !== null && $newSerial !== $lockedCp->serial_number) {
                 if (CustomerPart::where('serial_number', $newSerial)->where('id', '!=', $lockedCp->id)->lockForUpdate()->exists()) {
                     throw ValidationException::withMessages([
                         'serial_number' => ["شماره سریال {$newSerial} قبلاً برای دستگاه دیگری ثبت شده است."],

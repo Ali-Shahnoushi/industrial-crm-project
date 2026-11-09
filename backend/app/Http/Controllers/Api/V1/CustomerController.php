@@ -23,11 +23,30 @@ class CustomerController extends Controller
         $query = Customer::accessibleBy($request->user())
             ->with('creator:id,name')
             ->withCount('customerParts')
-            ->withSum('customerParts as total_devices_qty', 'quantity')
-            ->latest();
+            ->withSum('customerParts as total_devices_qty', 'quantity');
 
         if ($request->filled('customer_type') && in_array($request->customer_type, ['potential', 'effective'], true)) {
             $query->where('customer_type', $request->customer_type);
+        }
+
+        if ($request->filled('type') && in_array($request->type, ['company', 'individual'], true)) {
+            $query->where('type', $request->type);
+        }
+
+        if ($request->filled('province')) {
+            $query->where('province', $request->province);
+        }
+
+        if ($request->filled('city')) {
+            $query->where('city', $this->likeOp(), '%' . trim((string) $request->city) . '%');
+        }
+
+        if ($request->filled('has_devices')) {
+            if (in_array($request->has_devices, ['yes', '1', 'true'], true)) {
+                $query->has('customerParts');
+            } elseif (in_array($request->has_devices, ['no', '0', 'false'], true)) {
+                $query->doesntHave('customerParts');
+            }
         }
 
         if ($request->filled('q')) {
@@ -49,6 +68,25 @@ class CustomerController extends Controller
                     ->orWhere('province', $op, "%{$term}%")
                     ->orWhereRaw("{$fullNameExpr} {$op} ?", ["%{$term}%"]);
             });
+        }
+
+        $sortBy = $request->input('sort_by');
+        $sortDir = strtolower((string) $request->input('sort_direction', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+        if ($sortBy === 'name') {
+            $query->orderBy(DB::raw("COALESCE(company_name, last_name, first_name)"), $sortDir);
+        } elseif ($sortBy === 'customer_type') {
+            $query->orderBy('customer_type', $sortDir);
+        } elseif ($sortBy === 'contact' || $sortBy === 'mobile') {
+            $query->orderBy('mobile', $sortDir);
+        } elseif ($sortBy === 'city') {
+            $query->orderBy('province', $sortDir)->orderBy('city', $sortDir);
+        } elseif ($sortBy === 'devices') {
+            $query->orderBy('total_devices_qty', $sortDir);
+        } elseif ($sortBy === 'created_at') {
+            $query->orderBy('created_at', $sortDir);
+        } else {
+            $query->latest();
         }
 
         $perPage = max(1, min(200, (int) $request->input('per_page', 15)));
