@@ -72,7 +72,7 @@ class SettingController extends Controller
         return response()->json([
             'company_name' => $companyName ?: null,
             'company_logo_url' => $companyLogoUrl,
-            'app_version' => config('app.version', '2.1.0'),
+            'app_version' => config('app.version', '2.3.0'),
         ]);
     }
 
@@ -119,7 +119,7 @@ class SettingController extends Controller
             'message' => 'تنظیمات برندینگ شرکت با موفقیت ذخیره شد.',
             'company_name' => Setting::get('company_name') ?: null,
             'company_logo_url' => $companyLogoUrl,
-            'app_version' => config('app.version', '2.1.0'),
+            'app_version' => config('app.version', '2.3.0'),
         ]);
     }
 

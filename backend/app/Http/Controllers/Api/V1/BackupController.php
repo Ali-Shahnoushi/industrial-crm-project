@@ -62,7 +62,10 @@ class BackupController extends Controller
      */
     public function exportCustomersJson(Request $request): StreamedResponse
     {
-        $this->authorizePermission('customers.view');
+        $user = $request->user();
+        if (!$user->can('customers.export') && !$user->can('settings.manage') && !$user->isAdministrator()) {
+            abort(403, 'شما مجوز دریافت خروجی پرونده‌های مشتریان را ندارید.');
+        }
 
         $customers = Customer::accessibleBy($request->user())
             ->with(['customerParts.part', 'histories.user:id,name'])
@@ -72,7 +75,7 @@ class BackupController extends Controller
         $payload = [
             'metadata' => [
                 'system' => 'Industrial Equipment CRM',
-                'version' => '2.2.0',
+                'version' => '2.3.0',
                 'exported_at' => Carbon::now()->toIso8601String(),
                 'total_customers' => $customers->count(),
                 'total_devices' => $customers->sum(fn ($c) => $c->customerParts->count()),
@@ -130,7 +133,10 @@ class BackupController extends Controller
      */
     public function restoreCustomersJson(Request $request): JsonResponse
     {
-        $this->authorizePermission('customers.create');
+        $user = $request->user();
+        if (!$user->can('customers.import') && !$user->can('settings.manage') && !$user->isAdministrator()) {
+            abort(403, 'شما مجوز بازیابی و ورود پرونده‌های مشتریان را ندارید.');
+        }
 
         $request->validate([
             'file' => 'required|file|mimes:json,txt|max:20480', // up to 20MB

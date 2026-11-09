@@ -23,7 +23,7 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
 
   const companyName = companySettings?.company_name || 'سی‌آر‌ام دستگاه‌ها'
   const logoUrl = companySettings?.company_logo_url
-  const appVersion = companySettings?.app_version || '2.1.0'
+  const appVersion = companySettings?.app_version || '2.3.0'
 
   return (
     <div className="flex items-center gap-3 min-w-0">

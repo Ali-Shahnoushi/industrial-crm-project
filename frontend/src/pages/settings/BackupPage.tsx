@@ -2,19 +2,15 @@ import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
-  AlertTriangle,
   ArrowDownToLine,
   CheckCircle2,
   Cpu,
   Database,
   FileCode2,
   HardDrive,
-  History,
   Info,
-  Layers,
   RefreshCw,
   Server,
-  ShieldCheck,
   Upload,
   Users,
 } from 'lucide-react'

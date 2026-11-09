@@ -134,7 +134,7 @@ export default function SystemSettingsPage() {
   }
 
   const currentLogoUrl = removeLogo ? null : companySettings?.company_logo_url
-  const appVersion = companySettings?.app_version || '2.1.0'
+  const appVersion = companySettings?.app_version || '2.3.0'
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">

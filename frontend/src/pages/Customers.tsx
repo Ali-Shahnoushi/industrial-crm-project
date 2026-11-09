@@ -202,7 +202,6 @@ export default function Customers() {
   })
 
   const customers = data?.data ?? []
-  const pageCount = data?.last_page ?? 1
 
   return (
     <div className="space-y-6">

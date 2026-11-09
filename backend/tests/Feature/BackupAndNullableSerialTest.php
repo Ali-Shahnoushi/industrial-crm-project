@@ -85,7 +85,7 @@ class BackupAndNullableSerialTest extends TestCase
         $admin = User::where('email', 'admin@crm.local')->firstOrFail();
 
         $jsonPayload = [
-            'metadata' => ['version' => '2.2.0'],
+            'metadata' => ['version' => '2.3.0'],
             'customers' => [
                 [
                     'type' => 'company',
