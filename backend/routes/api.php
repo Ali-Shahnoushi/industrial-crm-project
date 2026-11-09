@@ -18,7 +18,7 @@ Route::prefix('v1')->group(function () {
     Route::get('/settings/company', [SettingController::class, 'getCompanySettings']);
 
     // Protected API endpoints
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', \App\Http\Middleware\EnsureUserIsActive::class])->group(function () {
         // User profile & logout
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::match(['put', 'post'], '/auth/me', [AuthController::class, 'updateProfile']);

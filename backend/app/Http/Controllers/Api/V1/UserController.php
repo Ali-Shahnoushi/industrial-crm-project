@@ -257,10 +257,14 @@ class UserController extends Controller
 
             if ($request->has('is_active') && $user->id !== auth()->id()) {
                 $user->is_active = $request->boolean('is_active');
+                if (!$user->is_active) {
+                    $user->tokens()->delete();
+                }
             }
 
             if (!empty($validated['password'])) {
                 $user->password = Hash::make($validated['password']);
+                $user->tokens()->delete();
             }
 
             if ($request->boolean('remove_avatar') || $request->input('remove_avatar') === '1') {

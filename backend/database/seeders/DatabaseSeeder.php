@@ -36,6 +36,35 @@ class DatabaseSeeder extends Seeder
         $admin->save();
 
         $admin->syncPermissions(Permission::all());
+        $admin->syncRoles([User::ROLE_ADMINISTRATOR]);
+
+        // 1.1 Sample Salesperson (Demonstrates 'own' scope)
+        $salesUser = User::firstOrCreate(
+            ['email' => 'sales@crm.local'],
+            [
+                'name' => 'مریم فروش (کارشناس فروش)',
+                'phone' => '09121110000',
+                'password' => Hash::make('Sales@123456'),
+                'is_active' => true,
+                'user_type' => User::ROLE_SALESPERSON,
+                'customer_scope' => User::SCOPE_OWN,
+            ]
+        );
+        $salesUser->syncRoles([User::ROLE_SALESPERSON]);
+
+        // 1.2 Sample Installer (Demonstrates technician role)
+        $installerUser = User::firstOrCreate(
+            ['email' => 'installer@crm.local'],
+            [
+                'name' => 'رضا صادقی (تکنسین نصب و خدمات)',
+                'phone' => '09122220000',
+                'password' => Hash::make('Install@123456'),
+                'is_active' => true,
+                'user_type' => User::ROLE_INSTALLER,
+                'customer_scope' => User::SCOPE_ALL,
+            ]
+        );
+        $installerUser->syncRoles([User::ROLE_INSTALLER]);
 
         $customerService = app(CustomerService::class);
 

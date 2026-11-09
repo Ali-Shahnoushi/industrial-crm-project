@@ -60,10 +60,21 @@ class AuthController extends Controller
 
         $otpCode = strval(random_int(10000, 99999));
         Cache::put('otp_' . $phone, $otpCode, now()->addMinutes(2));
+        Cache::put('otp_attempts_' . $phone, 0, now()->addMinutes(2));
         Cache::put($cooldownKey, true, now()->addSeconds(60));
 
         $smsText = "کد تأیید ورود شما به سامانه مدیریت ارتباط با مشتری: {$otpCode}\nاعتبار: ۲ دقیقه";
         $smsResult = $this->melipayamakService->sendNormalSms($phone, $smsText);
+
+        if (empty($smsResult['success'])) {
+            Cache::forget('otp_' . $phone);
+            Cache::forget('otp_attempts_' . $phone);
+            Cache::forget($cooldownKey);
+
+            return response()->json([
+                'message' => 'ارسال پیامک تأیید ناموفق بود. لطفاً دوباره تلاش کنید یا با مدیر سیستم تماس بگیرید.',
+            ], 503);
+        }
 
         $response = [
             'message' => 'کد تأیید ورود با موفقیت به شماره شما پیامک شد.',
@@ -71,8 +82,8 @@ class AuthController extends Controller
         ];
 
         if (!empty($smsResult['is_sandbox'])) {
-            $response['sandbox_code'] = $otpCode;
-            $response['message'] = "پیامک در حالت شبیه‌ساز (Sandbox) ثبت شد. کد ورود: {$otpCode}";
+            $response['sandbox'] = true;
+            $response['message'] = 'درگاه پیامک در حالت شبیه‌ساز است و پیامکی ارسال نشد. جهت دریافت کد با مدیر ارشد سیستم تماس بگیرید.';
         }
 
         return response()->json($response);
@@ -99,15 +110,31 @@ class AuthController extends Controller
         $phone = $validated['phone'];
         $code = trim($validated['code']);
 
+        $attemptKey = 'otp_attempts_' . $phone;
+        $attempts = (int) Cache::get($attemptKey, 0);
+
+        if ($attempts >= 5) {
+            Cache::forget('otp_' . $phone);
+            Cache::forget($attemptKey);
+
+            throw ValidationException::withMessages([
+                'code' => ['تعداد تلاش‌های ناموفق بیش از حد مجاز بود. لطفاً مجدداً درخواست کد تأیید ارسال کنید.'],
+            ]);
+        }
+
         $cachedCode = Cache::get('otp_' . $phone);
 
         if (!$cachedCode || $cachedCode !== $code) {
+            Cache::increment($attemptKey);
+            $remaining = max(0, 5 - ($attempts + 1));
+
             throw ValidationException::withMessages([
-                'code' => ['کد تأیید وارد شده نامعتبر است یا منقضی گردیده است.'],
+                'code' => ["کد تأیید وارد شده نادرست یا منقضی است. ({$remaining} فرصت تلاش باقی‌مانده)"],
             ]);
         }
 
         Cache::forget('otp_' . $phone);
+        Cache::forget($attemptKey);
 
         $user = User::where('phone', $phone)->firstOrFail();
 
@@ -233,6 +260,15 @@ class AuthController extends Controller
 
         $user->save();
 
+        // تغییر رمز باید تمام نشست‌های دیگر کاربر را باطل کند
+        if (!empty($validated['password'])) {
+            $token = $request->user()?->currentAccessToken();
+            $currentTokenId = $token instanceof \Laravel\Sanctum\PersonalAccessToken ? $token->getKey() : null;
+            $user->tokens()
+                ->when($currentTokenId, fn ($query) => $query->whereKeyNot($currentTokenId))
+                ->delete();
+        }
+
         return response()->json([
             'message' => 'پروفایل شما با موفقیت بروزرسانی شد.',
             'user' => $user->fresh()->serializeForApi(),
@@ -263,7 +299,7 @@ class AuthController extends Controller
             minutes: 60 * 24 * 7,
             path: '/',
             domain: null,
-            secure: false,
+            secure: request()->isSecure() || str_starts_with((string) config('app.url'), 'https://'),
             httpOnly: true,
             raw: false,
             sameSite: 'Lax'

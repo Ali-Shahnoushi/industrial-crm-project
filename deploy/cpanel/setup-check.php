@@ -1,22 +1,15 @@
 <?php
 /**
  * ─────────────────────────────────────────────────────────────
- *  بررسی محیط سرور برای استقرار CRM روی cPanel
- *  این فایل را بعد از تکمیل استقرار حتماً حذف کنید!
+ *  بررسی محیط سرور برای استقرار و عیب‌یابی CRM روی cPanel
  *  آدرس: https://دامنه-شما/setup-check.php
  * ─────────────────────────────────────────────────────────────
  */
 header('Content-Type: text/html; charset=utf-8');
 header('X-Robots-Tag: noindex');
+header('Cache-Control: no-store');
 
 $baseDir = require __DIR__ . '/resolve-private.php'; // Laravel root
-if (is_file($baseDir.'/storage/installed.lock') || is_file($baseDir.'/.env')) {
-    http_response_code(403); exit('Diagnostics disabled after configuration.');
-}
-
-$requiredExtensions = ['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'ctype', 'json'];
-$recommendedExtensions = ['gd', 'intl', 'zip', 'bcmath'];
-
 $envPath = $baseDir . '/.env';
 $envExists = is_file($envPath);
 
@@ -32,6 +25,9 @@ function envValue(string $file, string $key): ?string
     }
     return null;
 }
+
+$requiredExtensions = ['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'ctype', 'json'];
+$recommendedExtensions = ['gd', 'intl', 'zip', 'bcmath'];
 
 $db = [
     'host'     => envValue($envPath, 'DB_HOST') ?: '127.0.0.1',
@@ -67,9 +63,9 @@ function row(string $label, string $status, string $detail = ''): string
 {
     $icon = $status === 'ok' ? '✅' : ($status === 'warn' ? '⚠️' : ($status === 'fail' ? '❌' : 'ℹ️'));
     $color = $status === 'ok' ? '#16a34a' : ($status === 'warn' ? '#d97706' : ($status === 'fail' ? '#dc2626' : '#6b7280'));
-    return '<tr><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb">' . htmlspecialchars($label) . '</td>'
-        . '<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:' . $color . ';white-space:nowrap">' . $icon . ' ' . htmlspecialchars($status) . '</td>'
-        . '<td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;direction:ltr;text-align:left;font-size:12px;color:#4b5563">' . htmlspecialchars($detail) . '</td></tr>';
+    return '<tr><td style="padding:10px 14px;border-bottom:1px solid #334155">' . htmlspecialchars($label) . '</td>'
+        . '<td style="padding:10px 14px;border-bottom:1px solid #334155;color:' . $color . ';white-space:nowrap;font-weight:bold">' . $icon . ' ' . htmlspecialchars($status) . '</td>'
+        . '<td style="padding:10px 14px;border-bottom:1px solid #334155;direction:ltr;text-align:left;font-size:12px;color:#94a3b8;font-family:monospace">' . htmlspecialchars($detail) . '</td></tr>';
 }
 ?>
 <!doctype html>
@@ -78,44 +74,55 @@ function row(string $label, string $status, string $detail = ''): string
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>بررسی محیط سرور — Industrial CRM</title>
+<style>
+body { font-family: Tahoma, Vazirmatn, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 32px 16px; }
+.card { max-width: 820px; margin: auto; background: #1e293b; border: 1px solid #334155; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+.hd { background: #090d16; color: #fff; padding: 20px 24px; border-bottom: 1px solid #334155; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { background: #090d16; padding: 12px 14px; text-align: right; color: #94a3b8; border-bottom: 1px solid #334155; }
+.btn { display: inline-block; background: #2563eb; color: #fff; padding: 10px 22px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 13px; }
+</style>
 </head>
-<body style="font-family:Tahoma,Vazirmatn,sans-serif;background:#f3f4f6;margin:0;padding:32px">
-<div style="max-width:780px;margin:auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden">
-  <div style="background:#111827;color:#fff;padding:16px 20px">
-    <b>🏭 بررسی محیط سرور برای استقرار CRM</b>
-    <div style="font-size:12px;opacity:.7;margin-top:4px">پس از تکمیل استقرار، این فایل (setup-check.php) را از پوشه public حذف کنید.</div>
+<body>
+<div class="card">
+  <div class="hd">
+    <b style="font-size:18px">🏭 بررسی وضعیت محیط سرور — Industrial CRM</b>
+    <div style="font-size:12px;color:#94a3b8;margin-top:6px">پس از تکمیل عیب‌یابی و استقرار، این فایل (setup-check.php) را از پوشه public حذف کنید.</div>
   </div>
-  <table style="width:100%;border-collapse:collapse;font-size:14px">
+  <table>
     <thead>
-      <tr style="background:#f9fafb;text-align:right">
-        <th style="padding:10px 12px">بررسی</th><th style="padding:10px 12px">وضعیت</th><th style="padding:10px 12px">جزئیات</th>
+      <tr>
+        <th>بررسی</th><th>وضعیت</th><th>جزئیات</th>
       </tr>
     </thead>
     <tbody>
       <?php
-      echo row('نسخه PHP (حداقل 8.4.1)', version_compare(PHP_VERSION, '8.4.1', '>=') ? 'ok' : 'fail', PHP_VERSION);
+      echo row('نسخه PHP (حداقل 8.2 — پیشنهادی 8.4+)', version_compare(PHP_VERSION, '8.2.0', '>=') ? 'ok' : 'fail', PHP_VERSION);
       $nativePsr = extension_loaded('psr') || interface_exists('PsrExt\\Log\\LoggerInterface', false)
           || interface_exists('Psr\\Log\\LoggerInterface', false);
-      echo row('افزونه بومی psr/PsrExt', $nativePsr ? 'fail' : 'ok', $nativePsr
-          ? 'افزونه psr را برای PHP همین دامنه غیرفعال کنید؛ با Monolog پروژه تداخل دارد.' : 'بدون تداخل');
+      echo row('عدم تداخل افزونه بومی psr/PsrExt', $nativePsr ? 'fail' : 'ok', $nativePsr
+          ? 'افزونه psr را در Select PHP Version غیرفعال کنید؛ با Monolog تداخل دارد.' : 'بدون تداخل');
       foreach ($requiredExtensions as $ext) {
-          echo row('افزونه PHP: ' . $ext, extension_loaded($ext) ? 'ok' : 'fail', extension_loaded($ext) ? 'loaded' : 'در MultiPHP Manager فعال کنید');
+          echo row('افزونه PHP: ' . $ext, extension_loaded($ext) ? 'ok' : 'fail', extension_loaded($ext) ? 'فعال' : 'در MultiPHP / Select PHP Version فعال کنید');
       }
       foreach ($recommendedExtensions as $ext) {
-          echo row('افزونه پیشنهادی: ' . $ext, extension_loaded($ext) ? 'ok' : 'warn', extension_loaded($ext) ? 'loaded' : 'اختیاری — در صورت نبود، برخی قابلیت‌ها محدود می‌شود');
+          echo row('افزونه پیشنهادی: ' . $ext, extension_loaded($ext) ? 'ok' : 'warn', extension_loaded($ext) ? 'فعال' : 'اختیاری');
       }
-      echo row('وجود فایل .env', $envExists ? 'ok' : 'fail', $envExists ? '.env' : 'فایل .env در ریشه برنامه یافت نشد');
-      foreach (['storage', 'storage/app', 'storage/framework', 'storage/logs', 'bootstrap/cache', 'public/storage'] as $dir) {
+      echo row('مسیر فایل‌های خصوصی (Private Directory)', is_dir($baseDir) ? 'ok' : 'fail', $baseDir);
+      echo row('وجود پکیج‌های لاراول (vendor)', is_file($baseDir . '/vendor/autoload.php') ? 'ok' : 'fail', is_file($baseDir . '/vendor/autoload.php') ? 'کامل' : 'پوشه vendor یافت نشد');
+      echo row('وجود فایل .env', $envExists ? 'ok' : 'warn', $envExists ? 'موجود' : 'یافت نشد');
+      foreach (['storage', 'storage/app', 'storage/framework', 'storage/framework/sessions', 'storage/framework/cache', 'storage/framework/views', 'storage/logs', 'bootstrap/cache'] as $dir) {
           $p = $baseDir . '/' . $dir;
-          echo row('قابل نوشتن: ' . $dir, (is_dir($p) && is_writable($p)) ? 'ok' : 'fail', $p);
+          echo row('دسترسی نوشتن: ' . $dir, (is_dir($p) && is_writable($p)) ? 'ok' : 'fail', $p);
       }
       echo row('اتصال دیتابیس MySQL', $dbStatus, $dbMessage);
-      echo row('APP_KEY', envValue($envPath, 'APP_KEY') ? 'ok' : 'fail', envValue($envPath, 'APP_KEY') ? 'تنظیم شده' : 'در .env تنظیم نشده');
+      echo row('APP_KEY امنیتی', envValue($envPath, 'APP_KEY') ? 'ok' : 'warn', envValue($envPath, 'APP_KEY') ? 'تنظیم شده' : 'تنظیم نشده');
       ?>
     </tbody>
   </table>
-  <div style="padding:14px 20px;background:#f9fafb;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb">
-    اگر همه موارد سبز هستند، برنامه آماده استفاده است. 🎉
+  <div style="padding:16px 24px;background:#090d16;font-size:13px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #334155">
+    <span>اگر همه موارد سبز هستند، محیط هاست شما کاملاً آماده است. 🎉</span>
+    <a href="update.php" class="btn">ورود به فرم به‌روزرسانی (update.php) ←</a>
   </div>
 </div>
 </body>

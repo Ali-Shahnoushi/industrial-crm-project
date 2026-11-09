@@ -120,15 +120,18 @@ class MelipayamakService
         $fromNumber = Setting::get('melipayamak_from') ?: env('MELIPAYAMAK_FROM', '5000...');
         $sandbox = Setting::get('melipayamak_sandbox', 'true') === 'true' || env('MELIPAYAMAK_SANDBOX', true);
 
+        // ماسک کردن کدهای ۵ رقمی OTP در لاگ‌ها جهت حفظ محرمانگی
+        $maskedText = preg_replace('/\b\d{5}\b/', '*****', $text);
+
         // In sandbox mode or when credentials missing, log and simulate
         if ($sandbox || empty($username) || empty($password)) {
             $fakeMessageId = 'SANDBOX-OTP-' . rand(10000000, 99999999);
-            Log::info("Melipayamak Sandbox Normal SMS to {$mobile}: {$text}");
+            Log::info("Melipayamak Sandbox Normal SMS to {$mobile}: " . $maskedText);
 
             SmsLog::create([
                 'recipient_mobile' => $mobile,
                 'pattern_code' => 'NORMAL-OTP',
-                'tokens' => ['text' => $text],
+                'tokens' => ['text' => $maskedText],
                 'status' => 'sent',
                 'provider_message_id' => $fakeMessageId,
                 'error_message' => null,
@@ -162,7 +165,7 @@ class MelipayamakService
             SmsLog::create([
                 'recipient_mobile' => $mobile,
                 'pattern_code' => 'NORMAL-OTP',
-                'tokens' => ['text' => $text],
+                'tokens' => ['text' => $maskedText],
                 'status' => $isSuccess ? 'sent' : 'failed',
                 'provider_message_id' => $isSuccess ? (string)$val : null,
                 'error_message' => $isSuccess ? null : ($strStatus . ' (Code: ' . $val . ')'),

@@ -6,6 +6,7 @@ import { customerApi, partApi } from '../services/api'
 import { useAuthStore } from '../store/useAuthStore'
 import { Avatar } from '../components/ui/Avatar'
 import { customerDisplayName, digits, num } from '../utils/format'
+import { useDebouncedValue } from '../utils/useDebouncedValue'
 
 export function GlobalSearch() {
   const [q, setQ] = useState('')
@@ -29,7 +30,8 @@ export function GlobalSearch() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  const searchTerm = q.trim()
+  const rawSearch = q.trim()
+  const searchTerm = useDebouncedValue(rawSearch, 300)
 
   const { data: customerData, isFetching: customersLoading } = useQuery({
     queryKey: ['global-search-customers', searchTerm],

@@ -29,6 +29,7 @@ import { ImportModal } from '../components/customers/ImportModal'
 import { Can } from '../components/common/Can'
 import { customerApi } from '../services/api'
 import { customerDisplayName, cx, dateShort, num, toEnDigits } from '../utils/format'
+import { useDebouncedValue } from '../utils/useDebouncedValue'
 import type { Customer, CustomerType } from '../types'
 
 const PAGE_SIZE = 10
@@ -38,6 +39,7 @@ export default function Customers() {
   const qc = useQueryClient()
 
   const [q, setQ] = useState('')
+  const debouncedQ = useDebouncedValue(q, 300)
   const [page, setPage] = useState(1)
 
   const typeParam = params.get('type')
@@ -85,11 +87,11 @@ export default function Customers() {
   }
 
   const { data, isLoading } = useQuery({
-    queryKey: ['customers', customerType, q, page],
+    queryKey: ['customers', customerType, debouncedQ, page],
     queryFn: () =>
       customerApi.list({
         customer_type: customerType === 'all' ? undefined : customerType,
-        q: toEnDigits(q).trim() || undefined,
+        q: toEnDigits(debouncedQ).trim() || undefined,
         page,
         per_page: PAGE_SIZE,
       }),
