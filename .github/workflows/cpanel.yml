@@ -40,8 +40,36 @@ jobs:
           npm --prefix frontend run lint
       - name: Backend PHPUnit test suite (Unit + Feature)
         run: |
-          composer --working-dir=backend install --no-interaction --prefer-dist
-          php backend/artisan test
+          set +e
+          TEST_APP="$(mktemp -d "${TMPDIR:-/tmp}/crm-phpunit.XXXXXXXX")"
+          cp -R backend/. "$TEST_APP/"
+          mkdir -p "$TEST_APP/bootstrap/cache" "$TEST_APP/storage/app/private" "$TEST_APP/storage/app/public" \
+            "$TEST_APP/storage/framework/cache/data" "$TEST_APP/storage/framework/sessions" \
+            "$TEST_APP/storage/framework/views" "$TEST_APP/storage/logs"
+          cat > "$TEST_APP/.env" <<'ENV'
+          APP_NAME="Devices CRM Test"
+          APP_ENV=testing
+          APP_DEBUG=true
+          APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          APP_URL=http://localhost
+          DB_CONNECTION=sqlite
+          DB_DATABASE=:memory:
+          CACHE_STORE=array
+          SESSION_DRIVER=array
+          QUEUE_CONNECTION=sync
+          ENV
+          (
+            cd "$TEST_APP" && \
+            composer install --no-interaction --prefer-dist --no-progress && \
+            ./vendor/bin/phpunit --colors=never
+          ) > phpunit-tests.log 2>&1
+          status=$?
+          cat phpunit-tests.log
+          rm -rf "$TEST_APP"
+          if [ "$status" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; s=Path("phpunit-tests.log").read_text()[-20000:]; print("::error title=PHPUnit test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          fi
+          exit "$status"
       - name: Offline packaging regression tests
         run: python3 -m unittest discover -s deploy/cpanel/tests -v
       - run: bash deploy/cpanel/build.sh
