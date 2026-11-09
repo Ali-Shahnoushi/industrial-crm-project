@@ -1,0 +1,7 @@
+Built at (UTC): 2026-11-09T15:29:08Z
+PHP: 8.4.27
+Node: v24.22.2
+Requires hosting PHP >= 8.4.1 with required extensions.
+Configure private-path.php before installation.
+8e20e692a126a9434c058a5121553fc4890472ba50ae8a645e3be53dbc6b878a  /home/runner/work/industrial-crm-project/industrial-crm-project/backend/composer.lock
+b7e4f69a08d5fe92b8630060e2ff13c1a3ef7d379087fc5b0e3ecdd89eb5ec4e  /home/runner/work/industrial-crm-project/industrial-crm-project/frontend/package-lock.json
