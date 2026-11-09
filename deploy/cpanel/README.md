@@ -8,11 +8,11 @@
 
 آموزش کامل نصب ابزارها در WSL، ساخت محلی دو ZIP، انتقال به ویندوز و آپلود مستقیم به هاست: [راهنمای ویندوز](WINDOWS-BUILD-GUIDE.fa.md).
 
-## ۱. دریافت بسته
+## ۱. دریافت بسته (خودکار در پوشه `cpanel-release/`)
 
-در GitHub بخش Actions، workflow به نام **cPanel package** را با Run workflow اجرا کنید. پس از موفقیت artifact به نام `cpanel-package` را دانلود کنید. این workflow با تگ `v*` نیز اجرا می‌شود؛ فایل‌ها artifact هستند، نه پیوست خودکار Release.
+با هر تغییر کد در شاخه اصلی یا Pull Request، پایپ‌لاین **GitHub Actions (`cPanel package`)** به‌صورت کاملاً خودکار هر دو فایل **`cpanel-public.zip`** و **`cpanel-private.zip`** را ساخته، تمام تست‌های امنیتی و نصب را روی آن‌ها اجرا کرده و مستقیماً داخل پوشه **[`cpanel-release/`](../../cpanel-release)** در ریشه مخزن قرار می‌دهد (همچنین در بخش Releases با تگ `latest-cpanel` و در Artifacts اجرای اکشن نیز قابل دریافت هستند).
 
-یا روی ماشین دارای PHP و افزونه‌های موردنیاز، Composer، Node 22.12+، npm و zip:
+در صورت تمایل به ساخت دستی روی ماشین محلی دارای PHP 8.4.1+، افزونه‌های موردنیاز، Composer، Node 22.12+/24، npm و zip:
 
 ```bash
 bash deploy/cpanel/build.sh

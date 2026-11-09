@@ -1,14 +1,22 @@
 name: cPanel package
 on:
+  push:
+    branches: [main, master]
+    paths: ["backend/**", "frontend/**", "deploy/cpanel/**", ".github/workflows/cpanel.yml"]
   pull_request:
     paths: ["backend/**", "frontend/**", "deploy/cpanel/**", ".github/workflows/cpanel.yml"]
   workflow_dispatch:
-  push:
-    tags: ['v*']
+
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: cpanel-package-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   package:
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-24.04
     services:
       mysql:
@@ -22,22 +30,27 @@ jobs:
           --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v7
+
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
           extensions: pdo_mysql, pdo_sqlite, mbstring, intl, gd, zip, bcmath
           tools: composer:v2
+
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+
       - name: PHP syntax
         run: find backend deploy/cpanel -name '*.php' -print0 | xargs -0 -n1 php -l
+
       - name: Frontend zero-warning lint gate
         run: |
           npm --prefix frontend ci
           npm --prefix frontend run lint
+
       - name: Backend PHPUnit test suite (Unit + Feature)
         run: |
           set +e
@@ -70,11 +83,16 @@ jobs:
             python3 -c 'from pathlib import Path; s=Path("phpunit-tests.log").read_text()[-20000:]; print("::error title=PHPUnit test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$status"
+
       - name: Offline packaging regression tests
         run: python3 -m unittest discover -s deploy/cpanel/tests -v
-      - run: bash deploy/cpanel/build.sh
+
+      - name: Build verified cPanel public & private ZIP packages
+        run: bash deploy/cpanel/build.sh
+
       - name: SQLite extracted-package smoke test
         run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+
       - name: MySQL fresh install and idempotent upgrade smoke test
         env:
           CPANEL_SMOKE_MYSQL: '1'
@@ -88,6 +106,7 @@ jobs:
           SESSION_DRIVER: file
           CPANEL_INSTALL_PENDING: 'true'
         run: bash deploy/cpanel/tests/smoke-package.sh cpanel-release
+
       - name: Real installer GET/POST, failure diagnostics and retry tests
         env:
           CPANEL_INSTALLER_HTTP: '1'
@@ -105,7 +124,9 @@ jobs:
             python3 -c 'from pathlib import Path; s=Path("installer-http-tests.log").read_text()[-20000:]; print("::error title=Installer HTTP test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$status"
-      - uses: actions/upload-artifact@v7
+
+      - name: Upload cPanel ZIPs as GitHub Actions Artifact
+        uses: actions/upload-artifact@v7
         with:
           name: cpanel-package
           path: |
@@ -113,3 +134,107 @@ jobs:
             cpanel-release/SHA256SUMS
             cpanel-release/build-info.txt
           if-no-files-found: error
+
+      - name: Save built public & private ZIPs into cpanel-release/ folder in repository
+        env:
+          PR_REPO_FULL_NAME: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            if [[ "${PR_REPO_FULL_NAME}" != "${GITHUB_REPOSITORY}" ]]; then
+              echo "External fork PR detected; skipping direct branch commit (ZIPs remain available in Actions Artifacts)."
+              exit 0
+            fi
+            TARGET_BRANCH="${GITHUB_HEAD_REF}"
+          elif [[ "${GITHUB_REF}" == refs/heads/* ]]; then
+            TARGET_BRANCH="${GITHUB_REF_NAME}"
+          else
+            echo "Non-branch ref (${GITHUB_REF}); skipping branch commit."
+            exit 0
+          fi
+
+          STAGE_DIR="$(mktemp -d "${TMPDIR:-/tmp}/crm-stage.XXXXXXXX")"
+          cp cpanel-release/cpanel-public.zip "$STAGE_DIR/"
+          cp cpanel-release/cpanel-private.zip "$STAGE_DIR/"
+          cp cpanel-release/SHA256SUMS "$STAGE_DIR/"
+          cp cpanel-release/build-info.txt "$STAGE_DIR/"
+          cp deploy/cpanel/sql/v2.0.0_cpanel_migration.sql "$STAGE_DIR/"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+
+          mkdir -p cpanel-release
+          cp "$STAGE_DIR/cpanel-public.zip" cpanel-release/cpanel-public.zip
+          cp "$STAGE_DIR/cpanel-private.zip" cpanel-release/cpanel-private.zip
+          cp "$STAGE_DIR/SHA256SUMS" cpanel-release/SHA256SUMS
+          cp "$STAGE_DIR/build-info.txt" cpanel-release/build-info.txt
+          cp "$STAGE_DIR/v2.0.0_cpanel_migration.sql" cpanel-release/v2.0.0_cpanel_migration.sql
+          rm -rf "$STAGE_DIR"
+
+          git add \
+            cpanel-release/cpanel-public.zip \
+            cpanel-release/cpanel-private.zip \
+            cpanel-release/SHA256SUMS \
+            cpanel-release/build-info.txt \
+            cpanel-release/v2.0.0_cpanel_migration.sql
+
+          if git diff --cached --quiet; then
+            echo "cpanel-release/ packages are already up to date."
+          else
+            git commit -m "chore(release): auto-build cPanel public & private zip packages into cpanel-release/ [skip ci]"
+            git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          fi
+
+          PUBLIC_SIZE="$(du -h cpanel-release/cpanel-public.zip | cut -f1)"
+          PRIVATE_SIZE="$(du -h cpanel-release/cpanel-private.zip | cut -f1)"
+          FOLDER_URL="https://github.com/${GITHUB_REPOSITORY}/tree/${TARGET_BRANCH}/cpanel-release"
+          PUBLIC_RAW="https://github.com/${GITHUB_REPOSITORY}/raw/${TARGET_BRANCH}/cpanel-release/cpanel-public.zip"
+          PRIVATE_RAW="https://github.com/${GITHUB_REPOSITORY}/raw/${TARGET_BRANCH}/cpanel-release/cpanel-private.zip"
+
+          {
+            echo "## 📦 بسته‌های آماده نصب در cPanel با موفقیت ساخته و در پوشه \`cpanel-release/\` ذخیره شدند"
+            echo ""
+            echo "پوشه مستقیم در مخزن: **[📂 مشاهده پوشه \`cpanel-release/\`](${FOLDER_URL})**"
+            echo ""
+            echo "| فایل | حجم | لینک دانلود مستقیم | محل آپلود در هاست |"
+            echo "| :--- | :---: | :---: | :--- |"
+            echo "| \`cpanel-public.zip\` | \`${PUBLIC_SIZE}\` | [⬇️ دانلود مستقیم Public](${PUBLIC_RAW}) | داخل \`public_html\` |"
+            echo "| \`cpanel-private.zip\` | \`${PRIVATE_SIZE}\` | [⬇️ دانلود مستقیم Private](${PRIVATE_RAW}) | پوشه خصوصی بیرون از \`public_html\` (مثلاً \`crm-private\`) |"
+            echo ""
+            echo "### SHA-256 Checksums"
+            echo "\`\`\`text"
+            cat cpanel-release/SHA256SUMS
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish/update rolling GitHub Release on main branch
+        if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'master')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="latest-cpanel"
+          TITLE="آخرین بسته‌های آماده نصب در cPanel (ساخت خودکار v2.1.0)"
+          NOTES="فایل‌های تست‌شده \`cpanel-public.zip\` و \`cpanel-private.zip\` به‌صورت خودکار از شاخه اصلی ساخته شده‌اند. همچنین این فایل‌ها مستقیماً داخل پوشه \`cpanel-release/\` مخزن نیز قرار دارند."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              cpanel-release/cpanel-public.zip \
+              cpanel-release/cpanel-private.zip \
+              cpanel-release/SHA256SUMS \
+              cpanel-release/build-info.txt \
+              cpanel-release/v2.0.0_cpanel_migration.sql \
+              --clobber
+            gh release edit "$TAG" --title "$TITLE" --notes "$NOTES"
+          else
+            gh release create "$TAG" \
+              cpanel-release/cpanel-public.zip \
+              cpanel-release/cpanel-private.zip \
+              cpanel-release/SHA256SUMS \
+              cpanel-release/build-info.txt \
+              cpanel-release/v2.0.0_cpanel_migration.sql \
+              --title "$TITLE" \
+              --notes "$NOTES"
+          fi
