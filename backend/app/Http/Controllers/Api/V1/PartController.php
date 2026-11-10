@@ -26,8 +26,8 @@ class PartController extends Controller
             ->withSum('customerParts as assigned_quantity_sum', 'quantity')
             ->latest();
 
-        if ($request->filled('q')) {
-            $term = trim((string) $request->q);
+        if ($request->filled('q') || $request->filled('search')) {
+            $term = trim((string) ($request->q ?? $request->search));
             $op = $this->likeOp();
             $query->where(function ($q) use ($term, $op) {
                 $q->where('name', $op, "%{$term}%")
@@ -36,22 +36,64 @@ class PartController extends Controller
             });
         }
 
+        if ($request->boolean('active_only', false)) {
+            $query->where('is_active', true);
+        }
+
+        if ($request->boolean('low_stock_only', false)) {
+            $query->where('is_active', true)
+                ->where(function ($q) {
+                    $q->where(function ($q1) {
+                        $q1->where('min_stock', '>', 0)
+                            ->whereColumn('stock_quantity', '<=', 'min_stock');
+                    })->orWhere('stock_quantity', '<=', 0);
+                });
+        }
+
         $parts = $query->get();
 
         return response()->json($parts);
+    }
+
+    /**
+     * Dedicated warehouse dashboard summary: KPIs, low-stock devices, and recent stock movements.
+     */
+    public function inventorySummary(): JsonResponse
+    {
+        $this->authorizePermission('parts.view');
+
+        $activeParts = Part::where('is_active', true)->orderBy('stock_quantity')->get();
+        $lowStockItems = $activeParts->filter(fn (Part $p) => $p->is_low_stock)->values();
+
+        return response()->json([
+            'total_models' => Part::count(),
+            'active_models' => $activeParts->count(),
+            'total_units_in_stock' => (int) Part::sum('stock_quantity'),
+            'out_of_stock_count' => $activeParts->where('stock_quantity', '<=', 0)->count(),
+            'low_stock_count' => $lowStockItems->count(),
+            'low_stock_parts' => $lowStockItems,
+            'low_stock_items' => $lowStockItems,
+            'recent_movements' => PartInventoryLog::with([
+                'part:id,name,code,unit,stock_quantity,min_stock',
+                'user:id,name,user_type',
+                'customer:id,first_name,last_name,company_name,type',
+            ])->latest()->limit(15)->get(),
+        ]);
     }
 
     public function store(Request $request): JsonResponse
     {
         $this->authorizePermission('parts.manage');
 
-        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity']);
+        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity', 'min_stock']);
 
         $validated = $request->validate([
             'name' => 'required|string|max:150',
             'code' => ['required', 'string', 'max:50', 'regex:/^[a-zA-Z0-9\-_]+$/', 'unique:parts,code'],
-            'periodic_service_months' => 'required|integer|min:1',
+            'periodic_service_months' => 'nullable|integer|min:1',
             'stock_quantity' => 'nullable|integer|min:0',
+            'min_stock' => 'nullable|integer|min:0',
+            'unit' => 'nullable|string|max:30',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ], [
@@ -63,13 +105,17 @@ class PartController extends Controller
         ]);
 
         $initialStock = (int) ($validated['stock_quantity'] ?? 0);
+        $minStock = (int) ($validated['min_stock'] ?? 0);
+        $unit = trim((string) ($validated['unit'] ?? '')) ?: 'دستگاه';
 
-        $part = DB::transaction(function () use ($validated, $initialStock, $request) {
+        $part = DB::transaction(function () use ($validated, $initialStock, $minStock, $unit, $request) {
             $created = Part::create([
                 'name' => $validated['name'],
                 'code' => $validated['code'],
-                'periodic_service_months' => $validated['periodic_service_months'],
+                'periodic_service_months' => $validated['periodic_service_months'] ?? 12,
                 'stock_quantity' => 0,
+                'min_stock' => $minStock,
+                'unit' => $unit,
                 'description' => $validated['description'] ?? null,
                 'is_active' => $validated['is_active'] ?? true,
             ]);
@@ -91,6 +137,7 @@ class PartController extends Controller
         return response()->json([
             'message' => 'مدل دستگاه با موفقیت در کاتالوگ ثبت شد.',
             'part' => $part,
+            'data' => $part,
         ], 201);
     }
 
@@ -113,13 +160,15 @@ class PartController extends Controller
     {
         $this->authorizePermission('parts.manage');
 
-        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity']);
+        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity', 'min_stock']);
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:150',
             'code' => ['sometimes', 'string', 'max:50', 'regex:/^[a-zA-Z0-9\-_]+$/', "unique:parts,code,{$part->id}"],
-            'periodic_service_months' => 'sometimes|integer|min:1',
+            'periodic_service_months' => 'sometimes|nullable|integer|min:1',
             'stock_quantity' => 'nullable|integer|min:0',
+            'min_stock' => 'nullable|integer|min:0',
+            'unit' => 'nullable|string|max:30',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ], [
@@ -127,6 +176,13 @@ class PartController extends Controller
             'code.unique' => 'این کد دستگاه قبلاً در سیستم ثبت شده است.',
             'stock_quantity.min' => 'موجودی انبار نمی‌تواند منفی باشد.',
         ]);
+
+        if (array_key_exists('unit', $validated)) {
+            $validated['unit'] = trim((string) $validated['unit']) ?: 'دستگاه';
+        }
+        if (array_key_exists('min_stock', $validated)) {
+            $validated['min_stock'] = (int) ($validated['min_stock'] ?? 0);
+        }
 
         DB::transaction(function () use ($part, $validated, $request) {
             $newStock = array_key_exists('stock_quantity', $validated) && $validated['stock_quantity'] !== null
@@ -159,9 +215,11 @@ class PartController extends Controller
             }
         });
 
+        $freshPart = $part->fresh();
         return response()->json([
             'message' => 'مشخصات مدل دستگاه بروزرسانی شد.',
-            'part' => $part->fresh(),
+            'part' => $freshPart,
+            'data' => $freshPart,
         ]);
     }
 
@@ -169,9 +227,9 @@ class PartController extends Controller
     {
         $this->authorizePermission('parts.manage');
 
-        if ($part->customerParts()->exists()) {
+        if ($part->customerParts()->exists() || $part->inventoryLogs()->exists()) {
             return response()->json([
-                'message' => 'این دستگاه به مشتریان تخصیص داده شده و امکان حذف مستقیم آن وجود ندارد.',
+                'message' => 'این دستگاه دارای سوابق تخصیص به مشتریان یا گردش انبار است و برای حفظ یکپارچگی کاردکس انبار قابل حذف مستقیم نیست (می‌توانید آن را غیرفعال کنید).',
             ], 422);
         }
 
@@ -183,23 +241,24 @@ class PartController extends Controller
     }
 
     /**
-     * Manual warehouse stock entry / exit for a device.
+     * Manual warehouse stock entry / exit / physical count reconciliation for a device.
      */
     public function adjustStock(Request $request, Part $part): JsonResponse
     {
         $this->authorizePermission('parts.manage');
 
         $this->normalizeNumericFields($request, ['quantity']);
+        $isExactAdjustment = (string) $request->input('type') === PartInventoryLog::TYPE_ADJUSTMENT;
 
         $validated = $request->validate([
-            'type' => 'required|in:in,out_manual,return',
-            'quantity' => 'required|integer|min:1',
+            'type' => 'required|in:in,out_manual,return,adjustment',
+            'quantity' => ['required', 'integer', $isExactAdjustment ? 'min:0' : 'min:1'],
             'description' => 'nullable|string|max:500',
             'customer_id' => 'nullable|exists:customers,id',
         ], [
             'type.required' => 'نوع عملیات انبار را مشخص کنید.',
             'quantity.required' => 'تعداد را وارد کنید.',
-            'quantity.min' => 'تعداد باید حداقل ۱ عدد باشد.',
+            'quantity.min' => $isExactAdjustment ? 'موجودی شمارش‌شده نمی‌تواند منفی باشد.' : 'تعداد باید حداقل ۱ عدد باشد.',
         ]);
 
         if (!empty($validated['customer_id'])) {
@@ -207,21 +266,37 @@ class PartController extends Controller
             $this->authorizeCustomerAccess($customer);
         }
 
-        $log = $this->customerService->adjustStock(
-            $part,
-            $validated['type'],
-            (int) $validated['quantity'],
-            $validated['description'] ?? null,
-            $request->user()->id,
-            !empty($validated['customer_id']) ? (int) $validated['customer_id'] : null
-        );
+        $customerId = !empty($validated['customer_id']) ? (int) $validated['customer_id'] : null;
 
-        $actionTitle = $validated['type'] === PartInventoryLog::TYPE_OUT_MANUAL ? 'خروج کالا از انبار' : 'ورود کالا به انبار';
+        $log = $isExactAdjustment
+            ? $this->customerService->reconcileStock(
+                $part,
+                (int) $validated['quantity'],
+                $validated['description'] ?? null,
+                $request->user()->id,
+                $customerId
+            )
+            : $this->customerService->adjustStock(
+                $part,
+                $validated['type'],
+                (int) $validated['quantity'],
+                $validated['description'] ?? null,
+                $request->user()->id,
+                $customerId
+            );
 
+        $actionTitle = match ($validated['type']) {
+            PartInventoryLog::TYPE_OUT_MANUAL => 'خروج کالا از انبار',
+            PartInventoryLog::TYPE_ADJUSTMENT => 'تنظیم موجودی (انبارگردانی)',
+            default => 'ورود کالا به انبار',
+        };
+
+        $freshPart = $part->fresh();
         return response()->json([
             'message' => "{$actionTitle} برای دستگاه «{$part->name}» با موفقیت ثبت شد.",
             'log' => $log,
-            'part' => $part->fresh(),
+            'part' => $freshPart,
+            'data' => $freshPart,
         ], 201);
     }
 
@@ -242,7 +317,7 @@ class PartController extends Controller
 
         // Enforce row-level customer visibility for restricted users (e.g. Salesperson)
         if ($user && $user->hasRestrictedCustomerScope()) {
-            $canSeeWarehouseGeneral = $user->hasPermissionTo('parts.manage');
+            $canSeeWarehouseGeneral = $user->hasSafePermission('parts.manage');
             $query->where(function ($sub) use ($user, $canSeeWarehouseGeneral) {
                 $sub->whereHas('customer', fn ($cq) => $cq->accessibleBy($user));
                 if ($canSeeWarehouseGeneral) {
@@ -255,7 +330,7 @@ class PartController extends Controller
             $query->where('part_id', (int) $request->input('part_id'));
         }
 
-        if ($request->filled('type') && in_array($request->type, ['in', 'out_manual', 'out_assign', 'return'], true)) {
+        if ($request->filled('type') && in_array($request->type, ['in', 'out_manual', 'out_assign', 'return', 'adjustment'], true)) {
             $query->where('type', $request->type);
         }
 
@@ -298,7 +373,7 @@ class PartController extends Controller
         $this->authorizePermission('parts.assign');
         $this->authorizeCustomerAccess($customer);
 
-        $this->normalizeNumericFields($request, ['quantity', 'invoice_amount']);
+        $this->normalizeNumericFields($request, ['quantity', 'invoice_amount', 'warranty_months']);
         if ($request->exists('invoice_number')) {
             $invNo = trim((string) $this->normalizeDigits((string) $request->input('invoice_number', '')));
             $request->merge(['invoice_number' => $invNo !== '' ? $invNo : null]);
@@ -307,14 +382,17 @@ class PartController extends Controller
         $validated = $request->validate([
             'part_id' => 'required|exists:parts,id',
             'serial_number' => ['nullable', 'string', 'max:100', 'regex:/^[a-zA-Z0-9\-_\/]+$/', 'unique:customer_parts,serial_number'],
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'nullable|integer|min:1',
             'invoice_amount' => 'nullable|numeric|min:0',
             'invoice_number' => 'nullable|string|max:100',
             'installation_date' => 'nullable|date',
+            'warranty_months' => 'nullable|integer|min:0|max:240',
+            'warranty_expire_date' => 'nullable|date',
             'status' => 'nullable|in:active,under_repair,replaced,retired',
             'notes' => 'nullable|string',
         ], [
             'part_id.required' => 'انتخاب مدل دستگاه الزامی است.',
+            'serial_number.required' => 'وارد کردن شماره سریال یا کد یکتای دستگاه الزامی است.',
             'serial_number.regex' => 'شماره سریال فقط می‌تواند شامل حروف انگلیسی، اعداد و خط تیره باشد.',
             'serial_number.unique' => 'این شماره سریال قبلاً به مشتری دیگری تخصیص داده شده است.',
             'quantity.required' => 'تعداد دستگاه را وارد کنید.',
@@ -328,7 +406,7 @@ class PartController extends Controller
         $customerPart = $this->customerService->assignPart(
             $customer,
             $part,
-            $validated['serial_number'] ?? null,
+            $validated['serial_number'],
             $validated,
             $request->user()->id
         );
@@ -336,6 +414,7 @@ class PartController extends Controller
         return response()->json([
             'message' => "دستگاه «{$part->name}» (تعداد: {$customerPart->quantity} عدد) با موفقیت به مشتری تخصیص داده شد و از موجودی انبار کسر گردید.",
             'customer_part' => $customerPart,
+            'data' => $customerPart,
             'customer_type' => $customer->fresh()->customer_type,
         ], 201);
     }
@@ -349,7 +428,7 @@ class PartController extends Controller
         $customer = Customer::findOrFail($customerPart->customer_id);
         $this->authorizeCustomerAccess($customer);
 
-        $this->normalizeNumericFields($request, ['quantity', 'invoice_amount']);
+        $this->normalizeNumericFields($request, ['quantity', 'invoice_amount', 'warranty_months']);
         if ($request->exists('invoice_number')) {
             $invNo = trim((string) $this->normalizeDigits((string) $request->input('invoice_number', '')));
             $request->merge(['invoice_number' => $invNo !== '' ? $invNo : null]);
@@ -369,6 +448,8 @@ class PartController extends Controller
             'invoice_amount' => 'nullable|numeric|min:0',
             'invoice_number' => 'nullable|string|max:100',
             'installation_date' => 'nullable|date',
+            'warranty_months' => 'nullable|integer|min:0|max:240',
+            'warranty_expire_date' => 'nullable|date',
             'status' => 'nullable|in:active,under_repair,replaced,retired',
             'notes' => 'nullable|string',
         ], [
@@ -387,7 +468,24 @@ class PartController extends Controller
         return response()->json([
             'message' => 'اطلاعات دستگاه تخصیص‌یافته با موفقیت بروزرسانی شد.',
             'customer_part' => $updated,
+            'data' => $updated,
         ]);
+    }
+
+    public function updateAssignmentForCustomer(Request $request, Customer $customer, CustomerPart $customerPart): JsonResponse
+    {
+        if ((int) $customerPart->customer_id !== (int) $customer->id) {
+            abort(404);
+        }
+        return $this->updateAssignment($request, $customerPart);
+    }
+
+    public function deleteAssignmentForCustomer(Request $request, Customer $customer, CustomerPart $customerPart): JsonResponse
+    {
+        if ((int) $customerPart->customer_id !== (int) $customer->id) {
+            abort(404);
+        }
+        return $this->deleteAssignment($request, $customerPart);
     }
 
     /**

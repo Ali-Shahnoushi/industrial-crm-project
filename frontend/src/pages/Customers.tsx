@@ -80,6 +80,7 @@ export default function Customers() {
   const typeParam = params.get('type')
   const customerType: CustomerType | 'all' =
     typeParam === 'effective' || typeParam === 'potential' ? typeParam : 'all'
+  const isNewFromUrl = Boolean(params.get('new'))
 
   // Advanced Minimal Filters
   const [entityType, setEntityType] = useState<'all' | 'company' | 'individual'>('all')
@@ -711,12 +712,19 @@ export default function Customers() {
                             )}
                           </div>
                           <div>
-                            <Link
-                              to={`/customers/${c.id}`}
-                              className="font-bold text-sm text-base-content hover:text-primary transition-colors"
-                            >
-                              {title}
-                            </Link>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Link
+                                to={`/customers/${c.id}`}
+                                className="font-bold text-sm text-base-content hover:text-primary transition-colors"
+                              >
+                                {title}
+                              </Link>
+                              {c.portal_user && (
+                                <span className="badge badge-xs bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold">
+                                  پورتال فعال
+                                </span>
+                              )}
+                            </div>
                             {c.type === 'individual' && c.company_name && (
                               <p className="text-xs text-base-content/50 truncate max-w-[180px]">
                                 {c.company_name}
@@ -828,10 +836,10 @@ export default function Customers() {
       </div>
 
       {/* Customer Form Modal */}
-      {formOpen && (
+      {(formOpen || isNewFromUrl) && (
         <CustomerFormModal
-          open={formOpen}
-          customer={editing}
+          open={formOpen || isNewFromUrl}
+          customer={isNewFromUrl ? undefined : editing}
           onClose={closeFormModal}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ['customers'] })

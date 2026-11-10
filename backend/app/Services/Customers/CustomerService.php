@@ -42,6 +42,13 @@ class CustomerService
 
             /** @var Part $lockedPart */
             $lockedPart = Part::whereKey($part->id)->lockForUpdate()->firstOrFail();
+
+            if (!$lockedPart->is_active) {
+                throw ValidationException::withMessages([
+                    'part_id' => ["مدل دستگاه «{$lockedPart->name}» غیرفعال است و امکان تخصیص جدید ندارد."],
+                ]);
+            }
+
             $beforeBalance = (int) $lockedPart->stock_quantity;
 
             if ($beforeBalance < $quantity) {
@@ -59,8 +66,12 @@ class CustomerService
                 ? Carbon::parse($attributes['installation_date'])
                 : Carbon::now();
 
-            $warrantyMonths = $lockedPart->periodic_service_months ?: 12;
-            $warrantyExpire = (clone $installDate)->addMonths($warrantyMonths);
+            $warrantyMonths = isset($attributes['warranty_months']) && $attributes['warranty_months'] !== '' && $attributes['warranty_months'] !== null
+                ? (int) $attributes['warranty_months']
+                : ($lockedPart->periodic_service_months ?: 12);
+            $warrantyExpire = !empty($attributes['warranty_expire_date'])
+                ? Carbon::parse($attributes['warranty_expire_date'])
+                : (clone $installDate)->addMonths($warrantyMonths);
 
             $customerPart = $customer->customerParts()->create([
                 'part_id' => $lockedPart->id,
@@ -83,17 +94,15 @@ class CustomerService
                 'quantity' => $quantity,
                 'balance_before' => $beforeBalance,
                 'balance_after' => $newBalance,
-                'description' => "تخصیص دستگاه به مشتری «{$customer->display_name}»"
-                    . ($serialNumber ? " (سریال: {$serialNumber})" : '')
+                'description' => "تخصیص دستگاه به مشتری «{$customer->display_name}» (سریال: {$serialNumber})"
                     . ($invoiceNumber ? " - شماره فاکتور: {$invoiceNumber}" : ''),
             ]);
 
             $invoiceSummary = $invoiceAmount !== null ? ' - مبلغ فاکتور: ' . number_format((float) $invoiceAmount) . ' تومان' : '';
-            $serialSummary = $serialNumber ? "، شماره سریال: {$serialNumber}" : '';
             $customer->histories()->create([
                 'user_id' => $userId,
                 'action' => 'part_assigned',
-                'description' => "دستگاه «{$lockedPart->name}» (تعداد: {$quantity} عدد{$serialSummary}{$invoiceSummary}) به مشتری تخصیص داده شد.",
+                'description' => "دستگاه «{$lockedPart->name}» (تعداد: {$quantity} عدد، شماره سریال: {$serialNumber}{$invoiceSummary}) به مشتری تخصیص داده شد.",
                 'metadata' => [
                     'part_id' => $lockedPart->id,
                     'part_name' => $lockedPart->name,
@@ -163,6 +172,12 @@ class CustomerService
 
                 $oldPart = $oldPartId === $firstId ? $firstPart : $secondPart;
                 $newPart = $newPartId === $firstId ? $firstPart : $secondPart;
+
+                if (!$newPart->is_active) {
+                    throw ValidationException::withMessages([
+                        'part_id' => ["مدل دستگاه «{$newPart->name}» غیرفعال است و امکان جایگزینی با آن وجود ندارد."],
+                    ]);
+                }
 
                 $oldBefore = (int) $oldPart->stock_quantity;
                 $restoredBalance = $oldBefore + $oldQty;
@@ -256,10 +271,16 @@ class CustomerService
                 ? (!empty($attributes['installation_date']) ? Carbon::parse($attributes['installation_date']) : null)
                 : ($lockedCp->installation_date ? Carbon::parse($lockedCp->installation_date) : null);
 
-            $warrantyMonths = $activePart->periodic_service_months ?: 12;
-            $warrantyExpire = $installDate
-                ? (clone $installDate)->addMonths($warrantyMonths)->toDateString()
-                : ($lockedCp->warranty_expire_date?->toDateString());
+            $warrantyMonths = isset($attributes['warranty_months']) && $attributes['warranty_months'] !== '' && $attributes['warranty_months'] !== null
+                ? (int) $attributes['warranty_months']
+                : ($activePart->periodic_service_months ?: 12);
+            if (!empty($attributes['warranty_expire_date'])) {
+                $warrantyExpire = Carbon::parse($attributes['warranty_expire_date'])->toDateString();
+            } else {
+                $warrantyExpire = $installDate
+                    ? (clone $installDate)->addMonths($warrantyMonths)->toDateString()
+                    : ($lockedCp->warranty_expire_date?->toDateString());
+            }
 
             $invoiceAmount = array_key_exists('invoice_amount', $attributes)
                 ? ($attributes['invoice_amount'] !== '' && $attributes['invoice_amount'] !== null ? (float) $attributes['invoice_amount'] : null)
@@ -301,12 +322,20 @@ class CustomerService
 
     /**
      * Delete an assigned customer device and atomically return its quantity back to warehouse stock.
+     * Blocks deletion when service/repair histories exist to preserve financial & technical audit records.
      */
     public function deleteAssignedPart(CustomerPart $customerPart, ?int $userId = null): void
     {
         DB::transaction(function () use ($customerPart, $userId) {
             /** @var CustomerPart $lockedCp */
             $lockedCp = CustomerPart::whereKey($customerPart->id)->lockForUpdate()->firstOrFail();
+
+            if ($lockedCp->serviceHistories()->exists()) {
+                throw ValidationException::withMessages([
+                    'customer_part' => ['این دستگاه دارای سابقه سرویس/تعمیر ثبت‌شده است و برای حفظ اسناد مالی قابل حذف نیست.'],
+                ]);
+            }
+
             $customer = Customer::find($lockedCp->customer_id);
             /** @var Part $lockedPart */
             $lockedPart = Part::whereKey($lockedCp->part_id)->lockForUpdate()->firstOrFail();
@@ -437,6 +466,66 @@ class CustomerService
             }
 
             return $history;
+        });
+    }
+
+    /**
+     * Delete a customer safely inside a transaction:
+     * - Block deletion (422) if any assigned device has technical/financial service histories.
+     * - Otherwise restore all assigned device quantities back to warehouse stock with audit logs.
+     */
+    public function deleteCustomer(Customer $customer, ?int $userId = null): void
+    {
+        DB::transaction(function () use ($customer, $userId) {
+            $assignedParts = $customer->customerParts()->withCount('serviceHistories')->lockForUpdate()->get();
+
+            foreach ($assignedParts as $cp) {
+                if ((int) $cp->service_histories_count > 0) {
+                    throw ValidationException::withMessages([
+                        'customer' => ['این مشتری دارای سوابق سرویس/تعمیر ثبت‌شده روی دستگاه‌ها است و برای حفظ اسناد مالی امکان حذف مستقیم ندارد.'],
+                    ]);
+                }
+            }
+
+            foreach ($assignedParts as $cp) {
+                $this->deleteAssignedPart($cp, $userId);
+            }
+
+            $customer->delete();
+        });
+    }
+
+    /**
+     * Exact physical stock count reconciliation (type = adjustment, targetStock >= 0 including zero).
+     */
+    public function reconcileStock(
+        Part $part,
+        int $targetStock,
+        ?string $description = null,
+        ?int $userId = null,
+        ?int $customerId = null
+    ): PartInventoryLog {
+        $target = max(0, $targetStock);
+
+        return DB::transaction(function () use ($part, $target, $description, $userId, $customerId) {
+            /** @var Part $lockedPart */
+            $lockedPart = Part::whereKey($part->id)->lockForUpdate()->firstOrFail();
+            $before = (int) $lockedPart->stock_quantity;
+            $delta = abs($target - $before);
+
+            $lockedPart->update(['stock_quantity' => $target]);
+
+            return PartInventoryLog::create([
+                'part_id' => $lockedPart->id,
+                'customer_part_id' => null,
+                'customer_id' => $customerId,
+                'user_id' => $userId,
+                'type' => PartInventoryLog::TYPE_ADJUSTMENT,
+                'quantity' => $delta,
+                'balance_before' => $before,
+                'balance_after' => $target,
+                'description' => $description ?: "انبارگردانی و تنظیم موجودی فیزیکی روی {$target} " . ($lockedPart->unit ?: 'دستگاه'),
+            ])->load(['part', 'user', 'customer']);
         });
     }
 }

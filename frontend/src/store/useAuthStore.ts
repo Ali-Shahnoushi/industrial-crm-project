@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { authApi } from '../services/api'
+import { queryClient } from './queryClient'
 import type { User, UserType } from '../types'
 
 interface AuthState {
@@ -40,6 +41,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   async login(login, password) {
     try {
       const res = await authApi.login(login, password)
+      queryClient.clear()
       set({ user: res.user, isInitialized: true })
       return { ok: true }
     } catch (err: any) {
@@ -54,6 +56,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   async loginWithOtp(phone, code) {
     try {
       const res = await authApi.verifyOtp(phone, code)
+      queryClient.clear()
       set({ user: res.user, isInitialized: true })
       return { ok: true }
     } catch (err: any) {
@@ -72,6 +75,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     } catch {
       // Proceed with local logout regardless of network error
     } finally {
+      queryClient.clear()
       set({ user: null, isInitialized: true })
     }
   },

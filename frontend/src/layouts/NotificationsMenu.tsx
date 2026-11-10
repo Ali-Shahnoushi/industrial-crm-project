@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Bell, CheckCheck, Cog, History, Sparkles, UserPlus, Wrench } from 'lucide-react'
+import { AlertTriangle, Bell, CheckCheck, Cog, History, Sparkles, UserCheck, UserPlus, Wrench } from 'lucide-react'
 import { dashboardApi } from '../services/api'
 import { useAuthStore } from '../store/useAuthStore'
 import { customerDisplayName, cx, num, relativeFa } from '../utils/format'
@@ -40,6 +40,8 @@ function activityVisual(action: string) {
       return { icon: Wrench, tone: 'bg-success/15 text-success', title: 'ثبت سرویس فنی' }
     case 'type_converted':
       return { icon: Sparkles, tone: 'bg-warning/20 text-warning', title: 'ارتقا به مشتری بالفعل' }
+    case 'owner_changed':
+      return { icon: UserCheck, tone: 'bg-indigo-500/15 text-indigo-600', title: 'انتقال کارشناس مسئول' }
     default:
       return { icon: History, tone: 'bg-secondary/15 text-secondary', title: 'بروزرسانی پرونده' }
   }
@@ -64,10 +66,17 @@ export function NotificationsMenu() {
     [data?.recent_activities],
   )
 
+  const lowStockParts = useMemo(
+    () => data?.low_stock_parts ?? [],
+    [data?.low_stock_parts],
+  )
+
   const unread = useMemo(
     () => activities.filter((a) => !seenIds.has(String(a.id))),
     [activities, seenIds],
   )
+
+  const badgeCount = unread.length + lowStockParts.length
 
   const markRead = (id: string) => {
     setSeenIds((prev) => {
@@ -105,9 +114,9 @@ export function NotificationsMenu() {
         aria-label="اعلان‌ها و رویدادهای اخیر"
       >
         <Bell className="size-5" />
-        {unread.length > 0 && (
+        {badgeCount > 0 && (
           <span className="absolute end-1.5 top-1.5 flex size-4 items-center justify-center rounded-full bg-error text-[10px] font-bold text-white">
-            {num(unread.length)}
+            {num(badgeCount)}
           </span>
         )}
       </div>
@@ -116,7 +125,7 @@ export function NotificationsMenu() {
         className="dropdown-content z-50 mt-2 w-80 max-w-[calc(100vw-1.5rem)] rounded-2xl border border-base-300 bg-base-100 shadow-xl"
       >
         <div className="flex items-center justify-between border-b border-base-300/60 px-4 py-3">
-          <p className="font-bold text-sm">رویدادهای اخیر سامانه</p>
+          <p className="font-bold text-sm">اعلان‌ها و رویدادهای سامانه</p>
           {unread.length > 0 && (
             <button className="btn btn-ghost btn-xs gap-1 text-primary" onClick={markAllRead}>
               <CheckCheck className="size-3.5" /> خواندن همه
@@ -124,7 +133,33 @@ export function NotificationsMenu() {
           )}
         </div>
         <ul className="max-h-96 overflow-y-auto p-2">
-          {activities.length === 0 && (
+          {lowStockParts.length > 0 && (
+            <li className="mb-1">
+              <button
+                onClick={() => {
+                  closeDropdown()
+                  nav('/inventory?low=1')
+                }}
+                className="flex w-full items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-2.5 text-start transition-colors hover:bg-warning/20"
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/25 text-warning">
+                  <AlertTriangle className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-extrabold text-base-content">
+                    هشدار کمبود موجودی انبار ({num(lowStockParts.length)} مدل)
+                  </span>
+                  <span className="block line-clamp-2 text-[11px] text-base-content/70 mt-0.5">
+                    {lowStockParts
+                      .slice(0, 2)
+                      .map((p) => `${p.name}: ${num(p.stock_quantity ?? 0)} ${p.unit || 'دستگاه'}`)
+                      .join(' • ')}
+                  </span>
+                </span>
+              </button>
+            </li>
+          )}
+          {activities.length === 0 && lowStockParts.length === 0 && (
             <li className="p-6 text-center text-xs text-base-content/60">رویداد جدیدی ثبت نشده است</li>
           )}
           {activities.map((act) => {

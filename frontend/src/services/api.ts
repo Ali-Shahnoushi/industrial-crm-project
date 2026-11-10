@@ -1,5 +1,6 @@
 import axios from 'axios'
 import type {
+  AssignmentStrategy,
   CompanySettings,
   Customer,
   CustomerLookupItem,
@@ -7,13 +8,24 @@ import type {
   CustomerScope,
   DashboardStats,
   InventoryOperationType,
+  InventorySummary,
   Part,
   PartInventoryLog,
   PartServiceHistory,
+  PortalDevice,
+  PortalOverview,
   RoleOption,
   SmsLog,
   SmsSettings,
+  StaffOption,
   SystemPermission,
+  Ticket,
+  TicketDepartment,
+  TicketMessage,
+  TicketPriority,
+  TicketStatus,
+  TicketSummary,
+  TicketType,
   User,
   UserType,
 } from '../types'
@@ -35,12 +47,15 @@ http.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 Unauthenticated
+// Handle 401 Unauthenticated (preserve return path safely)
 http.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401 && !window.location.pathname.includes('/login')) {
-      window.location.href = '/login'
+    const reqUrl = String(err.config?.url ?? '')
+    const isAuthCheck = reqUrl.includes('/auth/me') || reqUrl.includes('/auth/login')
+    if (err.response?.status === 401 && !isAuthCheck && !window.location.pathname.includes('/login')) {
+      const target = `${window.location.pathname}${window.location.search}`
+      window.location.href = target && target !== '/' ? `/login?from=${encodeURIComponent(target)}` : '/login'
     }
     return Promise.reject(err)
   },
@@ -132,6 +147,41 @@ export const customerApi = {
     const { data } = await http.delete<{ message: string }>(`/customers/${id}`)
     return data
   },
+  staffOptions: async () => {
+    const { data } = await http.get<{ data: StaffOption[] }>('/customers-staff-options')
+    return data.data
+  },
+  updateOwner: async (
+    id: number | string,
+    ownerUserId: number | string,
+    salesManagerUserId?: number | string | null,
+  ) => {
+    const payload: Record<string, any> = { owner_user_id: Number(ownerUserId) }
+    if (salesManagerUserId !== undefined) {
+      payload.sales_manager_user_id = salesManagerUserId ? Number(salesManagerUserId) : null
+    }
+    const { data } = await http.patch<{ message: string; customer: Customer }>(
+      `/customers/${id}/owner`,
+      payload,
+    )
+    return data
+  },
+  managePortalAccess: async (
+    id: number | string,
+    body: {
+      portal_enabled: boolean
+      password?: string
+      login_email?: string | null
+      login_phone?: string | null
+      sales_manager_user_id?: number | null
+    },
+  ) => {
+    const { data } = await http.post<{ message: string; customer: Customer }>(
+      `/customers/${id}/portal-access`,
+      body,
+    )
+    return data
+  },
   importExcel: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -183,8 +233,12 @@ export const customerApi = {
 }
 
 export const partApi = {
-  list: async (params?: { q?: string }) => {
+  list: async (params?: { q?: string; low_stock_only?: boolean; active_only?: boolean }) => {
     const { data } = await http.get<Part[]>('/parts', { params })
+    return data
+  },
+  inventorySummary: async () => {
+    const { data } = await http.get<InventorySummary>('/inventory/summary')
     return data
   },
   create: async (body: Partial<Part>) => {
@@ -239,6 +293,7 @@ export const partApi = {
       invoice_amount?: number | string | null
       invoice_number?: string | null
       installation_date?: string
+      warranty_expire_date?: string | null
       notes?: string
     },
   ) => {
@@ -253,11 +308,12 @@ export const partApi = {
     customerPartId: number | string,
     body: {
       part_id?: number | string
-      serial_number?: string
+      serial_number?: string | null
       quantity?: number
       invoice_amount?: number | string | null
       invoice_number?: string | null
       installation_date?: string | null
+      warranty_expire_date?: string | null
       status?: string
       notes?: string | null
     },
@@ -306,6 +362,150 @@ export const smsApi = {
       last_page: number
       total: number
     }>('/sms/logs', { params })
+    return data
+  },
+}
+
+export const ticketApi = {
+  activeDepartments: async () => {
+    const { data } = await http.get<{ departments: TicketDepartment[] }>('/ticket-departments')
+    return data.departments
+  },
+  summary: async () => {
+    const { data } = await http.get<TicketSummary>('/tickets-summary')
+    return data
+  },
+  list: async (params?: {
+    q?: string
+    status?: string
+    priority?: string
+    ticket_type?: string
+    department_id?: number | string
+    assigned_to_user_id?: number | string
+    customer_id?: number | string
+    mine_only?: boolean
+    unassigned_only?: boolean
+    page?: number
+    per_page?: number
+  }) => {
+    const { data } = await http.get<{
+      data: Ticket[]
+      current_page: number
+      last_page: number
+      total: number
+    }>('/tickets', { params })
+    return data
+  },
+  get: async (id: number | string) => {
+    const { data } = await http.get<{ ticket: Ticket; staff_options: StaffOption[] }>(`/tickets/${id}`)
+    return data
+  },
+  create: async (body: FormData | Record<string, any>) => {
+    const { data } = await http.post<{ message: string; ticket: Ticket }>('/tickets', body)
+    return data
+  },
+  update: async (
+    id: number | string,
+    body: {
+      status?: TicketStatus
+      priority?: TicketPriority
+      department_id?: number | null
+      assigned_to_user_id?: number | null
+      auto_reassign?: boolean
+    },
+  ) => {
+    const { data } = await http.patch<{ message: string; ticket: Ticket }>(`/tickets/${id}`, body)
+    return data
+  },
+  addMessage: async (id: number | string, body: FormData | Record<string, any>) => {
+    const { data } = await http.post<{
+      message: string
+      ticket_message: TicketMessage
+      ticket: Ticket
+    }>(`/tickets/${id}/messages`, body)
+    return data
+  },
+}
+
+export const ticketDepartmentAdminApi = {
+  list: async () => {
+    const { data } = await http.get<{
+      departments: TicketDepartment[]
+      staff_candidates: StaffOption[]
+      strategies: Array<{ key: AssignmentStrategy; label: string; description: string }>
+    }>('/settings/ticket-departments')
+    return data
+  },
+  create: async (body: {
+    name: string
+    description?: string | null
+    assignment_strategy: AssignmentStrategy
+    is_default_repair?: boolean
+    is_active?: boolean
+    sort_order?: number
+    agent_ids?: number[]
+  }) => {
+    const { data } = await http.post<{ message: string; department: TicketDepartment }>(
+      '/settings/ticket-departments',
+      body,
+    )
+    return data
+  },
+  update: async (
+    id: number | string,
+    body: {
+      name?: string
+      description?: string | null
+      assignment_strategy?: AssignmentStrategy
+      is_default_repair?: boolean
+      is_active?: boolean
+      sort_order?: number
+      agent_ids?: number[]
+    },
+  ) => {
+    const { data } = await http.put<{ message: string; department: TicketDepartment }>(
+      `/settings/ticket-departments/${id}`,
+      body,
+    )
+    return data
+  },
+  delete: async (id: number | string) => {
+    const { data } = await http.delete<{ message: string }>(`/settings/ticket-departments/${id}`)
+    return data
+  },
+}
+
+export const portalApi = {
+  overview: async () => {
+    const { data } = await http.get<PortalOverview>('/portal/overview')
+    return data
+  },
+  devices: async () => {
+    const { data } = await http.get<{ devices: PortalDevice[] }>('/portal/devices')
+    return data.devices
+  },
+  tickets: async (params?: { status?: string; ticket_type?: TicketType | ''; q?: string; page?: number }) => {
+    const { data } = await http.get<{
+      data: Ticket[]
+      current_page: number
+      last_page: number
+      total: number
+    }>('/portal/tickets', { params })
+    return data
+  },
+  getTicket: async (id: number | string) => {
+    const { data } = await http.get<{ ticket: Ticket }>(`/portal/tickets/${id}`)
+    return data.ticket
+  },
+  createTicket: async (body: FormData | Record<string, any>) => {
+    const { data } = await http.post<{ message: string; ticket: Ticket }>('/portal/tickets', body)
+    return data
+  },
+  replyTicket: async (id: number | string, body: FormData | Record<string, any>) => {
+    const { data } = await http.post<{ message: string; ticket_message: TicketMessage }>(
+      `/portal/tickets/${id}/messages`,
+      body,
+    )
     return data
   },
 }

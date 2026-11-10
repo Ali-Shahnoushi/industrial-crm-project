@@ -1,8 +1,12 @@
 export type Role = 'admin' | 'manager' | 'sales' | 'support' | 'warehouse' | 'finance' | 'marketing'
 export type Presence = 'online' | 'away' | 'offline'
-export type UserType = 'administrator' | 'manager' | 'salesperson' | 'installer'
+export type UserType = 'administrator' | 'manager' | 'salesperson' | 'installer' | 'customer'
 export type CustomerScope = 'own' | 'selected' | 'all'
-export type InventoryOperationType = 'in' | 'out_manual' | 'out_assign' | 'return'
+export type InventoryOperationType = 'in' | 'out_manual' | 'out_assign' | 'return' | 'adjustment'
+export type AssignmentStrategy = 'round_robin' | 'least_loaded' | 'random'
+export type TicketType = 'repair_request' | 'sales_inquiry' | 'technical_support' | 'general'
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent'
+export type TicketStatus = 'open' | 'in_progress' | 'answered' | 'customer_reply' | 'resolved' | 'closed'
 
 export interface User {
   id: string
@@ -16,10 +20,14 @@ export interface User {
   presence?: Presence
   joinedAt?: string
   is_active?: boolean
+  is_primary_admin?: boolean
+  is_customer_portal?: boolean
+  customer_id?: number | null
   permissions: string[]
   created_at?: string
   user_type?: UserType
   role_label?: string
+  user_type_label?: string
   customer_scope?: CustomerScope
   granted_staff_ids?: number[]
   granted_staff?: Array<{ id: number; name: string }>
@@ -62,8 +70,35 @@ export interface Customer {
   city?: string | null
   address?: string | null
   notes?: string | null
+  portal_enabled?: boolean
   created_by_user_id?: number | null
-  creator?: { id: number; name: string } | null
+  sales_manager_user_id?: number | null
+  creator?: {
+    id: number
+    name: string
+    email?: string | null
+    phone?: string | null
+    user_type?: UserType
+    role_label?: string
+    avatar_url?: string | null
+  } | null
+  sales_manager?: {
+    id: number
+    name: string
+    email?: string | null
+    phone?: string | null
+    user_type?: UserType
+    role_label?: string
+    avatar_url?: string | null
+  } | null
+  portal_user?: {
+    id: number
+    customer_id: number
+    name: string
+    email: string
+    phone?: string | null
+    is_active: boolean
+  } | null
   created_at?: string
   updated_at?: string
   customer_parts_count?: number
@@ -71,6 +106,7 @@ export interface Customer {
   customer_parts?: CustomerPart[]
   histories?: CustomerHistory[]
   sms_logs?: SmsLog[]
+  tickets?: Ticket[]
 
   // Legacy demo compatibility fields
   firstName?: string
@@ -101,6 +137,9 @@ export interface Part {
   code: string
   periodic_service_months: number
   stock_quantity?: number
+  min_stock?: number
+  unit?: string
+  is_low_stock?: boolean
   description?: string | null
   is_active: boolean
   customer_parts_count?: number
@@ -118,10 +157,11 @@ export interface PartInventoryLog {
   type: InventoryOperationType
   type_label?: string
   quantity: number
+  balance_before?: number
   balance_after: number
   description?: string | null
   created_at: string
-  part?: Pick<Part, 'id' | 'name' | 'code' | 'stock_quantity'>
+  part?: Pick<Part, 'id' | 'name' | 'code' | 'stock_quantity' | 'unit' | 'min_stock'>
   user?: {
     id: number
     name: string
@@ -216,8 +256,187 @@ export interface DashboardStats {
     total_stock_quantity?: number
     assigned_parts: number
     total_sms_sent: number
+    low_stock_parts_count?: number
+    open_tickets_count?: number
+    pending_repair_tickets_count?: number
   }
+  low_stock_parts?: Part[]
   recent_activities: CustomerHistory[]
   recent_sms: SmsLog[]
+}
+
+export interface InventorySummary {
+  total_models: number
+  active_models: number
+  total_units_in_stock: number
+  out_of_stock_count: number
+  low_stock_count: number
+  low_stock_parts: Part[]
+  recent_movements: PartInventoryLog[]
+}
+
+export interface StaffOption {
+  id: number
+  name: string
+  email: string
+  phone?: string | null
+  user_type: UserType
+  role_label: string
+  avatar_url?: string | null
+  open_tickets_count?: number
+}
+
+export interface TicketDepartmentAgent {
+  id: number
+  name: string
+  email?: string
+  user_type?: UserType
+  role_label?: string
+  is_active?: boolean
+  avatar_url?: string | null
+  open_tickets_count?: number
+}
+
+export interface TicketDepartment {
+  id: number
+  name: string
+  description?: string | null
+  assignment_strategy: AssignmentStrategy
+  assignment_strategy_label?: string
+  is_default_repair: boolean
+  is_active: boolean
+  sort_order?: number
+  last_assigned_user_id?: number | null
+  last_assigned_user?: { id: number; name: string } | null
+  tickets_count?: number
+  open_tickets_count?: number
+  agent_ids?: number[]
+  agents?: TicketDepartmentAgent[]
+}
+
+export interface TicketMessage {
+  id: number
+  ticket_id: number
+  user_id?: number | null
+  sender_type: 'customer' | 'staff' | 'system'
+  is_internal_note: boolean
+  body: string
+  attachment_path?: string | null
+  attachment_name?: string | null
+  attachment_url?: string | null
+  created_at: string
+  user?: {
+    id: number
+    name: string
+    user_type?: UserType
+    role_label?: string
+    avatar_url?: string | null
+  } | null
+}
+
+export interface Ticket {
+  id: number
+  tracking_code: string
+  customer_id: number
+  customer_part_id?: number | null
+  department_id?: number | null
+  created_by_user_id?: number | null
+  assigned_to_user_id?: number | null
+  ticket_type: TicketType
+  priority: TicketPriority
+  status: TicketStatus
+  subject: string
+  last_reply_at?: string | null
+  closed_at?: string | null
+  created_at: string
+  updated_at?: string
+  messages_count?: number
+  customer?: Customer
+  customer_part?: CustomerPart | null
+  department?: TicketDepartment | null
+  assignee?: {
+    id: number
+    name: string
+    email?: string | null
+    phone?: string | null
+    user_type?: UserType
+    role_label?: string
+    avatar_url?: string | null
+  } | null
+  creator?: {
+    id: number
+    name: string
+    user_type?: UserType
+    role_label?: string
+  } | null
+  messages?: TicketMessage[]
+}
+
+export interface TicketSummary {
+  total: number
+  open_active: number
+  waiting_staff: number
+  repair_requests: number
+  urgent_high: number
+  assigned_to_me: number
+  unassigned: number
+}
+
+export interface PortalSalesContact {
+  id: number
+  name: string
+  title: string
+  role_label: string
+  phone?: string | null
+  email?: string | null
+  avatar_url?: string | null
+}
+
+export interface PortalDevice {
+  id: number
+  part_id: number
+  serial_number: string
+  quantity: number
+  installation_date?: string | null
+  warranty_expire_date?: string | null
+  is_under_warranty: boolean
+  warranty_days_remaining?: number | null
+  status: CustomerPartStatus
+  notes?: string | null
+  open_repair_tickets_count: number
+  part?: {
+    id: number
+    name: string
+    code: string
+    unit: string
+    periodic_service_months: number
+    description?: string | null
+  } | null
+  service_histories: Array<{
+    id: number
+    service_date: string
+    service_type: 'periodic' | 'repair' | 'overhaul'
+    description: string
+    cost?: number | string | null
+    performed_by_name: string
+  }>
+}
+
+export interface PortalOverview {
+  customer: Customer
+  sales_team: {
+    sales_manager: PortalSalesContact | null
+    sales_rep: PortalSalesContact | null
+  }
+  stats: {
+    devices_count: number
+    total_devices_qty: number
+    active_warranty_count: number
+    open_tickets_count: number
+    answered_tickets_count: number
+  }
+  devices: PortalDevice[]
+  departments: Array<Pick<TicketDepartment, 'id' | 'name' | 'description' | 'is_default_repair'>>
+  recent_tickets: Ticket[]
 }
 

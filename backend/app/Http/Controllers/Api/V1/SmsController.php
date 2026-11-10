@@ -34,12 +34,14 @@ class SmsController extends Controller
         }
 
         $validated = $request->validate([
-            'mobile' => 'required|string|regex:/^09\d{9}$/',
-            'pattern_code' => 'required|string',
-            'tokens' => 'required|array',
+            'mobile' => 'required_without:customer_id|nullable|string|regex:/^09\d{9}$/',
+            'pattern_code' => 'required|string|max:50',
+            'tokens' => 'required|array|min:1|max:10',
+            'tokens.*' => 'required|string|max:500',
             'customer_id' => 'nullable|exists:customers,id',
         ]);
 
+        $user = $request->user();
         $customer = isset($validated['customer_id'])
             ? Customer::find($validated['customer_id'])
             : null;
@@ -48,8 +50,27 @@ class SmsController extends Controller
             $this->authorizeCustomerAccess($customer);
         }
 
+        $mobile = $validated['mobile'] ?? $customer?->mobile;
+        if (!$mobile) {
+            return response()->json([
+                'message' => 'شماره همراه معتبری برای ارسال پیامک یافت نشد.',
+            ], 422);
+        }
+
+        // Prevent restricted-scope staff from bypassing customer ACL by supplying a colleague's customer mobile directly.
+        if (!$customer && $user && $user->hasRestrictedCustomerScope()) {
+            $matchingCustomers = Customer::where('mobile', $mobile)->get();
+            if ($matchingCustomers->isNotEmpty()) {
+                $accessibleMatch = $matchingCustomers->first(fn (Customer $c) => $user->canAccessCustomer($c));
+                if (!$accessibleMatch) {
+                    abort(403, 'این شماره همراه متعلق به پرونده مشتری خارج از محدوده دسترسی شما است.');
+                }
+                $customer = $accessibleMatch;
+            }
+        }
+
         $result = $this->melipayamakService->sendPattern(
-            $validated['mobile'],
+            $mobile,
             $validated['pattern_code'],
             $validated['tokens'],
             $customer

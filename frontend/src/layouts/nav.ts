@@ -1,8 +1,10 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  Boxes,
   Cpu,
   Database,
   LayoutDashboard,
+  LifeBuoy,
   MessageSquare,
   Palette,
   ShieldCheck,
@@ -14,39 +16,39 @@ export interface NavItem {
   to: string
   label: string
   icon: LucideIcon
-  end?: boolean
+  badge?: string | number
   permission?: string | string[]
-  external?: boolean
+  end?: boolean
 }
 
 export interface NavGroup {
-  title: string
+  title?: string
   items: NavItem[]
 }
 
 export const MAIN_NAV: NavGroup[] = [
   {
-    title: 'اصلی',
-    items: [
-      { to: '/', label: 'داشبورد مدیریت', icon: LayoutDashboard, end: true },
-    ],
+    items: [{ to: '/', label: 'داشبورد مدیریت', icon: LayoutDashboard }],
   },
   {
     title: 'مشتریان و دستگاه‌ها',
     items: [
       { to: '/customers', label: 'مدیریت مشتریان', icon: Users, permission: 'customers.view' },
-      { to: '/parts', label: 'کاتالوگ و انبار دستگاه‌ها', icon: Cpu, permission: 'parts.view' },
+      { to: '/parts', label: 'کاتالوگ دستگاه‌ها', icon: Cpu, permission: 'parts.view' },
+      { to: '/inventory', label: 'انبار و کاردکس موجودی', icon: Boxes, permission: 'parts.view' },
     ],
   },
   {
-    title: 'ارتباطات و پیام‌رسانی',
+    title: 'پشتیبانی و ارتباطات',
     items: [
+      { to: '/tickets', label: 'تیکت‌ها و درخواست تعمیر', icon: LifeBuoy, permission: 'tickets.view' },
       { to: '/sms', label: 'سامانه پیامک (ملی‌پیامک)', icon: MessageSquare, permission: ['sms.send', 'sms.logs'] },
     ],
   },
 ]
 
 export const SETTINGS_NAV: NavItem[] = [
+  { to: '/settings/ticketing', label: 'تیکتینگ و دپارتمان‌ها', icon: LifeBuoy, permission: 'settings.manage' },
   { to: '/settings/sms', label: 'سامانه ملی‌پیامک', icon: MessageSquare, permission: 'settings.manage' },
   { to: '/settings/users', label: 'کارمندان، نقش‌ها و دسترسی‌ها', icon: ShieldCheck, permission: 'users.manage' },
   { to: '/settings/backup', label: 'پشتیبان‌گیری و بازیابی داده‌ها', icon: Database, permission: 'settings.manage' },

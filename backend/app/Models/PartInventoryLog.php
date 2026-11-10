@@ -14,12 +14,14 @@ class PartInventoryLog extends Model
     public const TYPE_OUT_MANUAL = 'out_manual';
     public const TYPE_OUT_ASSIGN = 'out_assign';
     public const TYPE_RETURN = 'return';
+    public const TYPE_ADJUSTMENT = 'adjustment';
 
     public const TYPE_LABELS = [
         self::TYPE_IN => 'ورود به انبار',
         self::TYPE_OUT_MANUAL => 'خروج دستی از انبار',
         self::TYPE_OUT_ASSIGN => 'خروج جهت تخصیص به مشتری',
         self::TYPE_RETURN => 'برگشت به انبار',
+        self::TYPE_ADJUSTMENT => 'تنظیم موجودی (انبارگردانی)',
     ];
 
     protected $fillable = [

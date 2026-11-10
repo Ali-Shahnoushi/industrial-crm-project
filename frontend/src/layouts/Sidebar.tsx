@@ -73,12 +73,9 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
     return Array.isArray(perm) ? perm.some((p) => hasPermission(p)) : hasPermission(perm)
   }
 
-  const visibleSettingsItems = SETTINGS_NAV.filter((item) => {
-    if (item.to === '/settings/system') {
-      return isAdministrator || hasPermission('settings.manage')
-    }
-    return checkItemPermission(item.permission)
-  }).map((item) => {
+  const visibleSettingsItems = SETTINGS_NAV.filter((item) =>
+    checkItemPermission(item.permission),
+  ).map((item) => {
     if (item.to === '/settings/system' && !isAdministrator) {
       return { ...item, label: 'تنظیمات پوسته نمایشی' }
     }

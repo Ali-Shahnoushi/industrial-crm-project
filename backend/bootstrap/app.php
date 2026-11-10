@@ -13,6 +13,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->prepend(\App\Http\Middleware\SecurityHeadersAndLockdown::class);
+        $middleware->alias([
+            'active.user' => \App\Http\Middleware\EnsureActiveUser::class,
+            'staff.only' => \App\Http\Middleware\EnsureStaffUser::class,
+            'portal.customer' => \App\Http\Middleware\EnsureCustomerPortalUser::class,
+        ]);
         $middleware->api(prepend: [
             \App\Http\Middleware\AuthenticateFromCookie::class,
         ]);

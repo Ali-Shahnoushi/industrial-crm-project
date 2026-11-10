@@ -16,8 +16,14 @@ class Part extends Model
         'code',
         'periodic_service_months',
         'stock_quantity',
+        'min_stock',
+        'unit',
         'description',
         'is_active',
+    ];
+
+    protected $appends = [
+        'is_low_stock',
     ];
 
     protected function casts(): array
@@ -26,7 +32,19 @@ class Part extends Model
             'is_active' => 'boolean',
             'periodic_service_months' => 'integer',
             'stock_quantity' => 'integer',
+            'min_stock' => 'integer',
         ];
+    }
+
+    public function getIsLowStockAttribute(): bool
+    {
+        if (!$this->is_active) {
+            return false;
+        }
+        $min = (int) ($this->min_stock ?? 0);
+        $stock = (int) ($this->stock_quantity ?? 0);
+
+        return $min > 0 ? $stock <= $min : $stock <= 0;
     }
 
     public function customerParts(): HasMany

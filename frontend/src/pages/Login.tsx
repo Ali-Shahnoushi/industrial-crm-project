@@ -65,7 +65,6 @@ export default function Login() {
   const [otpCode, setOtpCode] = useState("");
   const [otpStep, setOtpStep] = useState<"request" | "verify">("request");
   const [otpCooldown, setOtpCooldown] = useState(0);
-  const [sandboxCode, setSandboxCode] = useState<string | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
 
   // Countdown timer for OTP
@@ -87,15 +86,34 @@ export default function Login() {
   });
 
   const isInitialized = useAuthStore((s) => s.isInitialized);
-  const from = (location.state as { from?: string } | null)?.from ?? "/";
-  if (isInitialized && user) return <Navigate to={from} replace />;
+  const queryFrom = new URLSearchParams(location.search).get("from");
+  const safeQueryFrom =
+    queryFrom && queryFrom.startsWith("/") && !queryFrom.startsWith("//")
+      ? queryFrom
+      : null;
+  const rawFrom =
+    (location.state as { from?: string } | null)?.from ?? safeQueryFrom;
+
+  const resolveDestination = (loggedUser: typeof user) => {
+    const isPortal = Boolean(
+      loggedUser?.is_customer_portal || loggedUser?.user_type === "customer",
+    );
+    if (isPortal) {
+      return rawFrom && rawFrom.startsWith("/portal") ? rawFrom : "/portal";
+    }
+    return rawFrom && !rawFrom.startsWith("/portal") ? rawFrom : "/";
+  };
+
+  if (isInitialized && user) {
+    return <Navigate to={resolveDestination(user)} replace />;
+  }
 
   const onSubmit = async (v: FormValues) => {
     setError("");
     const res = await login(toEnDigits(v.login).trim(), toEnDigits(v.password));
     if (res.ok) {
       toast.success("خوش آمدید 👋");
-      nav(from, { replace: true });
+      nav(resolveDestination(useAuthStore.getState().user), { replace: true });
     } else {
       setError(res.error);
     }
@@ -115,9 +133,6 @@ export default function Login() {
       toast.success(res.message);
       setOtpStep("verify");
       setOtpCooldown(res.expires_in || 120);
-      if (res.sandbox_code) {
-        setSandboxCode(res.sandbox_code);
-      }
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
@@ -143,7 +158,7 @@ export default function Login() {
       const res = await loginWithOtp(normalizedPhone, normalizedCode);
       if (res.ok) {
         toast.success("ورود موفقیت‌آمیز بود 👋");
-        nav(from, { replace: true });
+        nav(resolveDestination(useAuthStore.getState().user), { replace: true });
       } else {
         setError(res.error);
       }
@@ -359,15 +374,6 @@ export default function Login() {
                       تغییر شماره
                     </button>
                   </div>
-
-                  {sandboxCode && (
-                    <div className="rounded-xl border border-primary/30 bg-primary/10 p-2.5 text-xs text-primary font-bold flex items-center justify-between">
-                      <span>حالت شبیه‌ساز فعال است</span>
-                      <span className="font-mono text-sm">
-                        کد تست: {sandboxCode}
-                      </span>
-                    </div>
-                  )}
 
                   <Field label="کد تأیید ۵ رقمی پیامک‌شده">
                     <input

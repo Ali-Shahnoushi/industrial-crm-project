@@ -37,6 +37,25 @@ class CustomersExport implements
         $this->user = $user;
     }
 
+    /**
+     * Prevent Excel/LibreOffice formula injection (=, +, -, @, Tab/CR prefix) in CSV and XLSX cells.
+     */
+    public static function sanitizeCell(mixed $value): mixed
+    {
+        if (!is_string($value) || $value === '') {
+            return $value;
+        }
+        if (preg_match('/^[\t\r ]*[=+\-@]/u', $value) === 1) {
+            return "'" . $value;
+        }
+        return $value;
+    }
+
+    public static function sanitizeRow(array $row): array
+    {
+        return array_map([self::class, 'sanitizeCell'], $row);
+    }
+
     protected function getCustomers(): Collection
     {
         if ($this->cachedCustomers !== null) {
@@ -212,7 +231,7 @@ class CustomersSummarySheet implements
             ->implode(' | ');
         $totalInvoiceSum = (int) $assignments->sum(fn (CustomerPart $cp) => (int) ($cp->invoice_amount ?? 0));
 
-        return [
+        return CustomersExport::sanitizeRow([
             $customer->id,
             $customer->customer_type === 'effective' ? 'بالفعل' : 'بالقوه',
             $customer->type === 'company' ? 'حقوقی' : 'حقیقی',
@@ -237,7 +256,7 @@ class CustomersSummarySheet implements
             $totalInvoiceSum,
             $customer->notes ?? '',
             JalaliDate::formatDateTime($customer->created_at),
-        ];
+        ]);
     }
 
     /**
@@ -322,7 +341,7 @@ class CustomerDevicesDetailSheet implements
             default => $cp->status,
         };
 
-        return [
+        return CustomersExport::sanitizeRow([
             $cp->id,
             $customer?->id ?? '',
             $customer?->display_name ?? '',
@@ -338,7 +357,7 @@ class CustomerDevicesDetailSheet implements
             JalaliDate::format($cp->warranty_expire_date),
             $statusLabel,
             $cp->notes ?? '',
-        ];
+        ]);
     }
 
     public function registerEvents(): array

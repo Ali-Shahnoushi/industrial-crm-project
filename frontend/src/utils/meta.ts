@@ -1,4 +1,12 @@
-import type { CustomerScope, InventoryOperationType, UserType } from '../types'
+import type {
+  AssignmentStrategy,
+  CustomerScope,
+  InventoryOperationType,
+  TicketPriority,
+  TicketStatus,
+  TicketType,
+  UserType,
+} from '../types'
 
 export const roleLabel: Record<string, string> = {
   admin: 'مدیر سیستم',
@@ -6,6 +14,7 @@ export const roleLabel: Record<string, string> = {
   manager: 'مدیر / سرپرست',
   salesperson: 'کارمند فروش',
   installer: 'نصاب',
+  customer: 'مشتری (پنل کاربری)',
   sales: 'فروش',
   support: 'پشتیبانی',
   warehouse: 'انبار',
@@ -25,21 +34,27 @@ export const userTypeMeta: Record<
   },
   manager: {
     label: 'مدیر / سرپرست',
-    description: 'مدیریت عملیاتی مشتریان، انبار دستگاه‌ها و گزارش‌های سامانه',
+    description: 'مدیریت عملیاتی مشتریان، انبار دستگاه‌ها، تیکت‌ها و گزارش‌های سامانه',
     badgeClass:
       'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-300 dark:border-indigo-800',
   },
   salesperson: {
     label: 'کارمند فروش',
-    description: 'ثبت مشتری، پیگیری فروش و تخصیص دستگاه (پیش‌فرض: مشتریان خودش)',
+    description: 'ثبت مشتری، پیگیری فروش، ارتباط با مشتریان و تخصیص دستگاه',
     badgeClass:
       'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800',
   },
   installer: {
     label: 'نصاب',
-    description: 'مشاهده دستگاه‌های مشتریان، ثبت تحویل/نصب و سوابق سرویس و تعمیرات',
+    description: 'مشاهده دستگاه‌های مشتریان، ثبت تحویل/نصب، پاسخگویی تیکت فنی و تعمیرات',
     badgeClass:
       'bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-950/50 dark:text-cyan-300 dark:border-cyan-800',
+  },
+  customer: {
+    label: 'مشتری (پنل کاربری)',
+    description: 'دسترسی ایزوله به پنل اختصاصی مشتری، مشاهده دستگاه‌ها و ثبت درخواست تعمیر',
+    badgeClass:
+      'bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800',
   },
 }
 
@@ -66,7 +81,7 @@ export const customerScopeMeta: Record<
 
 export const inventoryTypeMeta: Record<
   InventoryOperationType,
-  { label: string; badgeClass: string; sign: '+' | '-' }
+  { label: string; badgeClass: string; sign: '+' | '-' | '=' }
 > = {
   in: {
     label: 'ورود به انبار',
@@ -87,5 +102,96 @@ export const inventoryTypeMeta: Record<
     label: 'بازگشت به انبار',
     badgeClass: 'badge-info badge-soft',
     sign: '+',
+  },
+  adjustment: {
+    label: 'انبارگردانی (تنظیم دقیق)',
+    badgeClass: 'badge-secondary badge-soft',
+    sign: '=',
+  },
+}
+
+export const ticketStatusMeta: Record<TicketStatus, { label: string; badgeClass: string }> = {
+  open: {
+    label: 'جدید (منتظر بررسی)',
+    badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30',
+  },
+  customer_reply: {
+    label: 'پاسخ مشتری',
+    badgeClass: 'bg-orange-500/15 text-orange-700 dark:text-orange-300 border border-orange-500/30',
+  },
+  in_progress: {
+    label: 'در دست اقدام فنی',
+    badgeClass: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30',
+  },
+  answered: {
+    label: 'پاسخ داده شده',
+    badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
+  },
+  resolved: {
+    label: 'رفع‌شده / تکمیل سرویس',
+    badgeClass: 'bg-teal-500/15 text-teal-700 dark:text-teal-300 border border-teal-500/30',
+  },
+  closed: {
+    label: 'بسته شده',
+    badgeClass: 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border border-slate-500/25',
+  },
+}
+
+export const ticketPriorityMeta: Record<TicketPriority, { label: string; badgeClass: string }> = {
+  low: {
+    label: 'عادی',
+    badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  },
+  medium: {
+    label: 'متوسط',
+    badgeClass: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
+  },
+  high: {
+    label: 'مهم',
+    badgeClass: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  },
+  urgent: {
+    label: 'فوری (توقف دستگاه)',
+    badgeClass: 'bg-rose-500/15 text-rose-700 dark:text-rose-300 font-extrabold',
+  },
+}
+
+export const ticketTypeMeta: Record<TicketType, { label: string; badgeClass: string }> = {
+  repair_request: {
+    label: 'اعلام خرابی و درخواست تعمیر',
+    badgeClass: 'badge-error badge-soft',
+  },
+  technical_support: {
+    label: 'پشتیبانی فنی و کالیبراسیون',
+    badgeClass: 'badge-info badge-soft',
+  },
+  sales_inquiry: {
+    label: 'ارتباط با واحد فروش پروژه',
+    badgeClass: 'badge-primary badge-soft',
+  },
+  general: {
+    label: 'سوال و پیگیری عمومی',
+    badgeClass: 'badge-ghost',
+  },
+}
+
+export const assignmentStrategyMeta: Record<
+  AssignmentStrategy,
+  { label: string; shortLabel: string; description: string }
+> = {
+  round_robin: {
+    label: 'توزیع نوبتی چرخشی (Round-Robin)',
+    shortLabel: 'نوبتی (Round-Robin)',
+    description: 'تیکت‌ها به ترتیب نوبت عادلانه بین کارشناسان فعال دپارتمان تقسیم می‌شوند.',
+  },
+  least_loaded: {
+    label: 'کمترین تیکت فعال (Least-Loaded)',
+    shortLabel: 'کمترین تیکت باز',
+    description: 'تیکت جدید به کارشناسی داده می‌شود که در لحظه کمترین تیکت باز را دارد.',
+  },
+  random: {
+    label: 'توزیع تصادفی (Random)',
+    shortLabel: 'تصادفی (Random)',
+    description: 'تیکت جدید به صورت تصادفی به یکی از نیروهای فعال دپارتمان ارجاع می‌شود.',
   },
 }

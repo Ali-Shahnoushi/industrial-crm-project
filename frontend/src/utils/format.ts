@@ -74,6 +74,15 @@ export function safeDate(val: string | Date | null | undefined): Date | null {
   return null
 }
 
+/** Returns local calendar YYYY-MM-DD (avoids UTC midnight day-shift in UTC+3:30). */
+export function localTodayYmd(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 const dateLong = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: 'long', day: 'numeric' })
 const dateNum = new Intl.DateTimeFormat('fa-IR-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit' })
 const timeFmt = new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' })

@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   Boxes,
   CheckCircle2,
   Clock,
   Cpu,
-  MessageSquare,
+  LifeBuoy,
   Send,
   ShieldCheck,
   UserCheck,
@@ -105,7 +106,7 @@ export default function Dashboard() {
           tone="secondary"
           hint={`موجودی کل انبار: ${num(stats.total_stock_quantity ?? 0)} عدد`}
           loading={isLoading}
-          to="/parts"
+          to="/inventory"
         />
         <StatCard
           title="دستگاه‌های تخصیص‌یافته"
@@ -117,15 +118,44 @@ export default function Dashboard() {
           to="/parts"
         />
         <StatCard
-          title="پیامک‌های ارسالی"
-          value={num(stats.total_sms_sent)}
-          icon={MessageSquare}
-          tone="success"
-          hint="مشاهده لاگ ملی‌پیامک"
+          title="تیکت‌ها و درخواست تعمیر"
+          value={num(stats.open_tickets_count ?? 0)}
+          icon={LifeBuoy}
+          tone={(stats.pending_repair_tickets_count ?? 0) > 0 ? "warning" : "primary"}
+          hint={
+            (stats.pending_repair_tickets_count ?? 0) > 0
+              ? `${num(stats.pending_repair_tickets_count ?? 0)} درخواست تعمیر باز`
+              : "مرکز تیکتینگ و پشتیبانی"
+          }
           loading={isLoading}
-          to="/sms"
+          to="/tickets"
         />
       </div>
+
+      {/* Low Stock Warehouse Alert Banner */}
+      {(data?.low_stock_parts?.length ?? 0) > 0 && (
+        <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-warning/20 text-warning">
+              <AlertTriangle className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-extrabold text-base-content">
+                هشدار انبار: {num(data?.low_stock_parts?.length ?? 0)} مدل دستگاه به حد آستانه کمبود موجودی رسیده‌اند
+              </p>
+              <p className="text-xs text-base-content/70 mt-0.5">
+                {data?.low_stock_parts
+                  ?.slice(0, 4)
+                  .map((p) => `${p.name} (موجودی: ${num(p.stock_quantity ?? 0)} ${p.unit || "دستگاه"})`)
+                  .join(" • ")}
+              </p>
+            </div>
+          </div>
+          <Link to="/inventory?low=1" className="btn btn-sm btn-warning shrink-0">
+            بررسی و شارژ انبار
+          </Link>
+        </div>
+      )}
 
       {/* Main Two-Column Layout */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -201,7 +231,8 @@ export default function Dashboard() {
 
         {/* Right Column: Melipayamak Dispatched Logs & Quick Status */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-base-100 rounded-2xl border border-base-200/80 p-5 shadow-xs">
+          <Can permission="sms.logs">
+            <div className="bg-base-100 rounded-2xl border border-base-200/80 p-5 shadow-xs">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-base-200">
               <div>
                 <h3 className="font-bold text-base">
@@ -269,7 +300,8 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
-          </div>
+            </div>
+          </Can>
 
           {/* Quick Info Box on Periodic Service Policy */}
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 dark:border-indigo-900/40 dark:bg-indigo-950/40">

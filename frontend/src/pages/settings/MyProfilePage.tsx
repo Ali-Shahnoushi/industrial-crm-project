@@ -31,47 +31,61 @@ const PERMISSION_LABELS_FA: Record<string, string> = {
   'parts.manage': 'تعریف دستگاه و ثبت ورود/خروج انبار',
   'parts.assign': 'تخصیص، ویرایش و حذف دستگاه مشتری',
   'parts.history': 'ثبت سوابق نصب، سرویس و تعمیرات دستگاه‌ها',
+  'tickets.view': 'مشاهده تیکت‌ها و درخواست‌های پشتیبانی/تعمیر',
+  'tickets.reply': 'ثبت تیکت، پاسخگویی و یادداشت داخلی تیکت‌ها',
+  'tickets.manage': 'مدیریت کامل تیکت‌ها (تغییر کارشناس، دپارتمان و وضعیت)',
   'sms.send': 'ارسال پیامک الگو',
   'sms.logs': 'مشاهده سوابق پیامک',
   'users.manage': 'مدیریت کارمندان، نقش‌ها و دسترسی‌ها',
   'settings.manage': 'مدیریت تنظیمات سیستم',
 }
 
-const schema = z.object({
-  name: z.string().trim().min(2, 'نام و نام خانوادگی را حداقل در ۲ کاراکتر وارد کنید'),
-  phone: z
-    .string()
-    .optional()
-    .superRefine((val, ctx) => {
-      if (!val || val.trim() === '') return
-      const cleaned = toEnDigits(val.trim())
-      if (!/^09\d{9}$/.test(cleaned)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'شماره همراه باید ۱۱ رقم عددی بوده و با 09 شروع شود (مثال: 09121234567)',
-        })
-      }
-    }),
-  password: z
-    .string()
-    .optional()
-    .superRefine((val, ctx) => {
-      if (!val || val.trim() === '') return
-      const trimmed = val.trim()
-      if (trimmed.length < 8) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'کلمه عبور جدید باید حداقل ۸ کاراکتر باشد',
-        })
-      }
-      if (!/[a-zA-Z]/.test(trimmed) || !/[0-9]/.test(trimmed)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'کلمه عبور باید شامل حروف انگلیسی و اعداد باشد',
-        })
-      }
-    }),
-})
+const schema = z
+  .object({
+    name: z.string().trim().min(2, 'نام و نام خانوادگی را حداقل در ۲ کاراکتر وارد کنید'),
+    phone: z
+      .string()
+      .optional()
+      .superRefine((val, ctx) => {
+        if (!val || val.trim() === '') return
+        const cleaned = toEnDigits(val.trim())
+        if (!/^09\d{9}$/.test(cleaned)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'شماره همراه باید ۱۱ رقم عددی بوده و با 09 شروع شود (مثال: 09121234567)',
+          })
+        }
+      }),
+    current_password: z.string().optional(),
+    password: z
+      .string()
+      .optional()
+      .superRefine((val, ctx) => {
+        if (!val || val.trim() === '') return
+        const trimmed = val.trim()
+        if (trimmed.length < 8) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'کلمه عبور جدید باید حداقل ۸ کاراکتر باشد',
+          })
+        }
+        if (!/[a-zA-Z]/.test(trimmed) || !/[0-9]/.test(trimmed)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'کلمه عبور باید شامل حروف انگلیسی و اعداد باشد',
+          })
+        }
+      }),
+  })
+  .superRefine((vals, ctx) => {
+    if (vals.password && vals.password.trim() !== '' && (!vals.current_password || vals.current_password.trim() === '')) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['current_password'],
+        message: 'برای تغییر رمز عبور، وارد کردن رمز عبور فعلی الزامی است',
+      })
+    }
+  })
 
 type ProfileFormValues = z.infer<typeof schema>
 
@@ -103,6 +117,7 @@ export default function MyProfilePage() {
     defaultValues: {
       name: currentUser?.name || '',
       phone: currentUser?.phone || '',
+      current_password: '',
       password: '',
     },
   })
@@ -116,6 +131,7 @@ export default function MyProfilePage() {
       reset({
         name: profileUser.name,
         phone: profileUser.phone || '',
+        current_password: '',
         password: '',
       })
     }
@@ -143,6 +159,7 @@ export default function MyProfilePage() {
     const cleanedPhone = values.phone ? toEnDigits(values.phone.trim()) : ''
     formData.append('phone', cleanedPhone)
     if (values.password && values.password.trim()) {
+      formData.append('current_password', toEnDigits((values.current_password || '').trim()))
       formData.append('password', toEnDigits(values.password.trim()))
     }
 
@@ -274,6 +291,22 @@ export default function MyProfilePage() {
                   error={errors.password?.message}
                 />
               </Field>
+
+              {passwordVal && passwordVal.trim() !== '' && (
+                <Field
+                  label="رمز عبور فعلی (جهت تأیید تغییر رمز)"
+                  required
+                  error={errors.current_password?.message}
+                >
+                  <input
+                    type="password"
+                    dir="ltr"
+                    className="input input-bordered w-full text-start font-mono text-sm"
+                    placeholder="رمز عبور فعلی خود را وارد کنید"
+                    {...register('current_password')}
+                  />
+                </Field>
+              )}
             </div>
           </div>
 

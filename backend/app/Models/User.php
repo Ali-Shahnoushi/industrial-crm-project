@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -19,6 +21,7 @@ class User extends Authenticatable
     public const ROLE_MANAGER = 'manager';
     public const ROLE_SALESPERSON = 'salesperson';
     public const ROLE_INSTALLER = 'installer';
+    public const ROLE_CUSTOMER = 'customer';
 
     public const SCOPE_OWN = 'own';
     public const SCOPE_SELECTED = 'selected';
@@ -29,6 +32,7 @@ class User extends Authenticatable
         self::ROLE_MANAGER => 'مدیر / سرپرست',
         self::ROLE_SALESPERSON => 'کارمند فروش',
         self::ROLE_INSTALLER => 'نصاب',
+        self::ROLE_CUSTOMER => 'مشتری (پنل کاربری)',
     ];
 
     public const ROLE_DEFAULT_PERMISSIONS = [
@@ -43,6 +47,9 @@ class User extends Authenticatable
             'parts.manage',
             'parts.assign',
             'parts.history',
+            'tickets.view',
+            'tickets.reply',
+            'tickets.manage',
             'sms.send',
             'sms.logs',
             'users.manage',
@@ -59,6 +66,9 @@ class User extends Authenticatable
             'parts.manage',
             'parts.assign',
             'parts.history',
+            'tickets.view',
+            'tickets.reply',
+            'tickets.manage',
             'sms.send',
             'sms.logs',
         ],
@@ -69,18 +79,57 @@ class User extends Authenticatable
             'customers.export',
             'parts.view',
             'parts.assign',
+            'tickets.view',
+            'tickets.reply',
         ],
         self::ROLE_INSTALLER => [
             'customers.view',
             'parts.view',
             'parts.assign',
             'parts.history',
+            'tickets.view',
+            'tickets.reply',
         ],
+        self::ROLE_CUSTOMER => [],
     ];
+
+    public function isCustomerPortalUser(): bool
+    {
+        return $this->user_type === self::ROLE_CUSTOMER;
+    }
+
+    public function scopeStaffOnly(Builder $query): Builder
+    {
+        return $query->where(function (Builder $q) {
+            $q->where('users.user_type', '!=', self::ROLE_CUSTOMER)
+                ->orWhereNull('users.user_type');
+        });
+    }
 
     public function isAdministrator(): bool
     {
         return $this->user_type === self::ROLE_ADMINISTRATOR || $this->email === 'admin@crm.local';
+    }
+
+    /**
+     * Safely check whether a staff user possesses an ACL permission without throwing
+     * `PermissionDoesNotExist` when a permission row hasn't been seeded yet.
+     */
+    public function hasSafePermission(string $permission): bool
+    {
+        if ($this->isCustomerPortalUser()) {
+            return false;
+        }
+
+        if ($this->isAdministrator()) {
+            return true;
+        }
+
+        try {
+            return $this->checkPermissionTo($permission);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function isSalesperson(): bool
@@ -109,6 +158,11 @@ class User extends Authenticatable
     public function hasRestrictedCustomerScope(): bool
     {
         return $this->effectiveCustomerScope() !== self::SCOPE_ALL;
+    }
+
+    public function hasFullCustomerScope(): bool
+    {
+        return !$this->hasRestrictedCustomerScope();
     }
 
     public function canAccessCustomer(Customer $customer): bool
@@ -145,11 +199,13 @@ class User extends Authenticatable
         'is_active',
         'user_type',
         'customer_scope',
+        'customer_id',
     ];
 
     protected $appends = [
         'avatar_url',
         'role_label',
+        'user_type_label',
     ];
 
     public function getAvatarUrlAttribute(): ?string
@@ -170,9 +226,34 @@ class User extends Authenticatable
         return self::ROLE_LABELS[$this->user_type ?? ''] ?? 'کاربر سیستم';
     }
 
+    public function getUserTypeLabelAttribute(): string
+    {
+        return $this->role_label;
+    }
+
     public function createdCustomers(): HasMany
     {
         return $this->hasMany(Customer::class, 'created_by_user_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class, 'customer_id');
+    }
+
+    public function ticketDepartments(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            TicketDepartment::class,
+            'ticket_department_user',
+            'user_id',
+            'department_id'
+        )->withTimestamps();
+    }
+
+    public function assignedTickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class, 'assigned_to_user_id');
     }
 
     public function grantedStaff(): BelongsToMany
@@ -248,14 +329,18 @@ class User extends Authenticatable
             'avatar' => $this->avatar,
             'avatar_url' => $this->avatar_url,
             'is_active' => (bool) $this->is_active,
+            'is_primary_admin' => ((int) $this->id === 1 || $this->email === 'admin@crm.local'),
             'user_type' => $this->user_type ?: self::ROLE_MANAGER,
+            'is_customer_portal' => $this->isCustomerPortalUser(),
+            'customer_id' => $this->customer_id ? (int) $this->customer_id : null,
             'role_label' => $this->role_label,
-            'customer_scope' => $this->effectiveCustomerScope(),
+            'user_type_label' => $this->role_label,
+            'customer_scope' => $this->isCustomerPortalUser() ? self::SCOPE_OWN : $this->effectiveCustomerScope(),
             'granted_staff_ids' => $grantedStaffIds,
             'granted_staff' => $grantedStaffList,
             'granted_customer_ids' => $grantedCustomerIds,
             'granted_customers' => $grantedCustomersList,
-            'permissions' => $this->getAllPermissions()->pluck('name')->values()->all(),
+            'permissions' => $this->isCustomerPortalUser() ? [] : $this->getAllPermissions()->pluck('name')->values()->all(),
             'created_at' => $this->created_at,
         ];
     }

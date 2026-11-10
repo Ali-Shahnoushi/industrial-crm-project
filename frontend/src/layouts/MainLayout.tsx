@@ -30,6 +30,9 @@ export function ProtectedRoute() {
   }
 
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  if (user.is_customer_portal || user.user_type === 'customer') {
+    return <Navigate to="/portal" replace />
+  }
   return <MainLayout />
 }
 
@@ -56,6 +59,7 @@ function UserMenu() {
   const nav = useNavigate()
 
   const displayRole =
+    user.user_type_label ||
     user.role_label ||
     (user.user_type ? roleLabel[user.user_type] : undefined) ||
     roleLabel[user.role || 'admin']
@@ -119,18 +123,17 @@ function UserMenu() {
             </button>
           </li>
         )}
-        {(isAdministrator || hasPermission('settings.manage')) && (
-          <li>
-            <button
-              onClick={() => {
-                closeDropdown()
-                nav('/settings/system')
-              }}
-            >
-              <Palette className="size-4" /> تنظیمات سیستم و پوسته
-            </button>
-          </li>
-        )}
+        <li>
+          <button
+            onClick={() => {
+              closeDropdown()
+              nav('/settings/system')
+            }}
+          >
+            <Palette className="size-4" />{' '}
+            {isAdministrator ? 'تنظیمات سیستم و پوسته' : 'تنظیمات پوسته نمایشی'}
+          </button>
+        </li>
         <li className="mt-1 border-t border-base-300/60 pt-1">
           <button
             className="text-error"

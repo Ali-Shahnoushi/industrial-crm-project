@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,6 +27,9 @@ class UserController extends Controller
         'parts.manage' => 'تعریف دستگاه و ثبت ورود/خروج انبار',
         'parts.assign' => 'تخصیص، ویرایش و حذف دستگاه مشتری',
         'parts.history' => 'ثبت سوابق نصب، سرویس و تعمیرات دستگاه‌ها',
+        'tickets.view' => 'مشاهده تیکت‌ها و درخواست‌های پشتیبانی/تعمیر',
+        'tickets.reply' => 'ثبت تیکت، پاسخگویی و یادداشت داخلی تیکت‌ها',
+        'tickets.manage' => 'مدیریت کامل تیکت‌ها (تغییر کارشناس، دپارتمان و وضعیت)',
         'sms.send' => 'ارسال پیامک الگو',
         'sms.logs' => 'مشاهده سوابق پیامک',
         'users.manage' => 'مدیریت کارمندان، نقش‌ها و دسترسی‌ها',
@@ -81,7 +85,7 @@ class UserController extends Controller
         $this->authorizePermission('users.manage');
 
         $callingUser = auth()->user();
-        $query = User::latest();
+        $query = User::staffOnly()->latest();
 
         if ($callingUser && !$callingUser->isAdministrator()) {
             $query->where(function ($q) {
@@ -147,14 +151,18 @@ class UserController extends Controller
 
         /** @var User|null $callingUser */
         $callingUser = auth()->user();
-        $requestedType = $validated['user_type'] ?? User::ROLE_SALESPERSON;
-        if ($requestedType === User::ROLE_ADMINISTRATOR && (!$callingUser || !$callingUser->isAdministrator())) {
-            $resolvedType = User::ROLE_MANAGER;
-        } else {
-            $resolvedType = $requestedType;
-        }
+        $requestedType = $validated['user_type']
+            ?? ($request->filled('role') ? (string) $request->input('role') : null)
+            ?? User::ROLE_SALESPERSON;
 
-        $defaultScope = $resolvedType === User::ROLE_SALESPERSON ? User::SCOPE_OWN : User::SCOPE_ALL;
+        if (!$callingUser || !$callingUser->isAdministrator()) {
+            if (in_array($requestedType, [User::ROLE_ADMINISTRATOR, User::ROLE_MANAGER, 'super_admin'], true)) {
+                abort(403, 'فقط مدیر ارشد مجاز به تعریف حساب مدیر ارشد یا مدیر جدید است.');
+            }
+        }
+        $resolvedType = $requestedType;
+
+        $defaultScope = in_array($resolvedType, [User::ROLE_SALESPERSON, User::ROLE_INSTALLER], true) ? User::SCOPE_OWN : User::SCOPE_ALL;
         $resolvedScope = $resolvedType === User::ROLE_ADMINISTRATOR
             ? User::SCOPE_ALL
             : ($validated['customer_scope'] ?? $defaultScope);
@@ -205,15 +213,37 @@ class UserController extends Controller
         ], 201);
     }
 
+    protected function isPrimaryAdmin(User $user): bool
+    {
+        return (int) $user->id === 1 || $user->email === 'admin@crm.local';
+    }
+
+    protected function ensureCanMutateTarget(?User $callingUser, User $target): void
+    {
+        if (!$callingUser) {
+            abort(403, 'دسترسی غیرمجاز.');
+        }
+
+        if ($callingUser->isAdministrator()) {
+            return;
+        }
+
+        if ($target->isAdministrator()) {
+            abort(403, 'مدیران عادی امکان ویرایش حساب مدیر ارشد را ندارند.');
+        }
+
+        if ($target->user_type === User::ROLE_MANAGER && (int) $target->id !== (int) $callingUser->id) {
+            abort(403, 'شما مجاز به ویرایش، تغییر رمز یا غیرفعال‌سازی حساب سایر مدیران سامانه نیستید.');
+        }
+    }
+
     public function update(Request $request, User $user): JsonResponse
     {
         $this->authorizePermission('users.manage');
 
         /** @var User|null $callingUser */
         $callingUser = auth()->user();
-        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
-            abort(403, 'مدیران عادی امکان ویرایش حساب مدیر ارشد را ندارند.');
-        }
+        $this->ensureCanMutateTarget($callingUser, $user);
 
         if ($request->has('phone')) {
             $normPhone = trim((string) $this->normalizeDigits($request->input('phone')));
@@ -221,8 +251,8 @@ class UserController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
-            'email' => 'required|email|unique:users,email,' . $user->id,
+            'name' => 'sometimes|required|string|max:100',
+            'email' => 'sometimes|required|email|unique:users,email,' . $user->id,
             'phone' => 'nullable|string|regex:/^09\d{9}$/|unique:users,phone,' . $user->id,
             'password' => ['nullable', 'string', 'min:8', 'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
             'is_active' => 'nullable|boolean',
@@ -248,23 +278,42 @@ class UserController extends Controller
             'avatar.max' => 'حداکثر حجم تصویر ۳ مگابایت است.',
         ]);
 
+        if ($this->isPrimaryAdmin($user)) {
+            if (($request->filled('user_type') && $validated['user_type'] !== User::ROLE_ADMINISTRATOR)
+                || ($request->has('is_active') && !$request->boolean('is_active'))
+                || ($request->filled('customer_scope') && $validated['customer_scope'] !== User::SCOPE_ALL)) {
+                return response()->json([
+                    'message' => 'تغییر سطح دسترسی، محدوده مشتریان یا غیرفعال‌سازی حساب مدیر ارشد اصلی سامانه مجاز نیست.',
+                ], 422);
+            }
+        }
+
+        if ((!$callingUser || !$callingUser->isAdministrator()) && $request->filled('user_type')) {
+            if ($validated['user_type'] === User::ROLE_ADMINISTRATOR
+                || ($validated['user_type'] === User::ROLE_MANAGER && $user->user_type !== User::ROLE_MANAGER)) {
+                abort(403, 'فقط مدیر ارشد مجاز به ارتقای کاربران به سطح مدیریتی است.');
+            }
+        }
+
+        $passwordChanged = !empty($validated['password']);
+
         DB::transaction(function () use ($request, $user, $validated, $callingUser) {
-            $user->name = $validated['name'];
-            $user->email = $validated['email'];
+            if (array_key_exists('name', $validated)) {
+                $user->name = $validated['name'];
+            }
+            if (array_key_exists('email', $validated)) {
+                $user->email = $validated['email'];
+            }
             if (array_key_exists('phone', $validated)) {
                 $user->phone = $validated['phone'];
             }
 
             if ($request->has('is_active') && $user->id !== auth()->id()) {
                 $user->is_active = $request->boolean('is_active');
-                if (!$user->is_active) {
-                    $user->tokens()->delete();
-                }
             }
 
             if (!empty($validated['password'])) {
                 $user->password = Hash::make($validated['password']);
-                $user->tokens()->delete();
             }
 
             if ($request->boolean('remove_avatar') || $request->input('remove_avatar') === '1') {
@@ -337,6 +386,10 @@ class UserController extends Controller
             }
         });
 
+        if (!$user->is_active || $passwordChanged) {
+            $user->tokens()->delete();
+        }
+
         return response()->json([
             'message' => 'اطلاعات، نقش و دسترسی‌های کارمند با موفقیت ویرایش شد.',
             'user' => $user->fresh()->serializeForApi(),
@@ -347,23 +400,20 @@ class UserController extends Controller
     {
         $this->authorizePermission('users.manage');
 
+        /** @var User|null $callingUser */
+        $callingUser = auth()->user();
+        $this->ensureCanMutateTarget($callingUser, $user);
+
         if ($user->id === auth()->id()) {
             return response()->json([
                 'message' => 'امکان حذف حساب کاربری خودتان وجود ندارد.',
             ], 422);
         }
 
-        if ($user->email === 'admin@crm.local') {
+        if ($this->isPrimaryAdmin($user)) {
             return response()->json([
                 'message' => 'امکان حذف حساب مدیر اصلی سیستم وجود ندارد.',
             ], 422);
-        }
-
-        $callingUser = auth()->user();
-        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
-            return response()->json([
-                'message' => 'مدیران عادی امکان حذف حساب مدیر ارشد را ندارند.',
-            ], 403);
         }
 
         if ($user->avatar && Storage::disk('public')->exists($user->avatar)) {
@@ -371,12 +421,18 @@ class UserController extends Controller
         }
 
         $userName = $user->name;
-        $user->syncPermissions([]);
-        $user->syncRoles([]);
-        $user->delete();
+        DB::transaction(function () use ($user) {
+            Customer::where('created_by_user_id', $user->id)->update([
+                'created_by_user_id' => auth()->id(),
+            ]);
+            $user->tokens()->delete();
+            $user->syncPermissions([]);
+            $user->syncRoles([]);
+            $user->delete();
+        });
 
         return response()->json([
-            'message' => "کاربر «{$userName}» با موفقیت حذف گردید.",
+            'message' => "کاربر «{$userName}» با موفقیت حذف گردید و مشتریان ایشان به حساب شما منتقل شد.",
         ]);
     }
 
@@ -386,8 +442,19 @@ class UserController extends Controller
 
         /** @var User|null $callingUser */
         $callingUser = auth()->user();
-        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
-            abort(403, 'مدیران عادی امکان تغییر دسترسی‌های مدیر ارشد را ندارند.');
+        $this->ensureCanMutateTarget($callingUser, $user);
+
+        if ($this->isPrimaryAdmin($user) && $request->filled('user_type') && $request->input('user_type') !== User::ROLE_ADMINISTRATOR) {
+            return response()->json([
+                'message' => 'تنزل سطح دسترسی حساب مدیر ارشد اصلی سامانه مجاز نیست.',
+            ], 422);
+        }
+
+        if ((!$callingUser || !$callingUser->isAdministrator()) && $request->filled('user_type')) {
+            if ($request->input('user_type') === User::ROLE_ADMINISTRATOR
+                || ($request->input('user_type') === User::ROLE_MANAGER && $user->user_type !== User::ROLE_MANAGER)) {
+                abort(403, 'فقط مدیر ارشد مجاز به اعطای نقش مدیریتی است.');
+            }
         }
 
         $validated = $request->validate([
@@ -462,12 +529,9 @@ class UserController extends Controller
     {
         $this->authorizePermission('users.manage');
 
+        /** @var User|null $callingUser */
         $callingUser = auth()->user();
-        if ($user->isAdministrator() && (!$callingUser || !$callingUser->isAdministrator())) {
-            return response()->json([
-                'message' => 'مدیران عادی امکان تغییر وضعیت حساب مدیر ارشد را ندارند.',
-            ], 403);
-        }
+        $this->ensureCanMutateTarget($callingUser, $user);
 
         if ($user->id === auth()->id()) {
             return response()->json([
@@ -475,7 +539,17 @@ class UserController extends Controller
             ], 422);
         }
 
+        if ($this->isPrimaryAdmin($user)) {
+            return response()->json([
+                'message' => 'غیرفعال‌سازی حساب مدیر ارشد اصلی سامانه مجاز نیست.',
+            ], 422);
+        }
+
         $user->update(['is_active' => !$user->is_active]);
+
+        if (!$user->is_active) {
+            $user->tokens()->delete();
+        }
 
         return response()->json([
             'message' => $user->is_active ? 'کاربر فعال شد.' : 'کاربر غیرفعال شد.',

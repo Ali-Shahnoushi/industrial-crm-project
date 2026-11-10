@@ -14,6 +14,8 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public const MAX_OTP_ATTEMPTS = 5;
+
     public function __construct(protected MelipayamakService $melipayamakService)
     {
     }
@@ -66,27 +68,20 @@ class AuthController extends Controller
         $smsText = "کد تأیید ورود شما به سامانه مدیریت ارتباط با مشتری: {$otpCode}\nاعتبار: ۲ دقیقه";
         $smsResult = $this->melipayamakService->sendNormalSms($phone, $smsText);
 
-        if (empty($smsResult['success'])) {
+        if (empty($smsResult['success']) || !empty($smsResult['is_sandbox'])) {
             Cache::forget('otp_' . $phone);
             Cache::forget('otp_attempts_' . $phone);
             Cache::forget($cooldownKey);
 
             return response()->json([
-                'message' => 'ارسال پیامک تأیید ناموفق بود. لطفاً دوباره تلاش کنید یا با مدیر سیستم تماس بگیرید.',
+                'message' => 'ارسال پیامک کد تأیید در حال حاضر امکان‌پذیر نیست (درگاه پیامک تنظیم نشده یا در حالت شبیه‌ساز قرار دارد). لطفاً با رمز عبور وارد شوید یا با مدیر سامانه تماس بگیرید.',
             ], 503);
         }
 
-        $response = [
+        return response()->json([
             'message' => 'کد تأیید ورود با موفقیت به شماره شما پیامک شد.',
             'expires_in' => 120,
-        ];
-
-        if (!empty($smsResult['is_sandbox'])) {
-            $response['sandbox'] = true;
-            $response['message'] = 'درگاه پیامک در حالت شبیه‌ساز است و پیامکی ارسال نشد. جهت دریافت کد با مدیر ارشد سیستم تماس بگیرید.';
-        }
-
-        return response()->json($response);
+        ]);
     }
 
     /**
@@ -109,32 +104,33 @@ class AuthController extends Controller
 
         $phone = $validated['phone'];
         $code = trim($validated['code']);
+        $attemptsKey = 'otp_attempts_' . $phone;
+        $otpKey = 'otp_' . $phone;
 
-        $attemptKey = 'otp_attempts_' . $phone;
-        $attempts = (int) Cache::get($attemptKey, 0);
-
-        if ($attempts >= 5) {
-            Cache::forget('otp_' . $phone);
-            Cache::forget($attemptKey);
-
+        $attempts = (int) Cache::get($attemptsKey, 0);
+        if ($attempts >= self::MAX_OTP_ATTEMPTS) {
+            Cache::forget($otpKey);
             throw ValidationException::withMessages([
-                'code' => ['تعداد تلاش‌های ناموفق بیش از حد مجاز بود. لطفاً مجدداً درخواست کد تأیید ارسال کنید.'],
+                'code' => ['تعداد تلاش‌های ناموفق بیش از حد مجاز است. لطفاً کد جدید دریافت کنید.'],
             ]);
         }
 
-        $cachedCode = Cache::get('otp_' . $phone);
+        $cachedCode = Cache::get($otpKey);
 
-        if (!$cachedCode || $cachedCode !== $code) {
-            Cache::increment($attemptKey);
-            $remaining = max(0, 5 - ($attempts + 1));
-
+        if (!$cachedCode || !hash_equals((string) $cachedCode, $code)) {
+            $newAttempts = $attempts + 1;
+            Cache::put($attemptsKey, $newAttempts, now()->addMinutes(2));
+            if ($newAttempts >= self::MAX_OTP_ATTEMPTS) {
+                Cache::forget($otpKey);
+            }
             throw ValidationException::withMessages([
-                'code' => ["کد تأیید وارد شده نادرست یا منقضی است. ({$remaining} فرصت تلاش باقی‌مانده)"],
+                'code' => ['کد تأیید وارد شده نامعتبر است یا منقضی گردیده است.'],
             ]);
         }
 
-        Cache::forget('otp_' . $phone);
-        Cache::forget($attemptKey);
+        Cache::forget($otpKey);
+        Cache::forget($attemptsKey);
+        Cache::forget('otp_cooldown_' . $phone);
 
         $user = User::where('phone', $phone)->firstOrFail();
 
@@ -144,6 +140,13 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if ($user->isCustomerPortalUser() && (!$user->customer || !$user->customer->portal_enabled)) {
+            return response()->json([
+                'message' => 'دسترسی پنل کاربری شما غیرفعال شده است. لطفاً با مسئول فروش خود تماس بگیرید.',
+            ], 403);
+        }
+
+        $user->tokens()->where('created_at', '<', now()->subDays(30))->delete();
         $token = $user->createToken('api-token')->plainTextToken;
         $cookie = $this->createAuthCookie($token);
 
@@ -159,6 +162,10 @@ class AuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
+        if (!$request->filled('login') && $request->filled('email')) {
+            $request->merge(['login' => $request->input('email')]);
+        }
+
         $validated = $request->validate([
             'login' => 'required|string',
             'password' => 'required|string',
@@ -187,6 +194,13 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if ($user->isCustomerPortalUser() && (!$user->customer || !$user->customer->portal_enabled)) {
+            return response()->json([
+                'message' => 'دسترسی پنل کاربری شما غیرفعال شده است. لطفاً با مسئول فروش خود تماس بگیرید.',
+            ], 403);
+        }
+
+        $user->tokens()->where('created_at', '<', now()->subDays(30))->delete();
         $token = $user->createToken('api-token')->plainTextToken;
         $cookie = $this->createAuthCookie($token);
 
@@ -223,26 +237,46 @@ class AuthController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => 'required|string|max:100',
+            'name' => 'sometimes|required|string|max:100',
             'phone' => 'nullable|string|regex:/^09\d{9}$/|unique:users,phone,' . $user->id,
+            'current_password' => 'required_with:password|nullable|string',
             'password' => ['nullable', 'string', 'min:8', 'regex:/[A-Za-z]/', 'regex:/[0-9]/'],
             'avatar' => 'nullable|image|max:3072',
         ], [
             'name.required' => 'وارد کردن نام و نام خانوادگی الزامی است.',
             'phone.regex' => 'فرمت شماره موبایل نامعتبر است (باید ۱۱ رقم عددی بوده و با 09 شروع شود).',
             'phone.unique' => 'این شماره موبایل قبلاً برای کاربر دیگری ثبت شده است.',
+            'current_password.required_with' => 'برای تغییر رمز عبور، وارد کردن رمز عبور فعلی الزامی است.',
             'password.min' => 'کلمه عبور باید حداقل ۸ کاراکتر باشد.',
             'password.regex' => 'کلمه عبور باید حداقل شامل یک حرف انگلیسی و یک عدد باشد.',
             'avatar.image' => 'فایل انتخابی باید تصویر باشد.',
             'avatar.max' => 'حداکثر حجم تصویر مجاز ۳ مگابایت است.',
         ]);
 
-        $user->name = $validated['name'];
+        if (!empty($validated['password'])) {
+            $rawCurrent = (string) ($validated['current_password'] ?? '');
+            $normCurrent = (string) $this->normalizeDigits($rawCurrent);
+            $currentMatches = $rawCurrent !== '' && (
+                Hash::check($rawCurrent, $user->password) ||
+                ($normCurrent !== $rawCurrent && Hash::check($normCurrent, $user->password))
+            );
+
+            if (!$currentMatches) {
+                throw ValidationException::withMessages([
+                    'current_password' => ['رمز عبور فعلی صحیح نمی‌باشد.'],
+                ]);
+            }
+        }
+
+        if (array_key_exists('name', $validated)) {
+            $user->name = $validated['name'];
+        }
         if (array_key_exists('phone', $validated)) {
             $user->phone = $validated['phone'];
         }
 
-        if (!empty($validated['password'])) {
+        $passwordChanged = !empty($validated['password']);
+        if ($passwordChanged) {
             $user->password = Hash::make($validated['password']);
         }
 
@@ -260,19 +294,28 @@ class AuthController extends Controller
 
         $user->save();
 
-        // تغییر رمز باید تمام نشست‌های دیگر کاربر را باطل کند
-        if (!empty($validated['password'])) {
-            $token = $request->user()?->currentAccessToken();
-            $currentTokenId = $token instanceof \Laravel\Sanctum\PersonalAccessToken ? $token->getKey() : null;
-            $user->tokens()
-                ->when($currentTokenId, fn ($query) => $query->whereKeyNot($currentTokenId))
-                ->delete();
+        $rotatedCookie = null;
+        $rotatedToken = null;
+        if ($passwordChanged) {
+            $wasRealPersonalToken = $user->currentAccessToken() instanceof \Laravel\Sanctum\PersonalAccessToken;
+            $user->tokens()->delete();
+
+            if ($wasRealPersonalToken && $request->hasCookie('crm_token')) {
+                $rotatedToken = $user->createToken('api-token')->plainTextToken;
+                $rotatedCookie = $this->createAuthCookie($rotatedToken);
+            }
         }
 
-        return response()->json([
+        $responsePayload = [
             'message' => 'پروفایل شما با موفقیت بروزرسانی شد.',
             'user' => $user->fresh()->serializeForApi(),
-        ]);
+        ];
+        if ($rotatedToken) {
+            $responsePayload['token'] = $rotatedToken;
+        }
+
+        $response = response()->json($responsePayload);
+        return $rotatedCookie ? $response->withCookie($rotatedCookie) : $response;
     }
 
     /**
@@ -299,7 +342,7 @@ class AuthController extends Controller
             minutes: 60 * 24 * 7,
             path: '/',
             domain: null,
-            secure: request()->isSecure() || str_starts_with((string) config('app.url'), 'https://'),
+            secure: request()->isSecure(),
             httpOnly: true,
             raw: false,
             sameSite: 'Lax'

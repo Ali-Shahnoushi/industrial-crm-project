@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Schema;
 
 class Customer extends Model
@@ -28,8 +29,17 @@ class Customer extends Model
         'city',
         'address',
         'notes',
+        'portal_enabled',
         'created_by_user_id',
+        'sales_manager_user_id',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'portal_enabled' => 'boolean',
+        ];
+    }
 
     protected $appends = ['full_name', 'display_name'];
 
@@ -101,6 +111,21 @@ class Customer extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    public function salesManager(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sales_manager_user_id');
+    }
+
+    public function portalUser(): HasOne
+    {
+        return $this->hasOne(User::class, 'customer_id');
+    }
+
+    public function tickets(): HasMany
+    {
+        return $this->hasMany(Ticket::class)->latest('last_reply_at');
     }
 
     public function customerParts(): HasMany

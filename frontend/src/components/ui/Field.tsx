@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Inbox } from 'lucide-react'
+import { Inbox, type LucideIcon } from 'lucide-react'
 
 export function Field({ label, error, hint, required, children, className }: {
   label: string
@@ -21,12 +21,24 @@ export function Field({ label, error, hint, required, children, className }: {
   )
 }
 
-export function EmptyState({ title = 'موردی یافت نشد', description, subtitle, action }: { title?: string; description?: string; subtitle?: string; action?: ReactNode }) {
+export function EmptyState({
+  icon: Icon = Inbox,
+  title = 'موردی یافت نشد',
+  description,
+  subtitle,
+  action,
+}: {
+  icon?: LucideIcon
+  title?: string
+  description?: string
+  subtitle?: string
+  action?: ReactNode
+}) {
   const desc = description || subtitle
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-4 py-14 text-center">
       <span className="flex size-14 items-center justify-center rounded-2xl bg-base-200 text-base-content/40">
-        <Inbox className="size-7" />
+        <Icon className="size-7" />
       </span>
       <p className="font-semibold">{title}</p>
       {desc && <p className="max-w-sm text-sm text-base-content/60">{desc}</p>}

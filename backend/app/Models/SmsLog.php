@@ -27,6 +27,17 @@ class SmsLog extends Model
         ];
     }
 
+    public function toArray(): array
+    {
+        $array = parent::toArray();
+
+        if (($this->pattern_code ?? '') === 'NORMAL-OTP') {
+            $array['tokens'] = ['text' => '[REDACTED]'];
+        }
+
+        return $array;
+    }
+
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);

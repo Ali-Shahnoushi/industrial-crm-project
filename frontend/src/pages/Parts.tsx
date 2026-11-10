@@ -53,6 +53,8 @@ const schema = z.object({
       return Number.isInteger(n) && n >= 1
     }, 'دوره سرویس باید حداقل ۱ ماه باشد'),
   stock_quantity: z.string().optional(),
+  min_stock: z.string().optional(),
+  unit: z.string().trim().optional(),
   description: z.string().trim().optional(),
   is_active: z.boolean(),
 })
@@ -71,9 +73,9 @@ export default function Parts() {
   const [editingPart, setEditingPart] = useState<Part | null>(null)
   const [deletingPart, setDeletingPart] = useState<Part | null>(null)
 
-  // Manual Stock In / Out Modal
+  // Manual Stock In / Out / Adjustment Modal
   const [stockTarget, setStockTarget] = useState<Part | null>(null)
-  const [stockActionType, setStockActionType] = useState<'in' | 'out_manual'>('in')
+  const [stockActionType, setStockActionType] = useState<'in' | 'out_manual' | 'adjustment'>('in')
   const [stockQtyInput, setStockQtyInput] = useState('1')
   const [stockDesc, setStockDesc] = useState('')
 
@@ -157,6 +159,8 @@ export default function Parts() {
       code: '',
       periodic_service_months: '12',
       stock_quantity: '0',
+      min_stock: '0',
+      unit: 'دستگاه',
       description: '',
       is_active: true,
     },
@@ -169,6 +173,8 @@ export default function Parts() {
       code: '',
       periodic_service_months: '12',
       stock_quantity: '0',
+      min_stock: '0',
+      unit: 'دستگاه',
       description: '',
       is_active: true,
     })
@@ -182,16 +188,18 @@ export default function Parts() {
       code: p.code,
       periodic_service_months: String(p.periodic_service_months),
       stock_quantity: String(p.stock_quantity ?? 0),
+      min_stock: String(p.min_stock ?? 0),
+      unit: p.unit || 'دستگاه',
       description: p.description ?? '',
       is_active: p.is_active,
     })
     setModalOpen(true)
   }
 
-  const openStockModal = (p: Part, type: 'in' | 'out_manual') => {
+  const openStockModal = (p: Part, type: 'in' | 'out_manual' | 'adjustment') => {
     setStockTarget(p)
     setStockActionType(type)
-    setStockQtyInput('1')
+    setStockQtyInput(type === 'adjustment' ? String(p.stock_quantity ?? 0) : '1')
     setStockDesc('')
   }
 
@@ -200,6 +208,8 @@ export default function Parts() {
     onSuccess: (res) => {
       toast.success(res.message)
       qc.invalidateQueries({ queryKey: ['parts-catalog'] })
+      qc.invalidateQueries({ queryKey: ['inventory-logs'] })
+      qc.invalidateQueries({ queryKey: ['inventory-summary'] })
       qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setDeletingPart(null)
     },
@@ -209,16 +219,25 @@ export default function Parts() {
   })
 
   const adjustStockMutation = useMutation({
-    mutationFn: () =>
-      partApi.adjustStock(stockTarget!.id, {
+    mutationFn: () => {
+      const qty = Number(toEnDigits(stockQtyInput))
+      return partApi.adjustStock(stockTarget!.id, {
         type: stockActionType,
-        quantity: Number(toEnDigits(stockQtyInput)) || 0,
-        description: stockDesc.trim() || undefined,
-      }),
+        quantity: qty,
+        description:
+          stockDesc.trim() ||
+          (stockActionType === 'in'
+            ? 'ورود دستی به انبار'
+            : stockActionType === 'out_manual'
+              ? 'خروج دستی از انبار'
+              : 'انبارگردانی و تنظیم دقیق موجودی فیزیکی'),
+      })
+    },
     onSuccess: (res) => {
       toast.success(res.message)
       qc.invalidateQueries({ queryKey: ['parts-catalog'] })
       qc.invalidateQueries({ queryKey: ['inventory-logs'] })
+      qc.invalidateQueries({ queryKey: ['inventory-summary'] })
       qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setStockTarget(null)
     },
@@ -233,6 +252,8 @@ export default function Parts() {
       name: values.name.trim(),
       code: toEnDigits(values.code).trim(),
       periodic_service_months: Number(toEnDigits(values.periodic_service_months)) || 12,
+      min_stock: Number(toEnDigits(values.min_stock || '0')) || 0,
+      unit: values.unit?.trim() || 'دستگاه',
       description: values.description?.trim() || null,
       is_active: values.is_active,
     }
@@ -251,6 +272,7 @@ export default function Parts() {
       }
       qc.invalidateQueries({ queryKey: ['parts-catalog'] })
       qc.invalidateQueries({ queryKey: ['inventory-logs'] })
+      qc.invalidateQueries({ queryKey: ['inventory-summary'] })
       qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
       setModalOpen(false)
     } catch (err: any) {
@@ -262,9 +284,14 @@ export default function Parts() {
   const handleStockSubmit = (e: FormEvent) => {
     e.preventDefault()
     if (!stockTarget) return
-    const qty = Number(toEnDigits(stockQtyInput)) || 0
-    if (qty < 1) {
-      toast.error('تعداد باید حداقل ۱ عدد باشد')
+    const raw = toEnDigits(stockQtyInput).trim()
+    const qty = raw === '' ? -1 : Number(raw)
+    if (!Number.isInteger(qty) || (stockActionType === 'adjustment' ? qty < 0 : qty < 1)) {
+      toast.error(
+        stockActionType === 'adjustment'
+          ? 'موجودی شمارش‌شده باید عدد صحیح صفر یا بیشتر باشد'
+          : 'تعداد باید حداقل ۱ عدد باشد',
+      )
       return
     }
     if (stockActionType === 'out_manual' && qty > (stockTarget.stock_quantity ?? 0)) {
@@ -790,6 +817,31 @@ export default function Parts() {
             </Field>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Field label="حد آستانه هشدار کمبود موجودی" hint="هشدار خودکار در داشبورد و انبار">
+              <input
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="input input-bordered w-full text-start font-mono"
+                placeholder="مثال: 3"
+                {...register('min_stock', {
+                  onChange: (e) => {
+                    e.target.value = toEnDigits(e.target.value).replace(/\D/g, '')
+                  },
+                })}
+              />
+            </Field>
+
+            <Field label="واحد شمارش در انبار">
+              <input
+                className="input input-bordered w-full"
+                placeholder="دستگاه / عدد / ست"
+                {...register('unit')}
+              />
+            </Field>
+          </div>
+
           {!editingPart && (
             <Field
               label="موجودی اولیه در انبار (عدد)"
@@ -850,7 +902,11 @@ export default function Parts() {
             >
               {adjustStockMutation.isPending && <span className="loading loading-spinner loading-xs" />}
               <PackagePlus className="size-4" />
-              {stockActionType === 'in' ? 'ثبت ورود به انبار' : 'ثبت خروج از انبار'}
+              {stockActionType === 'in'
+                ? 'ثبت ورود به انبار'
+                : stockActionType === 'out_manual'
+                  ? 'ثبت خروج از انبار'
+                  : 'ثبت نتیجه انبارگردانی'}
             </button>
           </>
         }
@@ -858,35 +914,57 @@ export default function Parts() {
         <form id="adjust-stock-form" onSubmit={handleStockSubmit} className="space-y-4">
           <div className="rounded-xl bg-base-200 p-3 text-xs flex items-center justify-between">
             <span>موجودی فعلی در انبار:</span>
-            <b className="font-mono">{num(stockTarget?.stock_quantity ?? 0)} عدد</b>
+            <b className="font-mono">{num(stockTarget?.stock_quantity ?? 0)} {stockTarget?.unit || 'عدد'}</b>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-base-200 p-1.5">
+          <div className="grid grid-cols-3 gap-1.5 rounded-2xl bg-base-200 p-1.5">
             <button
               type="button"
-              onClick={() => setStockActionType('in')}
+              onClick={() => {
+                setStockActionType('in')
+                setStockQtyInput('1')
+              }}
               className={cx(
-                'flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-all cursor-pointer',
+                'flex items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-bold transition-all cursor-pointer',
                 stockActionType === 'in'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'text-base-content/65 hover:text-base-content',
               )}
             >
-              <ArrowDownCircle className="size-4" />
-              ورود به انبار (+)
+              <ArrowDownCircle className="size-3.5" />
+              ورود (+)
             </button>
             <button
               type="button"
-              onClick={() => setStockActionType('out_manual')}
+              onClick={() => {
+                setStockActionType('out_manual')
+                setStockQtyInput('1')
+              }}
               className={cx(
-                'flex items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-all cursor-pointer',
+                'flex items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-bold transition-all cursor-pointer',
                 stockActionType === 'out_manual'
                   ? 'bg-amber-500 text-slate-950 shadow-xs'
                   : 'text-base-content/65 hover:text-base-content',
               )}
             >
-              <ArrowUpCircle className="size-4" />
-              خروج دستی (-)
+              <ArrowUpCircle className="size-3.5" />
+              خروج (-)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStockActionType('adjustment')
+                setStockQtyInput(String(stockTarget?.stock_quantity ?? 0))
+              }}
+              className={cx(
+                'flex items-center justify-center gap-1 rounded-xl py-2 text-[11px] font-bold transition-all cursor-pointer',
+                stockActionType === 'adjustment'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-base-content/65 hover:text-base-content',
+              )}
+            >
+              <Boxes className="size-3.5" />
+              انبارگردانی
             </button>
           </div>
 
@@ -894,7 +972,9 @@ export default function Parts() {
             label={
               stockActionType === 'in'
                 ? 'تعداد ورودی به انبار (عدد)'
-                : 'تعداد خروجی از انبار (عدد)'
+                : stockActionType === 'out_manual'
+                  ? 'تعداد خروجی از انبار (عدد)'
+                  : 'موجودی دقیق شمارش‌شده در انبار (عدد ۰ نیز مجاز است)'
             }
             required
           >
