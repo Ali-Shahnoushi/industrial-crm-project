@@ -23,7 +23,7 @@ function e(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
-function renderCard(string $title, string $body, string $badge = 'نسخه ۲.۰.۰'): string
+function renderCard(string $title, string $body, string $badge = 'نسخه ۲.۳.۰'): string
 {
     return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -104,11 +104,12 @@ function envValue(string $file, string $key): ?string
     return null;
 }
 
-/* ─── ۲. پاکسازی کش‌های قدیمی قبل از بارگذاری لاراول ─── */
-@unlink($baseDir . '/bootstrap/cache/config.php');
-@unlink($baseDir . '/bootstrap/cache/events.php');
-foreach (glob($baseDir . '/bootstrap/cache/routes*.php') ?: [] as $routeCache) {
-    @unlink($routeCache);
+/* ─── ۲. پاکسازی کامل کش‌های قدیمی (شامل packages.php و services.php نسخه‌های قبلی) قبل از بارگذاری لاراول ─── */
+foreach (glob($baseDir . '/bootstrap/cache/*.php') ?: [] as $staleCache) {
+    @unlink($staleCache);
+}
+foreach (glob($baseDir . '/storage/framework/views/*.php') ?: [] as $staleView) {
+    @unlink($staleView);
 }
 
 /* ─── ۳. بارگذاری هسته لاراول ─── */
@@ -120,10 +121,33 @@ if (!is_file($baseDir . '/vendor/autoload.php')) {
     exit;
 }
 
-require_once $baseDir . '/vendor/autoload.php';
-$app = require_once $baseDir . '/bootstrap/app.php';
-$kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
-$kernel->bootstrap();
+$updateExceptionHandler = function (\Throwable $ex) {
+    http_response_code(500);
+    $details = "نوع خطا: " . get_class($ex) . "\n"
+        . "پیام: " . $ex->getMessage() . "\n"
+        . "فایل: " . $ex->getFile() . " (خط " . $ex->getLine() . ")\n\n"
+        . "Trace:\n" . $ex->getTraceAsString();
+
+    echo renderCard('خطا در اجرای اسکریپت',
+        '<div class="err"><b>❌ در حین پردازش به‌روزرسانی خطایی رخ داد:</b><br>' . e($ex->getMessage()) . '</div>'
+        . '<div class="note">💡 <b>راهنمایی عیب‌یابی:</b><br>'
+        . '۱. بررسی کنید فایل‌های قدیمی <code>bootstrap/cache/*.php</code> پاک شده باشند.<br>'
+        . '۲. اطلاعات اتصال دیتابیس در فایل <code>.env</code> را بررسی کنید.<br>'
+        . '۳. دسترسی نوشتن پوشه‌های <code>storage/</code> و <code>bootstrap/cache/</code> را روی 755 بررسی کنید.</div>'
+        . '<pre>' . e($details) . '</pre>');
+    exit;
+};
+
+try {
+    require_once $baseDir . '/vendor/autoload.php';
+    $app = require_once $baseDir . '/bootstrap/app.php';
+    $kernel = $app->make(\Illuminate\Contracts\Console\Kernel::class);
+    $kernel->bootstrap();
+    // بازگردانی مدیریت خطای اختصاصی update.php پس از اجرای HandleExceptions لاراول
+    set_exception_handler($updateExceptionHandler);
+} catch (\Throwable $bootEx) {
+    $updateExceptionHandler($bootEx);
+}
 
 $serverAppKey = (string) envValue($envPath, 'APP_KEY');
 if ($serverAppKey === '' || $serverAppKey === 'base64:') {
@@ -142,13 +166,21 @@ if ($authSecret !== '') {
     if (hash_equals($serverAppKey, $authSecret) || hash_equals(str_replace('base64:', '', $serverAppKey), $authSecret)) {
         $isAuthorized = true;
     } else {
-        // ۲. یا تطابق با رمز عبور کاربر مدیر ارشد در دیتابیس
+        // ۲. یا تطابق با رمز عبور کاربر مدیر ارشد در دیتابیس (سازگار با دیتابیس‌های v1.x قبل از ایجاد ستون user_type)
         try {
-            $adminUser = \App\Models\User::where('user_type', 'administrator')
-                ->orWhere('email', 'admin@crm.local')
-                ->first();
-            if ($adminUser && \Illuminate\Support\Facades\Hash::check($authSecret, $adminUser->password)) {
-                $isAuthorized = true;
+            $hasUserType = \Illuminate\Support\Facades\Schema::hasColumn('users', 'user_type');
+            $candidates = $hasUserType
+                ? \App\Models\User::where('user_type', 'administrator')
+                    ->orWhere('email', 'admin@crm.local')
+                    ->orWhere('id', 1)
+                    ->get()
+                : \App\Models\User::orderBy('id')->limit(10)->get();
+
+            foreach ($candidates as $candidate) {
+                if (\Illuminate\Support\Facades\Hash::check($authSecret, $candidate->password)) {
+                    $isAuthorized = true;
+                    break;
+                }
             }
         } catch (\Throwable $t) {
             // ignore
@@ -180,7 +212,7 @@ if ($requestMethod !== 'POST' || !$isAuthorized) {
     }
 
     $body = $authError
-        . '<div class="note">این ابزار تغییرات دیتابیس نسخه ۲.۰.۰ (از جمله مدیریت انبار، سطوح دسترسی کارشناسان و تخصیص قطعات/دستگاه‌ها) را بدون از دست رفتن داده‌های قبلی بر روی دیتابیس اعمال می‌کند.</div>'
+        . '<div class="note">این ابزار تغییرات دیتابیس نسخه ۲.۳.۰ (مدیریت انبار، تیکتینگ، پنل مشتری، فیلد سریال اختیاری و ۱۷ سطح دسترسی) را بدون از دست رفتن داده‌های قبلی بر روی دیتابیس اعمال می‌کند.</div>'
         . $dbStatusHtml
         . '<form method="post" style="margin-top:20px">'
         . '<label for="secret">کلید امنیتی (APP_KEY موجود در .env یا رمز عبور مدیر سیستم):</label>'
@@ -244,7 +276,7 @@ $selfDeleted = @unlink(__FILE__);
 
 $appUrl = (string)envValue($envPath, 'APP_URL') ?: '/';
 
-$body = '<div class="succ">🎉 <b>به‌روزرسانی با موفقیت کامل شد!</b><br>دیتابیس سامانه و تمام جداول به نسخه ۲.۰.۰ ارتقا یافتند و داده‌های پیشین حفظ شدند.</div>'
+$body = '<div class="succ">🎉 <b>به‌روزرسانی با موفقیت کامل شد!</b><br>دیتابیس سامانه و تمام جداول به نسخه ۲.۳.۰ ارتقا یافتند و داده‌های پیشین حفظ شدند.</div>'
     . '<h3 style="margin-top:20px;color:#cbd5e1;font-size:14px">گزارش عملیات انجام‌شده:</h3>'
     . '<pre>' . e(trim($migrationLog)) . '</pre>'
     . '<div class="note">'

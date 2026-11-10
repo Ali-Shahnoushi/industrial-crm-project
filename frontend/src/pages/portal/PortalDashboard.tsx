@@ -246,7 +246,7 @@ export default function PortalDashboard() {
                       </span>
                     </div>
                     <p className="font-mono text-[11px] text-base-content/60 ltr-text">
-                      SN: {dev.serial_number}
+                      SN: {dev.serial_number || 'بدون سریال'}
                       {dev.warranty_expire_date ? ` • گارانتی تا ${dateFa(dev.warranty_expire_date)}` : ''}
                     </p>
                   </div>

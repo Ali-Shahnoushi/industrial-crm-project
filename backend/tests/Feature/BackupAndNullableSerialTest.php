@@ -30,7 +30,7 @@ class BackupAndNullableSerialTest extends TestCase
             'first_name' => 'علی',
             'last_name' => 'اکبری',
             'mobile' => '09129998877',
-            'created_by' => $admin->id,
+            'created_by_user_id' => $admin->id,
         ]);
 
         $part = Part::create([
@@ -117,9 +117,44 @@ class BackupAndNullableSerialTest extends TestCase
         $this->assertDatabaseHas('customers', [
             'company_name' => 'شرکت توسعه آزمایشی پارس',
             'mobile' => '09121110022',
+            'created_by_user_id' => $admin->id,
+            'customer_type' => 'effective',
         ]);
         $this->assertDatabaseHas('customer_parts', [
             'serial_number' => 'RESTORE-SN-999',
         ]);
+
+        // Restoring a second device of the same model WITHOUT serial_number must NOT overwrite RESTORE-SN-999
+        $secondPayload = [
+            'metadata' => ['version' => '2.3.0'],
+            'customers' => [
+                [
+                    'type' => 'company',
+                    'mobile' => '09121110022',
+                    'devices' => [
+                        [
+                            'part_code' => 'RESTORE-PART-01',
+                            'part_name' => 'الکتروموتور صنعتی',
+                            'serial_number' => null,
+                            'quantity' => 3,
+                            'status' => 'active',
+                        ],
+                    ],
+                ],
+            ],
+        ];
+        $tmpFile2 = UploadedFile::fake()->createWithContent('backup2.json', json_encode($secondPayload));
+        $this->actingAs($admin, 'sanctum')->post('/api/v1/backup/customers-restore-json', [
+            'file' => $tmpFile2,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('customer_parts', ['serial_number' => 'RESTORE-SN-999']);
+        $this->assertDatabaseHas('customer_parts', ['serial_number' => null, 'quantity' => 3]);
+
+        // Verify pure-PHP SQL dump generator works without removed doctrine/dbal APIs
+        $dumpSql = (new \App\Http\Controllers\Api\V1\BackupController())->generateSqlDump();
+        $this->assertStringContainsString('Industrial Equipment CRM Database Dump', $dumpSql);
+        $this->assertStringContainsString('INSERT INTO `customers`', $dumpSql);
+        $this->assertStringContainsString('RESTORE-SN-999', $dumpSql);
     }
 }

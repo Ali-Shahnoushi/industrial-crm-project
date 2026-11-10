@@ -196,6 +196,9 @@ session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'secure' 
 if (!session_start()) { throw new RuntimeException('PHP session could not be started.'); }
 $_SESSION['install_csrf'] ??= bin2hex(random_bytes(32));
 
+if (!defined('CRM_SKIP_PSR_EXIT')) {
+    define('CRM_SKIP_PSR_EXIT', true);
+}
 $baseDir = require __DIR__ . '/resolve-private.php';
 $envPath = $baseDir . '/.env';
 if (is_file($baseDir.'/storage/installed.lock')) {
@@ -361,8 +364,8 @@ ENV;
 
     // Bootstrap Laravel AFTER .env is written so it sees the new config
     // Discard environment-specific caches from a previous deployment before boot.
-    foreach (['config.php', 'events.php'] as $cache) @unlink($baseDir.'/bootstrap/cache/'.$cache);
-    foreach (glob($baseDir.'/bootstrap/cache/routes*.php') ?: [] as $cache) @unlink($cache);
+    foreach (glob($baseDir.'/bootstrap/cache/*.php') ?: [] as $cache) @unlink($cache);
+    foreach (glob($baseDir.'/storage/framework/views/*.php') ?: [] as $viewCache) @unlink($viewCache);
     $installerStage = 'autoload';
     require $baseDir . '/vendor/autoload.php';
     $installerStage = 'bootstrap';

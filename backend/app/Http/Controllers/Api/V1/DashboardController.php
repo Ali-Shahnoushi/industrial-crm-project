@@ -27,8 +27,12 @@ class DashboardController extends Controller
         $potentialCustomers = (clone $accessibleCustomers)->where('customer_type', 'potential')->count();
 
         $totalParts = Part::count();
-        $totalStockQuantity = (int) Part::sum('stock_quantity');
-        $assignedParts = (int) (clone $accessibleParts)->sum('quantity');
+        $totalStockQuantity = Schema::hasColumn('parts', 'stock_quantity')
+            ? (int) Part::sum('stock_quantity')
+            : 0;
+        $assignedParts = Schema::hasColumn('customer_parts', 'quantity')
+            ? (int) (clone $accessibleParts)->sum('quantity')
+            : (int) (clone $accessibleParts)->count();
 
         $canViewParts = !$user || $user->hasSafePermission('parts.view');
         $lowStockParts = $canViewParts

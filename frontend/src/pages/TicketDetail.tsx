@@ -492,7 +492,7 @@ export default function TicketDetail() {
                   {ticket.customer_part.part?.name ?? 'دستگاه'}
                 </p>
                 <p className="font-mono text-base-content/70 ltr-text">
-                  SN: {ticket.customer_part.serial_number}
+                  SN: {ticket.customer_part.serial_number || 'بدون سریال'}
                 </p>
                 {ticket.customer_part.installation_date && (
                   <p className="text-base-content/65">

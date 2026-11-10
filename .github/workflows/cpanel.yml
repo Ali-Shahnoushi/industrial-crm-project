@@ -71,16 +71,13 @@ jobs:
           SESSION_DRIVER=array
           QUEUE_CONNECTION=sync
           ENV
-          (
-            cd "$TEST_APP" && \
-            composer install --no-interaction --prefer-dist --no-progress && \
-            ./vendor/bin/phpunit --colors=never
-          ) > phpunit-tests.log 2>&1
+          (cd "$TEST_APP" && composer install --no-interaction --prefer-dist --no-progress)
+          (cd "$TEST_APP" && ./vendor/bin/phpunit --colors=never) > phpunit-tests.log 2>&1
           status=$?
           cat phpunit-tests.log
           rm -rf "$TEST_APP"
           if [ "$status" -ne 0 ]; then
-            python3 -c 'from pathlib import Path; s=Path("phpunit-tests.log").read_text()[-20000:]; print("::error title=PHPUnit test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+            python3 -c 'from pathlib import Path; s=Path("phpunit-tests.log").read_text()[-3500:]; print("::error title=PHPUnit test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$status"
 
@@ -121,7 +118,7 @@ jobs:
           status=$?
           cat installer-http-tests.log
           if [ "$status" -ne 0 ]; then
-            python3 -c 'from pathlib import Path; s=Path("installer-http-tests.log").read_text()[-20000:]; print("::error title=Installer HTTP test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+            python3 -c 'from pathlib import Path; s=Path("installer-http-tests.log").read_text()[-3500:]; print("::error title=Installer HTTP test details::"+s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$status"
 
@@ -217,7 +214,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="latest-cpanel"
-          TITLE="آخرین بسته‌های آماده نصب در cPanel (ساخت خودکار v2.1.0)"
+          TITLE="آخرین بسته‌های آماده نصب در cPanel (ساخت خودکار v2.3.0)"
           NOTES="فایل‌های تست‌شده \`cpanel-public.zip\` و \`cpanel-private.zip\` به‌صورت خودکار از شاخه اصلی ساخته شده‌اند. همچنین این فایل‌ها مستقیماً داخل پوشه \`cpanel-release/\` مخزن نیز قرار دارند."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \

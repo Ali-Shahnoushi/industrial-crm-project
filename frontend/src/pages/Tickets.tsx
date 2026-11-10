@@ -401,7 +401,7 @@ export default function Tickets() {
                                 </span>
                               </p>
                               <p className="font-mono text-[10px] text-base-content/55 ltr-text">
-                                {t.customer_part.serial_number}
+                                {t.customer_part.serial_number || 'بدون سریال'}
                               </p>
                             </div>
                           ) : (
@@ -543,7 +543,7 @@ export default function Tickets() {
                 <option value="">بدون انتخاب دستگاه خاص</option>
                 {(selectedCustomerDetail?.customer_parts ?? []).map((cp) => (
                   <option key={cp.id} value={String(cp.id)}>
-                    {cp.part?.name ?? 'دستگاه'} — سریال: {cp.serial_number}
+                    {cp.part?.name ?? 'دستگاه'} — سریال: {cp.serial_number || 'بدون سریال'}
                   </option>
                 ))}
               </select>

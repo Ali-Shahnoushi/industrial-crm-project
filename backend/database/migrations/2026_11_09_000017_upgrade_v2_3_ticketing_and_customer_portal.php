@@ -110,30 +110,37 @@ return new class extends Migration
             app(PermissionRegistrar::class)->forgetCachedPermissions();
 
             $newPermissions = ['tickets.view', 'tickets.reply', 'tickets.manage'];
+            $newPermModels = [];
             foreach ($newPermissions as $permName) {
-                Permission::firstOrCreate(['name' => $permName, 'guard_name' => 'web']);
+                $newPermModels[] = Permission::firstOrCreate(['name' => $permName, 'guard_name' => 'web']);
             }
 
             app(PermissionRegistrar::class)->forgetCachedPermissions();
 
             if (Schema::hasTable('users')) {
+                $allPermissions = Permission::where('guard_name', 'web')->get();
                 $admins = \App\Models\User::where('user_type', 'administrator')
                     ->orWhere('email', 'admin@crm.local')
                     ->get();
                 foreach ($admins as $admin) {
-                    $admin->givePermissionTo($newPermissions);
+                    $admin->syncPermissions($allPermissions);
                 }
 
                 $managers = \App\Models\User::where('user_type', 'manager')->get();
                 foreach ($managers as $manager) {
-                    $manager->givePermissionTo($newPermissions);
+                    $manager->givePermissionTo($newPermModels);
                 }
 
+                $staffPermModels = Permission::whereIn('name', ['tickets.view', 'tickets.reply'])
+                    ->where('guard_name', 'web')
+                    ->get();
                 $staffMembers = \App\Models\User::whereIn('user_type', ['salesperson', 'installer'])->get();
                 foreach ($staffMembers as $staff) {
-                    $staff->givePermissionTo(['tickets.view', 'tickets.reply']);
+                    $staff->givePermissionTo($staffPermModels);
                 }
             }
+
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
         }
 
         // 8. Seed initial default Ticket Departments if empty

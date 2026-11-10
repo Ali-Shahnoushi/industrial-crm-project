@@ -171,7 +171,7 @@ function PortalCreateTicketModalInner({
               <option value="">بدون انتخاب دستگاه خاص</option>
               {devices.map((d) => (
                 <option key={d.id} value={String(d.id)}>
-                  {d.part?.name ?? 'دستگاه'} — سریال: {d.serial_number}{' '}
+                  {d.part?.name ?? 'دستگاه'} — سریال: {d.serial_number || 'بدون سریال'}{' '}
                   {d.is_under_warranty ? '(تحت گارانتی)' : ''}
                 </option>
               ))}

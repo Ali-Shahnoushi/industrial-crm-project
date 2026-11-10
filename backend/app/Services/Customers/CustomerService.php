@@ -85,6 +85,8 @@ class CustomerService
                 'notes' => $attributes['notes'] ?? null,
             ]);
 
+            $serialLabel = $serialNumber ?: 'بدون سریال';
+
             PartInventoryLog::create([
                 'part_id' => $lockedPart->id,
                 'customer_part_id' => $customerPart->id,
@@ -94,7 +96,7 @@ class CustomerService
                 'quantity' => $quantity,
                 'balance_before' => $beforeBalance,
                 'balance_after' => $newBalance,
-                'description' => "تخصیص دستگاه به مشتری «{$customer->display_name}» (سریال: {$serialNumber})"
+                'description' => "تخصیص دستگاه به مشتری «{$customer->display_name}» (سریال: {$serialLabel})"
                     . ($invoiceNumber ? " - شماره فاکتور: {$invoiceNumber}" : ''),
             ]);
 
@@ -102,7 +104,7 @@ class CustomerService
             $customer->histories()->create([
                 'user_id' => $userId,
                 'action' => 'part_assigned',
-                'description' => "دستگاه «{$lockedPart->name}» (تعداد: {$quantity} عدد، شماره سریال: {$serialNumber}{$invoiceSummary}) به مشتری تخصیص داده شد.",
+                'description' => "دستگاه «{$lockedPart->name}» (تعداد: {$quantity} عدد، شماره سریال: {$serialLabel}{$invoiceSummary}) به مشتری تخصیص داده شد.",
                 'metadata' => [
                     'part_id' => $lockedPart->id,
                     'part_name' => $lockedPart->name,
@@ -119,7 +121,7 @@ class CustomerService
                 $customer->histories()->create([
                     'user_id' => $userId,
                     'action' => 'type_converted',
-                    'description' => "وضعیت مشتری به دلیل تحویل دستگاه فیزیکی (سریال {$serialNumber}) از «بالقوه» به «بالفعل» ارتقا یافت.",
+                    'description' => "وضعیت مشتری به دلیل تحویل دستگاه فیزیکی ({$serialLabel}) از «بالقوه» به «بالفعل» ارتقا یافت.",
                     'metadata' => [
                         'previous_type' => 'potential',
                         'new_type' => 'effective',
