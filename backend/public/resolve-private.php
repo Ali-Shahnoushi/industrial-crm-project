@@ -63,6 +63,7 @@ if (!defined('CRM_SKIP_PSR_EXIT') && (extension_loaded('psr') || interface_exist
     exit;
 }
 
+if (!function_exists('_resolveLaravelPrivateDir')) {
 function _resolveLaravelPrivateDir(): string
 {
     $candidates = [];
@@ -165,7 +166,91 @@ return '<?= htmlspecialchars(dirname(__DIR__) . '/laravel_project/crmpart') ?>';
     <?php
     exit;
 }
+}
+
+if (!function_exists('_selfHealLaravelBootstrapCache')) {
+function _selfHealLaravelBootstrapCache(string $privatePath, string $publicPath): void
+{
+    foreach ([
+        $privatePath . '/bootstrap/cache',
+        $privatePath . '/storage/app/private',
+        $privatePath . '/storage/app/public',
+        $privatePath . '/storage/framework/cache/data',
+        $privatePath . '/storage/framework/sessions',
+        $privatePath . '/storage/framework/views',
+        $privatePath . '/storage/logs',
+    ] as $dir) {
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+    }
+
+    $cacheDir = $privatePath . '/bootstrap/cache';
+    $lockFile = $privatePath . '/composer.lock';
+    $provFile = $privatePath . '/bootstrap/providers.php';
+    $stampFile = $privatePath . '/storage/framework/crm-runtime.stamp';
+
+    $currentStamp = implode('|', [
+        $privatePath,
+        $publicPath,
+        is_file($lockFile) ? (@filemtime($lockFile) . ':' . @filesize($lockFile)) : 'no-lock',
+        is_file($provFile) ? (@filemtime($provFile) . ':' . @filesize($provFile)) : 'no-prov',
+    ]);
+
+    $savedStamp = is_file($stampFile) ? trim((string) @file_get_contents($stampFile)) : '';
+    $needsPurge = ($savedStamp !== $currentStamp);
+
+    // بررسی اضافی برای فایل‌های کش باقی‌مانده از نسخه‌های قبلی (مانند Filament / Livewire در v1.x)
+    if (!$needsPurge) {
+        foreach ([$cacheDir . '/packages.php', $cacheDir . '/services.php', $cacheDir . '/config.php'] as $checkFile) {
+            if (is_file($checkFile)) {
+                $rawCache = (string) @file_get_contents($checkFile);
+                if (
+                    str_contains($rawCache, 'Filament\\') ||
+                    str_contains($rawCache, 'Livewire\\') ||
+                    str_contains($rawCache, 'AdminPanelProvider') ||
+                    str_contains($rawCache, 'Collision\\') ||
+                    ($checkFile === $cacheDir . '/config.php' && !str_contains($rawCache, $privatePath))
+                ) {
+                    $needsPurge = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if ($needsPurge) {
+        foreach (glob($cacheDir . '/*.php') ?: [] as $staleFile) {
+            @unlink($staleFile);
+        }
+        foreach (glob($privatePath . '/storage/framework/views/*.php') ?: [] as $staleView) {
+            @unlink($staleView);
+        }
+        @file_put_contents($stampFile, $currentStamp);
+    }
+
+    // اگر پوشه bootstrap/cache روی هاست اشتراکی دسترسی نوشتن نداشت، مسیر کش را به storage/framework/cache هدایت کن
+    if (!is_writable($cacheDir)) {
+        @chmod($cacheDir, 0755);
+    }
+    $fallbackCache = $privatePath . '/storage/framework/cache';
+    if (!is_writable($cacheDir) && is_writable($fallbackCache)) {
+        $overrides = [
+            'APP_PACKAGES_CACHE' => $fallbackCache . '/packages.php',
+            'APP_SERVICES_CACHE' => $fallbackCache . '/services.php',
+            'APP_CONFIG_CACHE' => $fallbackCache . '/config.php',
+            'APP_ROUTES_CACHE' => $fallbackCache . '/routes-v7.php',
+            'APP_EVENTS_CACHE' => $fallbackCache . '/events.php',
+        ];
+        foreach ($overrides as $k => $v) {
+            $_SERVER[$k] = $_ENV[$k] = $v;
+            @putenv($k . '=' . $v);
+        }
+    }
+}
+}
 
 $privatePath = _resolveLaravelPrivateDir();
 $_SERVER['APP_PUBLIC_PATH'] = __DIR__;
+_selfHealLaravelBootstrapCache($privatePath, __DIR__);
 return $privatePath;

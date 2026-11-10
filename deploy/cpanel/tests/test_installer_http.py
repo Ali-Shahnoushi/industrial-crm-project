@@ -203,6 +203,50 @@ $db=getenv('TEST_DB_NAME');$pdo->exec("GRANT ALL PRIVILEGES ON `$db`.* TO $user"
         self.assertEqual(self.submit(csrf='wrong')[0], 419)
         self.assertFalse((self.private/'.env').exists())
 
+    def test_live_upgrade_heals_stale_bootstrap_caches_for_login_and_updater(self):
+        self.assert_success(*self.submit())
+        cache_dir = self.private / 'bootstrap/cache'
+        stamp_file = self.private / 'storage/framework/crm-runtime.stamp'
+
+        def poison_cache(old_stamp=True):
+            (cache_dir / 'packages.php').write_text(
+                "<?php return ['filament/filament' => ['providers' => ['Filament\\\\FilamentServiceProvider']]];"
+            )
+            (cache_dir / 'services.php').write_text(
+                "<?php return ['providers' => ['Filament\\\\FilamentServiceProvider'], "
+                "'eager' => ['Filament\\\\FilamentServiceProvider', 'App\\\\Providers\\\\Filament\\\\AdminPanelProvider'], "
+                "'deferred' => [], 'when' => []];"
+            )
+            if old_stamp:
+                stamp_file.write_text('legacy-v1-build-stamp')
+
+        # 1. Poison with legacy v1 Filament cache and verify live login via index.php self-heals (no 500 Target class [view])
+        poison_cache(old_stamp=False)
+        login_req = urllib.request.Request(
+            f'http://127.0.0.1:{self.port}/api/v1/auth/login',
+            data=urllib.parse.urlencode({'login': 'owner@example.test', 'password': self.admin_password}).encode(),
+            headers={'Accept': 'application/json'},
+        )
+        with self.client.open(login_req, timeout=30) as resp:
+            login_body = resp.read().decode('utf-8', errors='replace')
+            self.assertEqual(resp.code, 200, login_body)
+            self.assertIn('owner@example.test', login_body)
+
+        # 2. Re-poison with legacy build stamp + stale cache and verify update.php GET & POST succeed cleanly
+        poison_cache(old_stamp=True)
+        upd_url = f'http://127.0.0.1:{self.port}/update.php'
+        with self.client.open(upd_url, timeout=30) as resp:
+            upd_get = resp.read().decode('utf-8', errors='replace')
+            self.assertEqual(resp.code, 200, upd_get)
+            self.assertIn('اتصال به دیتابیس برقرار است', upd_get)
+
+        post_data = urllib.parse.urlencode({'secret': self.admin_password}).encode()
+        with self.client.open(upd_url, post_data, timeout=60) as resp:
+            upd_post = resp.read().decode('utf-8', errors='replace')
+            self.assertEqual(resp.code, 200, upd_post)
+            self.assertIn('به‌روزرسانی با موفقیت کامل شد', upd_post)
+        self.assertFalse((self.public / 'update.php').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

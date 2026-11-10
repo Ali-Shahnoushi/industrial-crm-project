@@ -100,6 +100,10 @@ class User extends Authenticatable
 
     public function scopeStaffOnly(Builder $query): Builder
     {
+        if (!Schema::hasColumn('users', 'user_type')) {
+            return $query;
+        }
+
         return $query->where(function (Builder $q) {
             $q->where('users.user_type', '!=', self::ROLE_CUSTOMER)
                 ->orWhereNull('users.user_type');
@@ -108,7 +112,9 @@ class User extends Authenticatable
 
     public function isAdministrator(): bool
     {
-        return $this->user_type === self::ROLE_ADMINISTRATOR || $this->email === 'admin@crm.local';
+        return $this->user_type === self::ROLE_ADMINISTRATOR
+            || $this->email === 'admin@crm.local'
+            || ($this->user_type === null && (int) $this->id === 1);
     }
 
     /**
