@@ -23,7 +23,7 @@ function e(string $s): string {
     return htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
 }
 
-function renderCard(string $title, string $body, string $badge = 'نسخه ۲.۰.۰'): string
+function renderCard(string $title, string $body, string $badge = 'نسخه ۲.۳.۰'): string
 {
     return '<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8">'
         . '<meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -180,7 +180,7 @@ if ($requestMethod !== 'POST' || !$isAuthorized) {
     }
 
     $body = $authError
-        . '<div class="note">این ابزار تغییرات دیتابیس نسخه ۲.۰.۰ (از جمله مدیریت انبار، سطوح دسترسی کارشناسان و تخصیص قطعات/دستگاه‌ها) را بدون از دست رفتن داده‌های قبلی بر روی دیتابیس اعمال می‌کند.</div>'
+        . '<div class="note">این ابزار تغییرات دیتابیس نسخه ۲.۳.۰ (مدیریت انبار، تیکتینگ، پنل مشتری، فیلد سریال اختیاری و ۱۷ سطح دسترسی) را بدون از دست رفتن داده‌های قبلی بر روی دیتابیس اعمال می‌کند.</div>'
         . $dbStatusHtml
         . '<form method="post" style="margin-top:20px">'
         . '<label for="secret">کلید امنیتی (APP_KEY موجود در .env یا رمز عبور مدیر سیستم):</label>'
@@ -244,7 +244,7 @@ $selfDeleted = @unlink(__FILE__);
 
 $appUrl = (string)envValue($envPath, 'APP_URL') ?: '/';
 
-$body = '<div class="succ">🎉 <b>به‌روزرسانی با موفقیت کامل شد!</b><br>دیتابیس سامانه و تمام جداول به نسخه ۲.۰.۰ ارتقا یافتند و داده‌های پیشین حفظ شدند.</div>'
+$body = '<div class="succ">🎉 <b>به‌روزرسانی با موفقیت کامل شد!</b><br>دیتابیس سامانه و تمام جداول به نسخه ۲.۳.۰ ارتقا یافتند و داده‌های پیشین حفظ شدند.</div>'
     . '<h3 style="margin-top:20px;color:#cbd5e1;font-size:14px">گزارش عملیات انجام‌شده:</h3>'
     . '<pre>' . e(trim($migrationLog)) . '</pre>'
     . '<div class="note">'

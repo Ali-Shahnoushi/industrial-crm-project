@@ -9,6 +9,9 @@ header('Content-Type: text/html; charset=utf-8');
 header('X-Robots-Tag: noindex');
 header('Cache-Control: no-store');
 
+if (!defined('CRM_SKIP_PSR_EXIT')) {
+    define('CRM_SKIP_PSR_EXIT', true);
+}
 $baseDir = require __DIR__ . '/resolve-private.php'; // Laravel root
 $envPath = $baseDir . '/.env';
 $envExists = is_file($envPath);

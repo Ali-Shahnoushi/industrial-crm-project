@@ -19,7 +19,10 @@ class SettingController extends Controller
         $username = Setting::get('melipayamak_username') ?: env('MELIPAYAMAK_USERNAME', '');
         $password = Setting::get('melipayamak_password') ?: env('MELIPAYAMAK_PASSWORD', '');
         $fromNumber = Setting::get('melipayamak_from') ?: env('MELIPAYAMAK_FROM', '');
-        $sandbox = Setting::get('melipayamak_sandbox', 'true') === 'true';
+        $rawSandbox = Setting::get('melipayamak_sandbox');
+        $sandbox = $rawSandbox !== null
+            ? filter_var($rawSandbox, FILTER_VALIDATE_BOOLEAN)
+            : filter_var(env('MELIPAYAMAK_SANDBOX', true), FILTER_VALIDATE_BOOLEAN);
 
         return response()->json([
             'melipayamak_username' => $username,
@@ -137,12 +140,12 @@ class SettingController extends Controller
         $migrateOutput = trim(Artisan::output());
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        Setting::set('app_version', config('app.version', '2.1.0'));
+        Setting::set('app_version', config('app.version', '2.3.0'));
         Artisan::call('optimize:clear');
 
         return response()->json([
             'message' => 'ارتقای ساختار پایگاه داده (Zero Data Loss) و پاکسازی کش سامانه با موفقیت انجام شد.',
-            'version' => config('app.version', '2.1.0'),
+            'version' => config('app.version', '2.3.0'),
             'output' => $migrateOutput,
         ]);
     }

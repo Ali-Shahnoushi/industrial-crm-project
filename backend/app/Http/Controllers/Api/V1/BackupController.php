@@ -52,7 +52,7 @@ class BackupController extends Controller
             'total_customers' => Customer::count(),
             'total_devices' => CustomerPart::count(),
             'total_parts' => Part::count(),
-            'total_users' => User::count(),
+            'total_users' => User::staffOnly()->count(),
             'server_time' => Carbon::now()->toIso8601String(),
         ]);
     }
@@ -63,7 +63,7 @@ class BackupController extends Controller
     public function exportCustomersJson(Request $request): StreamedResponse
     {
         $user = $request->user();
-        if (!$user->can('customers.export') && !$user->can('settings.manage') && !$user->isAdministrator()) {
+        if (!$user || (!$user->isAdministrator() && !$user->hasSafePermission('settings.manage') && !$user->hasSafePermission('customers.view'))) {
             abort(403, 'شما مجوز دریافت خروجی پرونده‌های مشتریان را ندارید.');
         }
 
@@ -134,7 +134,7 @@ class BackupController extends Controller
     public function restoreCustomersJson(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user->can('customers.import') && !$user->can('settings.manage') && !$user->isAdministrator()) {
+        if (!$user || (!$user->isAdministrator() && !$user->hasSafePermission('settings.manage') && !$user->hasSafePermission('customers.create'))) {
             abort(403, 'شما مجوز بازیابی و ورود پرونده‌های مشتریان را ندارید.');
         }
 
@@ -198,11 +198,15 @@ class BackupController extends Controller
                     'notes' => $item['notes'] ?? null,
                 ];
 
+                if (!empty($item['devices']) && is_array($item['devices'])) {
+                    $customerData['customer_type'] = 'effective';
+                }
+
                 if ($customer) {
-                    $customer->update($customerData);
+                    $customer->update(array_filter($customerData, fn ($v) => $v !== null));
                     $updatedCustomers++;
                 } else {
-                    $customerData['created_by'] = $request->user()->id;
+                    $customerData['created_by_user_id'] = $request->user()->id;
                     $customer = Customer::create($customerData);
                     $createdCustomers++;
                 }
@@ -238,11 +242,10 @@ class BackupController extends Controller
                         $cp = null;
                         if ($serial) {
                             $cp = CustomerPart::where('serial_number', $serial)->first();
-                        }
-                        if (!$cp) {
+                        } else {
                             $cp = CustomerPart::where('customer_id', $customer->id)
                                 ->where('part_id', $part->id)
-                                ->when($serial, fn ($q) => $q->where('serial_number', $serial))
+                                ->whereNull('serial_number')
                                 ->first();
                         }
 
@@ -312,67 +315,103 @@ class BackupController extends Controller
             ]);
         }
 
-        // Generic SQL dumper for MySQL / MariaDB (Pure PHP implementation - 100% reliable on cPanel)
+        // Generic SQL dumper for MySQL / MariaDB (Pure PHP implementation - 100% reliable on cPanel, no doctrine/dbal)
         $filename = 'crm-database-backup-' . Carbon::now()->format('Y-m-d-His') . '.sql';
 
-        return response()->streamDownload(function () {
-            echo "-- ============================================================\n";
-            echo "-- Industrial Equipment CRM Database Dump\n";
-            echo "-- Exported at: " . Carbon::now()->toDateTimeString() . "\n";
-            echo "-- ============================================================\n\n";
-            echo "SET FOREIGN_KEY_CHECKS=0;\n\n";
+        return response()->streamDownload(function () use ($driver) {
+            echo $this->generateSqlDump($driver);
+        }, $filename, [
+            'Content-Type' => 'application/sql; charset=utf-8',
+        ]);
+    }
 
-            $pdo = DB::connection()->getPdo();
-            $tables = DB::connection()->getDoctrineSchemaManager()->listTableNames();
+    /**
+     * Generate a portable SQL dump string without relying on mysqldump or removed doctrine/dbal APIs.
+     */
+    public function generateSqlDump(?string $driver = null): string
+    {
+        $driver = $driver ?: DB::connection()->getDriverName();
+        $pdo = DB::connection()->getPdo();
 
-            foreach ($tables as $table) {
-                if (in_array($table, ['sessions', 'cache', 'cache_locks', 'jobs', 'failed_jobs'], true)) {
-                    continue;
-                }
+        $out = "-- ============================================================\n";
+        $out .= "-- Industrial Equipment CRM Database Dump\n";
+        $out .= '-- Exported at: ' . Carbon::now()->toDateTimeString() . "\n";
+        $out .= "-- ============================================================\n\n";
+        $out .= "SET NAMES utf8mb4;\n";
+        $out .= "SET FOREIGN_KEY_CHECKS=0;\n\n";
 
-                echo "-- Table structure for `{$table}`\n";
-                echo "DROP TABLE IF EXISTS `{$table}`;\n";
+        if ($driver === 'mysql' || $driver === 'mariadb') {
+            $tableRows = DB::select("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
+            $tables = array_map(fn ($r) => (string) reset((array) $r), $tableRows);
+        } else {
+            $tables = array_map(
+                fn ($t) => is_array($t) ? (string) ($t['name'] ?? reset($t)) : (string) $t,
+                Schema::getTables()
+            );
+        }
 
-                try {
+        foreach ($tables as $table) {
+            if (in_array($table, ['sessions', 'cache', 'cache_locks', 'jobs', 'failed_jobs', 'sqlite_sequence'], true)) {
+                continue;
+            }
+
+            $out .= "-- Table structure for `{$table}`\n";
+            $out .= "DROP TABLE IF EXISTS `{$table}`;\n";
+
+            try {
+                if ($driver === 'mysql' || $driver === 'mariadb') {
                     $createRow = DB::select("SHOW CREATE TABLE `{$table}`");
                     if (!empty($createRow)) {
                         $createSql = ((array) $createRow[0])['Create Table'] ?? null;
                         if ($createSql) {
-                            echo $createSql . ";\n\n";
+                            $out .= $createSql . ";\n\n";
                         }
                     }
-                } catch (\Throwable) {
-                    // Fallback if SHOW CREATE TABLE not available
                 }
-
-                // Table Rows
-                echo "-- Dumping data for table `{$table}`\n";
-                $rows = DB::table($table)->get();
-                if ($rows->count() > 0) {
-                    foreach ($rows->chunk(100) as $chunk) {
-                        $inserts = [];
-                        foreach ($chunk as $row) {
-                            $values = [];
-                            foreach ((array) $row as $val) {
-                                if (is_null($val)) {
-                                    $values[] = 'NULL';
-                                } else {
-                                    $values[] = $pdo->quote((string) $val);
-                                }
-                            }
-                            $inserts[] = '(' . implode(', ', $values) . ')';
-                        }
-                        echo "INSERT INTO `{$table}` VALUES\n  " . implode(",\n  ", $inserts) . ";\n";
-                    }
-                }
-                echo "\n";
+            } catch (\Throwable) {
+                // Fallback if SHOW CREATE TABLE is unavailable
             }
 
-            echo "SET FOREIGN_KEY_CHECKS=1;\n";
-            echo "-- Dump completed successfully.\n";
-        }, $filename, [
-            'Content-Type' => 'application/sql; charset=utf-8',
-        ]);
+            $out .= "-- Dumping data for table `{$table}`\n";
+            $batch = [];
+            $columnsHeader = null;
+
+            foreach (DB::table($table)->cursor() as $row) {
+                $rowArr = (array) $row;
+                if ($columnsHeader === null) {
+                    $cols = array_map(fn ($c) => "`{$c}`", array_keys($rowArr));
+                    $columnsHeader = '(' . implode(', ', $cols) . ')';
+                }
+
+                $values = [];
+                foreach ($rowArr as $val) {
+                    if ($val === null) {
+                        $values[] = 'NULL';
+                    } elseif (is_bool($val)) {
+                        $values[] = $val ? '1' : '0';
+                    } else {
+                        $values[] = $pdo->quote((string) $val);
+                    }
+                }
+                $batch[] = '(' . implode(', ', $values) . ')';
+
+                if (count($batch) >= 100) {
+                    $out .= "INSERT INTO `{$table}` {$columnsHeader} VALUES\n  " . implode(",\n  ", $batch) . ";\n";
+                    $batch = [];
+                }
+            }
+
+            if (!empty($batch)) {
+                $out .= "INSERT INTO `{$table}` {$columnsHeader} VALUES\n  " . implode(",\n  ", $batch) . ";\n";
+            }
+
+            $out .= "\n";
+        }
+
+        $out .= "SET FOREIGN_KEY_CHECKS=1;\n";
+        $out .= "-- Dump completed successfully.\n";
+
+        return $out;
     }
 
     private function formatBytes(int $bytes): string

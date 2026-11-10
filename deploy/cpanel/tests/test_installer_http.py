@@ -123,7 +123,7 @@ $db=getenv('TEST_DB_NAME');$pdo->exec("DROP DATABASE IF EXISTS `$db`");$pdo->exe
 $_SERVER['APP_PUBLIC_PATH']=getenv('TEST_PUBLIC');$app=require getenv('TEST_PRIVATE').'/bootstrap/app.php';
 $app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
 $u=App\\Models\\User::where('email','owner@example.test')->firstOrFail();
-if(!Illuminate\\Support\\Facades\\Hash::check(getenv('TEST_ADMIN_PASSWORD'),$u->password)||$u->getAllPermissions()->count()!==14) exit(3);''')
+if(!Illuminate\\Support\\Facades\\Hash::check(getenv('TEST_ADMIN_PASSWORD'),$u->password)||$u->getAllPermissions()->count()!==Spatie\\Permission\\Models\\Permission::count()||$u->getAllPermissions()->count()<17) exit(3);''')
 
     def assert_diagnostic(self, status, body, stage):
         self.assertEqual(status, 500, body)

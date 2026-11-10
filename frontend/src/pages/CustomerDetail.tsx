@@ -441,7 +441,11 @@ export default function CustomerDetail() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="font-bold text-sm text-base-content">{cp.part?.name ?? 'دستگاه'}</h3>
-                          <span className="badge badge-primary font-mono text-xs">{cp.serial_number}</span>
+                          {cp.serial_number ? (
+                            <span className="badge badge-primary font-mono text-xs">{cp.serial_number}</span>
+                          ) : (
+                            <span className="badge badge-ghost text-xs">بدون سریال</span>
+                          )}
                           <span className="badge badge-primary badge-soft font-bold text-xs">
                             تعداد: {num(cp.quantity ?? 1)} عدد
                           </span>
@@ -875,7 +879,7 @@ export default function CustomerDetail() {
           deletingAssignedPart
             ? `آیا از حذف دستگاه «${deletingAssignedPart.part?.name ?? ''}» (تعداد: ${num(
                 deletingAssignedPart.quantity ?? 1,
-              )} عدد، سریال: ${deletingAssignedPart.serial_number}) از پرونده این مشتری اطمینان دارید؟ تعداد ${num(
+              )} عدد، سریال: ${deletingAssignedPart.serial_number || 'بدون سریال'}) از پرونده این مشتری اطمینان دارید؟ تعداد ${num(
                 deletingAssignedPart.quantity ?? 1,
               )} عدد به صورت خودکار به موجودی انبار بازگردانده شده و در لاگ انبار ثبت می‌گردد.`
             : ''

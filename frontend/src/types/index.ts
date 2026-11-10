@@ -185,7 +185,7 @@ export interface CustomerPart {
   id: number | string
   customer_id: number | string
   part_id: number | string
-  serial_number: string
+  serial_number?: string | null
   quantity?: number
   invoice_amount?: number | string | null
   invoice_number?: string | null
@@ -395,7 +395,7 @@ export interface PortalSalesContact {
 export interface PortalDevice {
   id: number
   part_id: number
-  serial_number: string
+  serial_number?: string | null
   quantity: number
   installation_date?: string | null
   warranty_expire_date?: string | null

@@ -6,7 +6,8 @@
  */
 
 // ۱. بررسی زودهنگام تداخل افزونه بومی psr سرور (قبل از لود شدن vendor)
-if (extension_loaded('psr') || interface_exists('PsrExt\\SimpleCache\\CacheInterface', false) || interface_exists('PsrExt\\Log\\LoggerInterface', false)) {
+// نکته: install.php و setup-check.php خودشان جدول بررسی پیش‌نیازها را رندر می‌کنند (CRM_SKIP_PSR_EXIT)
+if (!defined('CRM_SKIP_PSR_EXIT') && (extension_loaded('psr') || interface_exists('PsrExt\\SimpleCache\\CacheInterface', false) || interface_exists('PsrExt\\Log\\LoggerInterface', false))) {
     http_response_code(500);
     $isApi = (!empty($_SERVER['REQUEST_URI']) && str_contains($_SERVER['REQUEST_URI'], '/api/'))
         || (!empty($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json'));

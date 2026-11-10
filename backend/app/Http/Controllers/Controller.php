@@ -24,7 +24,7 @@ abstract class Controller
     protected function authorizePermission(string $permission): void
     {
         $user = auth()->user();
-        if (!$user || !$user->hasPermissionTo($permission)) {
+        if (!$user || !$user->hasSafePermission($permission)) {
             abort(403, "شما دسترسی لازم ({$permission}) برای این عملیات را ندارید.");
         }
     }

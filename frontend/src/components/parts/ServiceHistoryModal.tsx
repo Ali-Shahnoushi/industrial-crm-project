@@ -85,7 +85,7 @@ export function ServiceHistoryModal({ open, onClose, customerPart, onSuccess }: 
       open={open}
       onClose={onClose}
       size="md"
-      title={`ثبت سابقه اقدام/تعمیر دستگاه — سریال ${customerPart.serial_number}`}
+      title={`ثبت سابقه اقدام/تعمیر دستگاه — ${customerPart.serial_number ? `سریال ${customerPart.serial_number}` : 'بدون سریال'}`}
       footer={
         <>
           <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSubmitting}>

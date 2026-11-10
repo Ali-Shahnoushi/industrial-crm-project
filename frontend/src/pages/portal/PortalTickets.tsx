@@ -143,7 +143,7 @@ export default function PortalTickets() {
                         {t.customer_part && (
                           <span className="inline-flex items-center gap-1 text-primary font-semibold">
                             <Cpu className="size-3" /> {t.customer_part.part?.name} (
-                            {t.customer_part.serial_number})
+                            {t.customer_part.serial_number || 'بدون سریال'})
                           </span>
                         )}
                       </div>

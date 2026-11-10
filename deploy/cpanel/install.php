@@ -196,6 +196,9 @@ session_set_cookie_params(['httponly' => true, 'samesite' => 'Strict', 'secure' 
 if (!session_start()) { throw new RuntimeException('PHP session could not be started.'); }
 $_SESSION['install_csrf'] ??= bin2hex(random_bytes(32));
 
+if (!defined('CRM_SKIP_PSR_EXIT')) {
+    define('CRM_SKIP_PSR_EXIT', true);
+}
 $baseDir = require __DIR__ . '/resolve-private.php';
 $envPath = $baseDir . '/.env';
 if (is_file($baseDir.'/storage/installed.lock')) {

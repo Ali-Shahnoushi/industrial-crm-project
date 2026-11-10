@@ -116,7 +116,7 @@ export default function PortalTicketDetail() {
           {ticket.customer_part && (
             <span className="inline-flex items-center gap-1.5 text-primary font-bold">
               <Cpu className="size-4" />
-              دستگاه: {ticket.customer_part.part?.name} (سریال: {ticket.customer_part.serial_number})
+              دستگاه: {ticket.customer_part.part?.name} (سریال: {ticket.customer_part.serial_number || 'بدون سریال'})
             </span>
           )}
         </div>

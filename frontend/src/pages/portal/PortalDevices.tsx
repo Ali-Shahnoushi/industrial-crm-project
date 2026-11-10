@@ -100,7 +100,7 @@ export default function PortalDevices() {
                       </span>
                       <span>•</span>
                       <span>
-                        شماره سریال: <b className="font-mono ltr-text">{dev.serial_number}</b>
+                        شماره سریال: <b className="font-mono ltr-text">{dev.serial_number || 'بدون سریال'}</b>
                       </span>
                       <span>•</span>
                       <span>
