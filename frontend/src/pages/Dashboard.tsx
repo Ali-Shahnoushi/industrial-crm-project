@@ -6,8 +6,10 @@ import {
   Clock,
   Cpu,
   LifeBuoy,
+  Receipt,
   Send,
   ShieldCheck,
+  TrendingUp,
   UserCheck,
   UserPlus,
   Users,
@@ -20,7 +22,7 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
 import { dashboardApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
-import { customerDisplayName, cx, dateFa, num, relativeFa, weekdayFa } from "../utils/format";
+import { compactToman, customerDisplayName, cx, dateFa, num, relativeFa, toman, weekdayFa } from "../utils/format";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
@@ -131,6 +133,86 @@ export default function Dashboard() {
           to="/tickets"
         />
       </div>
+
+      {/* Sales & Finance Summary Widget */}
+      <Can permission="sales.view">
+        <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-l from-emerald-500/10 via-base-100 to-base-100 p-4 sm:p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                <TrendingUp className="size-5" />
+              </span>
+              <div>
+                <h2 className="text-sm sm:text-base font-extrabold text-base-content">
+                  خلاصه عملکرد فروش و مالی
+                </h2>
+                <p className="text-xs text-base-content/60 mt-0.5">
+                  گزارش درآمد تاییدشده، سفارش‌ها و مانده مطالبات براساس سطح دسترسی شما
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Link to="/sales" className="btn btn-sm btn-primary gap-1.5">
+                <TrendingUp className="size-4" /> گزارش و نمودارهای فروش
+              </Link>
+              <Link to="/finance" className="btn btn-sm btn-outline gap-1.5">
+                <Receipt className="size-4" /> مالی و فاکتورها
+              </Link>
+            </div>
+          </div>
+
+          {(() => {
+            const rev30d = stats.sales_revenue_30d ?? data?.sales_summary?.revenue_last_30_days ?? 0
+            const revTotal = stats.sales_revenue_total ?? data?.sales_summary?.total_revenue ?? 0
+            const countTotal = stats.sales_count_total ?? data?.sales_summary?.sales_count ?? 0
+            const unpaidTotal = stats.sales_unpaid_total ?? data?.sales_summary?.unpaid_amount ?? 0
+            return (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-xl border border-base-200 bg-base-100/95 p-3.5 sm:p-4">
+                  <p className="text-xs text-base-content/60 font-bold">درآمد ۳۰ روز اخیر</p>
+                  <p className="mt-1.5 text-lg font-black text-emerald-600 dark:text-emerald-400">
+                    {compactToman(rev30d)}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-base-content/55 break-words">
+                    {toman(rev30d)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-base-200 bg-base-100/95 p-3.5 sm:p-4">
+                  <p className="text-xs text-base-content/60 font-bold">کل فروش تاییدشده</p>
+                  <p className="mt-1.5 text-lg font-black text-base-content">
+                    {compactToman(revTotal)}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-base-content/55 break-words">
+                    {toman(revTotal)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-base-200 bg-base-100/95 p-3.5 sm:p-4">
+                  <p className="text-xs text-base-content/60 font-bold">تعداد سفارش‌ها</p>
+                  <p className="mt-1.5 text-lg font-black text-primary">
+                    {num(countTotal)} سفارش
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-base-content/55">
+                    فروش‌های تاییدشده و فعال
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-base-200 bg-base-100/95 p-3.5 sm:p-4">
+                  <p className="text-xs text-base-content/60 font-bold">مانده تسویه‌نشده</p>
+                  <p className="mt-1.5 text-lg font-black text-amber-600 dark:text-amber-400">
+                    {compactToman(unpaidTotal)}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-base-content/55 break-words">
+                    {toman(unpaidTotal)}
+                  </p>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      </Can>
 
       {/* Low Stock Warehouse Alert Banner */}
       {(data?.low_stock_parts?.length ?? 0) > 0 && (
