@@ -19,6 +19,7 @@ import {
   Receipt,
   Send,
   Trash2,
+  TrendingUp,
   User,
   UserCheck,
   UserCog,
@@ -31,14 +32,23 @@ import { PasswordRulesTooltip } from '../components/ui/PasswordRulesTooltip'
 import { CustomerFormModal } from '../components/customers/CustomerFormModal'
 import { AssignPartModal } from '../components/parts/AssignPartModal'
 import { ServiceHistoryModal } from '../components/parts/ServiceHistoryModal'
+import { SaleFormModal } from '../components/sales/SaleFormModal'
 import { Can } from '../components/common/Can'
 import { customerApi, partApi } from '../services/api'
+import { salesApi } from '../services/sales'
 import { useAuthStore } from '../store/useAuthStore'
-import { ticketPriorityMeta, ticketStatusMeta, ticketTypeMeta } from '../utils/meta'
+import {
+  paymentStatusMeta,
+  saleStatusMeta,
+  ticketPriorityMeta,
+  ticketStatusMeta,
+  ticketTypeMeta,
+} from '../utils/meta'
 import { customerDisplayName, cx, dateFa, dateShort, num, relativeFa, toEnDigits, toman } from '../utils/format'
 import type { CustomerPart } from '../types'
+import type { Sale } from '../types/sales'
 
-type ActiveTab = 'parts' | 'tickets' | 'audit' | 'sms' | 'profile'
+type ActiveTab = 'parts' | 'sales' | 'tickets' | 'audit' | 'sms' | 'profile'
 
 export default function CustomerDetail() {
   const { id } = useParams<{ id: string }>()
@@ -54,6 +64,7 @@ export default function CustomerDetail() {
       (currentUser?.user_type === 'manager' && currentUser?.customer_scope === 'all'))
   const canViewSmsLogs = hasPermission('sms.logs')
   const canViewTickets = hasPermission('tickets.view')
+  const canViewSales = hasPermission('sales.view')
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('parts')
   const [editOpen, setEditOpen] = useState(false)
@@ -73,11 +84,19 @@ export default function CustomerDetail() {
   const [editingAssignedPart, setEditingAssignedPart] = useState<CustomerPart | null>(null)
   const [deletingAssignedPart, setDeletingAssignedPart] = useState<CustomerPart | null>(null)
   const [servicePart, setServicePart] = useState<CustomerPart | null>(null)
+  const [saleModalOpen, setSaleModalOpen] = useState(false)
+  const [editingSale, setEditingSale] = useState<Sale | null>(null)
 
   const { data: customer, isLoading, error } = useQuery({
     queryKey: ['customer', id],
     queryFn: () => customerApi.get(id!),
     enabled: Boolean(id),
+  })
+
+  const { data: customerSales = [] } = useQuery({
+    queryKey: ['customer-sales', id],
+    queryFn: () => salesApi.customerSales(id!),
+    enabled: Boolean(id) && canViewSales,
   })
 
   const { data: staffOptions = [] } = useQuery({
@@ -361,6 +380,16 @@ export default function CustomerDetail() {
             >
               <LifeBuoy className="size-4" />
               تیکت‌ها و تعمیرات ({num(customerTickets.length)})
+            </button>
+          )}
+          {canViewSales && (
+            <button
+              role="tab"
+              className={cx('tab gap-2 font-bold text-xs', activeTab === 'sales' && 'tab-active')}
+              onClick={() => setActiveTab('sales')}
+            >
+              <TrendingUp className="size-4" />
+              فروش‌ها و فاکتورها ({num(customerSales.length)})
             </button>
           )}
           <button
@@ -647,6 +676,155 @@ export default function CustomerDetail() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab 2.5: Customer Sales & Invoices */}
+      {activeTab === 'sales' && canViewSales && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-base-200 bg-base-100 p-4 shadow-xs">
+              <p className="text-[11px] font-bold text-base-content/55">مجموع خرید تاییدشده</p>
+              <p className="mt-1 font-mono text-lg font-black text-emerald-600">
+                {toman(
+                  customerSales
+                    .filter((s) => s.status !== 'cancelled')
+                    .reduce((acc, s) => acc + Number(s.total || 0), 0),
+                )}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-base-200 bg-base-100 p-4 shadow-xs">
+              <p className="text-[11px] font-bold text-base-content/55">تعداد سفارش‌های ثبت‌شده</p>
+              <p className="mt-1 font-mono text-lg font-black text-base-content">
+                {num(customerSales.length)} سفارش
+              </p>
+            </div>
+            <div className="rounded-2xl border border-base-200 bg-base-100 p-4 shadow-xs">
+              <p className="text-[11px] font-bold text-base-content/55">مانده بدهی / تسویه‌نشده</p>
+              <p className="mt-1 font-mono text-lg font-black text-amber-600">
+                {toman(
+                  customerSales
+                    .filter((s) => s.status !== 'cancelled')
+                    .reduce(
+                      (acc, s) =>
+                        acc + Math.max(0, Number(s.total || 0) - Number(s.paid_amount || 0)),
+                      0,
+                    ),
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-base-200 bg-base-100 p-5 shadow-xs space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-bold text-base text-base-content">فهرست فروش‌ها و فاکتورهای مشتری</h2>
+              <div className="flex items-center gap-2">
+                <Can permission="sales.create">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingSale(null)
+                      setSaleModalOpen(true)
+                    }}
+                    className="btn btn-primary btn-sm gap-1.5"
+                  >
+                    <Plus className="size-4" /> ثبت فروش جدید
+                  </button>
+                </Can>
+              </div>
+            </div>
+
+            {!customerSales.length ? (
+              <EmptyState
+                icon={Receipt}
+                title="فروشی برای این مشتری ثبت نشده است"
+                subtitle="با تخصیص دستگاه یا ثبت سفارش از این بخش، سوابق فروش و فاکتورهای مشتری نمایش داده می‌شود."
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="table table-sm w-full">
+                  <thead>
+                    <tr className="text-base-content/60 text-xs">
+                      <th>شماره فروش</th>
+                      <th>تاریخ</th>
+                      <th>اقلام</th>
+                      <th>مبلغ کل</th>
+                      <th>پرداخت</th>
+                      <th>وضعیت سفارش</th>
+                      <th>فاکتور</th>
+                      <th>عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customerSales.map((s) => {
+                      const st = saleStatusMeta[s.status] ?? saleStatusMeta.confirmed
+                      const pm = paymentStatusMeta[s.payment_status] ?? paymentStatusMeta.unpaid
+                      const activeInv =
+                        s.active_invoice ?? s.invoices?.find((inv) => inv.status !== 'void')
+                      return (
+                        <tr key={s.id} className="hover:bg-base-200/40 text-xs">
+                          <td className="font-mono font-bold">
+                            <Link to={`/sales/${s.id}`} className="link link-primary">
+                              #{num(s.id)}
+                            </Link>
+                          </td>
+                          <td className="text-base-content/70">{dateFa(s.sale_date)}</td>
+                          <td className="max-w-xs truncate">
+                            {s.items?.map((i) => `${i.part?.name || 'دستگاه'} (${num(i.quantity)})`).join('، ') || '—'}
+                          </td>
+                          <td className="font-mono font-bold">{toman(s.total)}</td>
+                          <td>
+                            <span className={cx('badge badge-xs font-bold', pm.badgeClass)}>
+                              {pm.label}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={cx('badge badge-xs font-bold', st.badgeClass)}>
+                              {st.label}
+                            </span>
+                          </td>
+                          <td>
+                            {activeInv ? (
+                              <Link
+                                to={`/invoices/${activeInv.id}/print`}
+                                className="btn btn-ghost btn-xs font-mono gap-1 text-primary"
+                              >
+                                <Receipt className="size-3" /> {activeInv.number}
+                              </Link>
+                            ) : (
+                              <span className="text-base-content/40">—</span>
+                            )}
+                          </td>
+                          <td>
+                            <div className="flex items-center gap-1">
+                              <Link to={`/sales/${s.id}`} className="btn btn-ghost btn-xs">
+                                جزئیات
+                              </Link>
+                              <Can permission="sales.manage">
+                                {s.status !== 'cancelled' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingSale(s)
+                                      setSaleModalOpen(true)
+                                    }}
+                                    className="btn btn-ghost btn-xs"
+                                    title="ویرایش فروش"
+                                  >
+                                    <Pencil className="size-3" />
+                                  </button>
+                                )}
+                              </Can>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1069,6 +1247,18 @@ export default function CustomerDetail() {
           )}
         </div>
       </Modal>
+
+      {canViewSales && (
+        <SaleFormModal
+          open={saleModalOpen}
+          onClose={() => {
+            setSaleModalOpen(false)
+            setEditingSale(null)
+          }}
+          editingSale={editingSale}
+          defaultCustomerId={customer.id}
+        />
+      )}
     </div>
   )
 }

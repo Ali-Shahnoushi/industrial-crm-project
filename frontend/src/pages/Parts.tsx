@@ -1,8 +1,8 @@
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import {
@@ -32,8 +32,10 @@ import {
   customerDisplayName,
   cx,
   dateTimeFa,
+  formatNumericInput,
   num,
   toEnDigits,
+  toman,
 } from '../utils/format'
 import { inventoryTypeMeta } from '../utils/meta'
 import type { InventoryOperationType, Part } from '../types'
@@ -52,6 +54,7 @@ const schema = z.object({
       const n = Number(toEnDigits(v))
       return Number.isInteger(n) && n >= 1
     }, 'دوره سرویس باید حداقل ۱ ماه باشد'),
+  unit_price: z.string().optional(),
   stock_quantity: z.string().optional(),
   min_stock: z.string().optional(),
   unit: z.string().trim().optional(),
@@ -151,6 +154,8 @@ export default function Parts() {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PartFormValues>({
     resolver: zodResolver(schema),
@@ -158,6 +163,7 @@ export default function Parts() {
       name: '',
       code: '',
       periodic_service_months: '12',
+      unit_price: '0',
       stock_quantity: '0',
       min_stock: '0',
       unit: 'دستگاه',
@@ -166,12 +172,15 @@ export default function Parts() {
     },
   })
 
+  const unitPriceVal = useWatch({ control, name: 'unit_price' })
+
   const openCreate = () => {
     setEditingPart(null)
     reset({
       name: '',
       code: '',
       periodic_service_months: '12',
+      unit_price: '0',
       stock_quantity: '0',
       min_stock: '0',
       unit: 'دستگاه',
@@ -187,6 +196,7 @@ export default function Parts() {
       name: p.name,
       code: p.code,
       periodic_service_months: String(p.periodic_service_months),
+      unit_price: formatNumericInput(String(Math.round(Number(p.unit_price ?? 0)))),
       stock_quantity: String(p.stock_quantity ?? 0),
       min_stock: String(p.min_stock ?? 0),
       unit: p.unit || 'دستگاه',
@@ -248,10 +258,12 @@ export default function Parts() {
   })
 
   const onSubmit = async (values: PartFormValues) => {
+    const parsedUnitPrice = Number(toEnDigits(values.unit_price || '0').replace(/,/g, '')) || 0
     const payload: Partial<Part> = {
       name: values.name.trim(),
       code: toEnDigits(values.code).trim(),
       periodic_service_months: Number(toEnDigits(values.periodic_service_months)) || 12,
+      unit_price: Math.max(0, parsedUnitPrice),
       min_stock: Number(toEnDigits(values.min_stock || '0')) || 0,
       unit: values.unit?.trim() || 'دستگاه',
       description: values.description?.trim() || null,
@@ -475,6 +487,7 @@ export default function Parts() {
                           )}
                         </div>
                       </th>
+                      <th>قیمت واحد (تومان)</th>
                       <th
                         onClick={() => handleSort('status')}
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
@@ -545,6 +558,10 @@ export default function Parts() {
                               <Boxes className="size-3.5" />
                               {num(assignedSum)} دستگاه
                             </span>
+                          </td>
+
+                          <td className="font-mono text-xs font-bold text-base-content">
+                            {Number(p.unit_price ?? 0) > 0 ? toman(p.unit_price ?? 0) : <span className="text-base-content/40">—</span>}
                           </td>
 
                           <td>
@@ -841,6 +858,18 @@ export default function Parts() {
               />
             </Field>
           </div>
+
+          <Field label="قیمت پایه فروش (تومان)" hint="هنگام تخصیص یا ثبت فروش به‌صورت خودکار پیشنهاد می‌شود">
+            <input
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
+              className="input input-bordered w-full text-start font-mono font-bold"
+              placeholder="مثال: 25,000,000"
+              value={unitPriceVal || ''}
+              onChange={(e) => setValue('unit_price', formatNumericInput(e.target.value))}
+            />
+          </Field>
 
           {!editingPart && (
             <Field
