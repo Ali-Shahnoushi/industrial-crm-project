@@ -295,11 +295,19 @@ export const partApi = {
       installation_date?: string
       warranty_expire_date?: string | null
       notes?: string
+      unit_price?: number | string | null
+      discount_amount?: number | string | null
+      tax_percent?: number | string | null
+      sale_status?: string
+      payment_status?: string
+      paid_amount?: number | string | null
+      send_sms?: boolean
     },
   ) => {
     const { data } = await http.post<{
       message: string
       customer_part: CustomerPart
+      sale?: any
       customer_type: string
     }>(`/customers/${customerId}/parts`, body)
     return data

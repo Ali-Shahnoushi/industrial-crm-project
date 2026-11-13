@@ -157,10 +157,10 @@ export function MainLayout() {
   const { pathname } = useLocation()
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-base-200">
+    <div className="flex h-dvh overflow-hidden bg-base-200 print:h-auto print:overflow-visible print:bg-white">
       <Sidebar open={open} onClose={() => setOpen(false)} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-base-300/60 bg-base-100/80 px-3 backdrop-blur-md sm:gap-3 sm:px-6">
+        <header className="z-30 flex h-16 shrink-0 items-center justify-between gap-2 border-b border-base-300/60 bg-base-100/80 px-3 backdrop-blur-md sm:gap-3 sm:px-6 print:hidden">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 max-w-md">
             <button
               className="btn btn-ghost btn-circle lg:hidden shrink-0"
@@ -178,7 +178,7 @@ export function MainLayout() {
             <UserMenu />
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 print:overflow-visible print:p-0">
           <motion.div
             key={pathname}
             initial={{ opacity: 0, y: 10 }}

@@ -195,3 +195,57 @@ export const assignmentStrategyMeta: Record<
     description: 'تیکت جدید به صورت تصادفی به یکی از نیروهای فعال دپارتمان ارجاع می‌شود.',
   },
 }
+
+export const saleStatusMeta: Record<
+  'draft' | 'confirmed' | 'cancelled',
+  { label: string; badgeClass: string }
+> = {
+  confirmed: {
+    label: 'تایید شده',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800',
+  },
+  draft: {
+    label: 'پیش‌نویس',
+    badgeClass: 'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800',
+  },
+  cancelled: {
+    label: 'لغو شده',
+    badgeClass: 'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800',
+  },
+}
+
+export const paymentStatusMeta: Record<
+  'unpaid' | 'partial' | 'paid',
+  { label: string; badgeClass: string }
+> = {
+  paid: {
+    label: 'پرداخت کامل',
+    badgeClass: 'badge-success badge-soft',
+  },
+  partial: {
+    label: 'پرداخت جزئی',
+    badgeClass: 'badge-warning badge-soft',
+  },
+  unpaid: {
+    label: 'پرداخت‌نشده',
+    badgeClass: 'badge-error badge-soft',
+  },
+}
+
+export const invoiceStatusMeta: Record<
+  'issued' | 'paid' | 'void',
+  { label: string; badgeClass: string }
+> = {
+  issued: {
+    label: 'صادر شده',
+    badgeClass: 'badge-info badge-soft',
+  },
+  paid: {
+    label: 'تسویه‌شده',
+    badgeClass: 'badge-success badge-soft',
+  },
+  void: {
+    label: 'باطل‌شده',
+    badgeClass: 'badge-error badge-soft',
+  },
+}
