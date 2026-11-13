@@ -18,6 +18,7 @@ class Part extends Model
         'stock_quantity',
         'min_stock',
         'unit',
+        'unit_price',
         'description',
         'is_active',
     ];
@@ -33,6 +34,7 @@ class Part extends Model
             'periodic_service_months' => 'integer',
             'stock_quantity' => 'integer',
             'min_stock' => 'integer',
+            'unit_price' => 'integer',
         ];
     }
 
