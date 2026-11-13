@@ -79,6 +79,35 @@ class SettingController extends Controller
         ]);
     }
 
+    public function getSalesSettings(): JsonResponse
+    {
+        $this->authorizePermission('sales.view');
+
+        return response()->json([
+            'sales_default_tax_percent' => (float) Setting::get('sales_default_tax_percent', '10'),
+            'sales_sms_pattern_id' => Setting::get('sales_sms_pattern_id', ''),
+        ]);
+    }
+
+    public function updateSalesSettings(Request $request): JsonResponse
+    {
+        $this->authorizePermission('settings.manage');
+
+        $validated = $request->validate([
+            'sales_default_tax_percent' => 'required|numeric|min:0|max:100',
+            'sales_sms_pattern_id' => 'nullable|string|max:50',
+        ]);
+
+        Setting::set('sales_default_tax_percent', (string) $validated['sales_default_tax_percent']);
+        Setting::set('sales_sms_pattern_id', trim((string) ($validated['sales_sms_pattern_id'] ?? '')));
+
+        return response()->json([
+            'message' => 'تنظیمات فروش و مالیات با موفقیت ذخیره شد.',
+            'sales_default_tax_percent' => (float) Setting::get('sales_default_tax_percent', '10'),
+            'sales_sms_pattern_id' => Setting::get('sales_sms_pattern_id', ''),
+        ]);
+    }
+
     public function updateCompanySettings(Request $request): JsonResponse
     {
         $this->authorizePermission('settings.manage');

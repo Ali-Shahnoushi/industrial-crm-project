@@ -5,7 +5,9 @@ use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\CustomerPortalController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\InvoiceController;
 use App\Http\Controllers\Api\V1\PartController;
+use App\Http\Controllers\Api\V1\SalesController;
 use App\Http\Controllers\Api\V1\SettingController;
 use App\Http\Controllers\Api\V1\SmsController;
 use App\Http\Controllers\Api\V1\TicketController;
@@ -73,6 +75,24 @@ Route::prefix('v1')->group(function () {
             Route::post('/customer-parts/{customerPart}/history', [PartController::class, 'addServiceHistory']);
             Route::post('/customer-parts/{customerPart}/service-history', [PartController::class, 'addServiceHistory']);
 
+            // Sales, Analytics (KPIs & Charts), Excel Export & Invoices (Finance)
+            Route::get('/sales/summary', [SalesController::class, 'summary']);
+            Route::get('/sales/charts', [SalesController::class, 'charts']);
+            Route::get('/sales/export', [SalesController::class, 'export']);
+            Route::get('/sales/seller-options', [SalesController::class, 'sellerOptions']);
+            Route::get('/sales', [SalesController::class, 'index']);
+            Route::post('/sales', [SalesController::class, 'store']);
+            Route::get('/sales/{sale}', [SalesController::class, 'show'])->whereNumber('sale');
+            Route::match(['put', 'patch'], '/sales/{sale}', [SalesController::class, 'update'])->whereNumber('sale');
+            Route::delete('/sales/{sale}', [SalesController::class, 'destroy'])->whereNumber('sale');
+            Route::post('/sales/{sale}/invoice', [InvoiceController::class, 'generate'])->whereNumber('sale');
+            Route::get('/customers/{customer}/sales', [SalesController::class, 'customerSales']);
+
+            Route::get('/invoices/summary', [InvoiceController::class, 'summary']);
+            Route::get('/invoices', [InvoiceController::class, 'index']);
+            Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->whereNumber('invoice');
+            Route::patch('/invoices/{invoice}/void', [InvoiceController::class, 'void'])->whereNumber('invoice');
+
             // Enterprise Ticketing System (Staff Hub + Configurable Departments)
             Route::get('/ticket-departments', [TicketDepartmentController::class, 'activeList']);
             Route::get('/tickets/summary', [TicketController::class, 'summary']);
@@ -102,6 +122,8 @@ Route::prefix('v1')->group(function () {
 
             Route::get('/settings/sms', [SettingController::class, 'getSmsSettings']);
             Route::match(['put', 'post'], '/settings/sms', [SettingController::class, 'updateSmsSettings']);
+            Route::get('/settings/sales', [SettingController::class, 'getSalesSettings']);
+            Route::match(['put', 'post'], '/settings/sales', [SettingController::class, 'updateSalesSettings']);
             Route::post('/settings/company', [SettingController::class, 'updateCompanySettings']);
             Route::post('/settings/system/upgrade', [SettingController::class, 'upgradeSystem']);
 

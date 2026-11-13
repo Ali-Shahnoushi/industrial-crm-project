@@ -7,8 +7,10 @@ use App\Models\Customer;
 use App\Models\CustomerHistory;
 use App\Models\CustomerPart;
 use App\Models\Part;
+use App\Models\Sale;
 use App\Models\SmsLog;
 use App\Models\Ticket;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -82,6 +84,22 @@ class DashboardController extends Controller
             ->take(8)
             ->get();
 
+        $canViewSales = !$user || $user->hasSafePermission('sales.view');
+        $salesStats = null;
+        if ($canViewSales && Schema::hasTable('sales')) {
+            $salesBase = Sale::accessibleBy($user)->where('status', Sale::STATUS_CONFIRMED);
+            $monthStart = Carbon::now()->subDays(29)->toDateString();
+            $salesStats = [
+                'total_revenue' => (int) (clone $salesBase)->sum('total'),
+                'sales_count' => (clone $salesBase)->count(),
+                'revenue_last_30_days' => (int) (clone $salesBase)->whereDate('sale_date', '>=', $monthStart)->sum('total'),
+                'unpaid_amount' => (int) (clone $salesBase)
+                    ->whereColumn('total', '>', 'paid_amount')
+                    ->selectRaw('COALESCE(SUM(total - paid_amount), 0) as amt')
+                    ->value('amt'),
+            ];
+        }
+
         return response()->json([
             'stats' => [
                 'total_customers' => $totalCustomers,
@@ -94,7 +112,12 @@ class DashboardController extends Controller
                 'low_stock_parts_count' => $lowStockParts->count(),
                 'open_tickets_count' => $openTicketsCount,
                 'pending_repair_tickets_count' => $pendingRepairTicketsCount,
+                'sales_revenue_total' => $salesStats['total_revenue'] ?? 0,
+                'sales_count_total' => $salesStats['sales_count'] ?? 0,
+                'sales_revenue_30d' => $salesStats['revenue_last_30_days'] ?? 0,
+                'sales_unpaid_total' => $salesStats['unpaid_amount'] ?? 0,
             ],
+            'sales_summary' => $salesStats,
             'low_stock_parts' => $lowStockParts->take(8)->values(),
             'recent_activities' => $recentActivities,
             'recent_sms' => $recentSms,
