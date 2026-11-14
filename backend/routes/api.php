@@ -51,6 +51,7 @@ Route::prefix('v1')->group(function () {
 
             // Customers + Excel Import/Export + Template + Owner Reassignment + Portal Access + ACL Lookup
             Route::get('/customers-lookup', [CustomerController::class, 'lookup']);
+            Route::get('/customers-creator-options', [CustomerController::class, 'creatorOptions']);
             Route::get('/customers-staff-options', [CustomerController::class, 'staffOptions']);
             Route::get('/customers/template', [CustomerController::class, 'template']);
             Route::get('/customers/export', [CustomerController::class, 'export']);

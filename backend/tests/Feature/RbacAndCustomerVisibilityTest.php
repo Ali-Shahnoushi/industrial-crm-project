@@ -165,4 +165,58 @@ class RbacAndCustomerVisibilityTest extends TestCase
             ->deleteJson("/api/v1/users/{$admin->id}")
             ->assertForbidden();
     }
+
+    public function test_customers_can_be_filtered_and_searched_by_creator_with_scoped_creator_options(): void
+    {
+        $admin = $this->makeStaff(User::ROLE_ADMINISTRATOR, User::SCOPE_ALL);
+        $salesA = $this->makeStaff(User::ROLE_SALESPERSON, User::SCOPE_OWN);
+        $salesA->update(['name' => 'محمد کارشناس']);
+        $salesB = $this->makeStaff(User::ROLE_SALESPERSON, User::SCOPE_OWN);
+        $salesB->update(['name' => 'سهراب فروشنده']);
+
+        $custA = Customer::create([
+            'customer_type' => 'effective',
+            'type' => 'individual',
+            'first_name' => 'نیما',
+            'last_name' => 'صادقی',
+            'created_by_user_id' => $salesA->id,
+        ]);
+
+        $custB = Customer::create([
+            'customer_type' => 'potential',
+            'type' => 'individual',
+            'first_name' => 'آرش',
+            'last_name' => 'مرادی',
+            'created_by_user_id' => $salesB->id,
+        ]);
+
+        // Filter by creator id
+        $filterRes = $this->actingAs($admin, 'sanctum')
+            ->getJson("/api/v1/customers?created_by_user_id={$salesA->id}")
+            ->assertOk();
+        $filterIds = collect($filterRes->json('data'))->pluck('id')->all();
+        $this->assertSame([$custA->id], $filterIds);
+
+        // Search by creator name via q
+        $searchRes = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/customers?q=' . urlencode('محمد کارشناس'))
+            ->assertOk();
+        $searchIds = collect($searchRes->json('data'))->pluck('id')->all();
+        $this->assertContains($custA->id, $searchIds);
+        $this->assertNotContains($custB->id, $searchIds);
+
+        // Creator options respect scope: admin sees both, salesA (SCOPE_OWN) sees only salesA
+        $adminOpts = $this->actingAs($admin, 'sanctum')
+            ->getJson('/api/v1/customers-creator-options')
+            ->assertOk();
+        $adminOptIds = collect($adminOpts->json('data'))->pluck('id')->all();
+        $this->assertContains($salesA->id, $adminOptIds);
+        $this->assertContains($salesB->id, $adminOptIds);
+
+        $salesAOpts = $this->actingAs($salesA, 'sanctum')
+            ->getJson('/api/v1/customers-creator-options')
+            ->assertOk();
+        $salesAOptIds = collect($salesAOpts->json('data'))->pluck('id')->all();
+        $this->assertSame([$salesA->id], $salesAOptIds);
+    }
 }
