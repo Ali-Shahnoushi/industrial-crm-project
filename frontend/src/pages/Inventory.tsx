@@ -16,6 +16,7 @@ import {
 import { PageHeader } from '../components/ui/PageHeader'
 import { StatCard } from '../components/ui/StatCard'
 import { SearchInput } from '../components/ui/SearchInput'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { Pagination } from '../components/ui/Pagination'
 import { Modal } from '../components/ui/Modal'
 import { Field, TableSkeleton, EmptyState } from '../components/ui/Field'
@@ -139,11 +140,10 @@ export default function Inventory() {
     <div className="space-y-6">
       <PageHeader
         title="انبار دستگاه‌ها و کاردکس موجودی"
-        subtitle="پایش لحظه‌ای موجودی فیزیکی، حد آستانه هشدار کمبود، انبارگردانی و گردش کامل ورود و خروج"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link to="/parts" className="btn btn-sm btn-outline gap-1.5">
-              <Cpu className="size-4" /> مدیریت کاتالوگ دستگاه‌ها
+              <Cpu className="size-4" /> کاتالوگ دستگاه‌ها
             </Link>
           </div>
         }
@@ -256,12 +256,12 @@ export default function Inventory() {
             <table className="table table-zebra align-middle text-xs sm:text-sm">
               <thead>
                 <tr className="text-base-content/60">
-                  <th>نام و کد فنی دستگاه</th>
-                  <th>موجودی فعلی</th>
-                  <th>حد آستانه هشدار</th>
-                  <th>وضعیت موجودی</th>
-                  <th>تخصیص‌یافته به مشتریان</th>
-                  <th className="text-end">عملیات سریع انبار</th>
+                  <th>دستگاه / کد</th>
+                  <th>موجودی</th>
+                  <th>حد هشدار</th>
+                  <th>وضعیت</th>
+                  <th>تخصیص</th>
+                  <th className="text-end">عملیات</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,10 +295,10 @@ export default function Inventory() {
                           <span className="badge badge-error badge-soft badge-sm font-bold">ناموجود</span>
                         ) : isLow ? (
                           <span className="badge badge-warning badge-soft badge-sm font-bold">
-                            کمبود موجودی
+                            کمبود
                           </span>
                         ) : (
-                          <span className="badge badge-success badge-soft badge-sm font-bold">موجودی کافی</span>
+                          <span className="badge badge-success badge-soft badge-sm font-bold">کافی</span>
                         )}
                       </td>
                       <td>
@@ -350,32 +350,34 @@ export default function Inventory() {
       </div>
 
       {/* Kardex Movement Audit Logs */}
-      <div className="card-surface overflow-hidden">
+      <div className="card-surface">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-b border-base-200">
           <div className="flex items-center gap-2">
             <History className="size-5 text-primary" />
             <div>
-              <h3 className="font-bold text-sm sm:text-base">کاردکس گردش کامل موجودی انبار</h3>
+              <h3 className="font-bold text-sm sm:text-base">کاردکس گردش موجودی</h3>
               <p className="text-xs text-base-content/60">
                 ثبت غیرقابل‌تغییر تمام ورودها، خروج‌ها، تخصیص‌ها و انبارگردانی‌ها همراه با نام اقدام‌کننده
               </p>
             </div>
           </div>
-          <select
-            className="select select-bordered select-sm w-full sm:w-56"
+          <SearchableSelect
+            className="w-full sm:w-52"
             value={logType}
-            onChange={(e) => {
-              setLogType(e.target.value as InventoryOperationType | '')
+            onChange={(val) => {
+              setLogType(val as InventoryOperationType | '')
               setLogPage(1)
             }}
-          >
-            <option value="">همه انواع تراکنش انبار</option>
-            <option value="in">ورود به انبار</option>
-            <option value="out_assign">خروج بابت تخصیص به مشتری</option>
-            <option value="out_manual">خروج دستی از انبار</option>
-            <option value="return">بازگشت به انبار</option>
-            <option value="adjustment">تنظیم موجودی (انبارگردانی)</option>
-          </select>
+            placeholder="همه تراکنش‌ها"
+            searchPlaceholder="جستجوی نوع تراکنش..."
+            options={[
+              { value: 'in', label: 'ورود به انبار' },
+              { value: 'out_assign', label: 'خروج تخصیص' },
+              { value: 'out_manual', label: 'خروج دستی' },
+              { value: 'return', label: 'بازگشت' },
+              { value: 'adjustment', label: 'تنظیم موجودی' },
+            ]}
+          />
         </div>
 
         {logsLoading ? (
@@ -390,13 +392,13 @@ export default function Inventory() {
               <table className="table align-middle text-xs">
                 <thead>
                   <tr className="text-base-content/60">
-                    <th>تاریخ و ساعت</th>
+                    <th>تاریخ</th>
                     <th>دستگاه</th>
-                    <th>نوع عملیات</th>
-                    <th>تعداد تغییر</th>
-                    <th>موجودی پس از عملیات</th>
-                    <th>کارشناس / مشتری مرتبط</th>
-                    <th>شرح سند</th>
+                    <th>عملیات</th>
+                    <th>تعداد</th>
+                    <th>مانده</th>
+                    <th>مرتبط</th>
+                    <th>شرح</th>
                   </tr>
                 </thead>
                 <tbody>

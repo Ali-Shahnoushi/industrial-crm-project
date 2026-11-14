@@ -129,7 +129,6 @@ export default function SmsCenter() {
     <div className="space-y-6">
       <PageHeader
         title="سامانه پیامک خدماتی (ملی‌پیامک)"
-        subtitle="ارسال پیامک‌های سریع بر اساس کدهای الگوی ملی‌پیامک (بدون مسدودی بلک‌لیست) و مشاهده لاگ‌ها"
       />
 
       {/* Sandbox Notice Banner */}
@@ -282,11 +281,11 @@ export default function SmsCenter() {
               <table className="table table-sm table-hover">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-900/60 text-xs font-bold text-base-content/75 border-b border-base-200">
-                    <th>شماره گیرنده</th>
-                    <th>کد الگو</th>
+                    <th>گیرنده</th>
+                    <th>الگو</th>
                     <th>وضعیت</th>
-                    <th>شناسه پیامک</th>
-                    <th>زمان ارسال</th>
+                    <th>شناسه</th>
+                    <th>زمان</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-base-200/80">

@@ -15,6 +15,7 @@ import {
 import { PageHeader } from '../components/ui/PageHeader'
 import { StatCard } from '../components/ui/StatCard'
 import { SearchInput } from '../components/ui/SearchInput'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { DatePicker } from '../components/ui/DatePicker'
 import { Pagination } from '../components/ui/Pagination'
 import { ConfirmDialog } from '../components/ui/Modal'
@@ -110,10 +111,9 @@ export default function Finance() {
     <div className="space-y-6">
       <PageHeader
         title="امور مالی و صدور فاکتورها"
-        subtitle="صدور خودکار فاکتور با شماره‌گذاری یکتای سالانه، مشاهده وضعیت تسویه و چاپ یا ذخیره PDF فاکتور"
         actions={
           <Link to="/sales" className="btn btn-sm btn-outline">
-            مشاهده داشبورد فروش
+            داشبورد فروش
           </Link>
         }
       />
@@ -195,13 +195,13 @@ export default function Finance() {
                 <table className="table table-hover">
                   <thead>
                     <tr className="border-b border-base-200 bg-slate-50 text-xs font-bold dark:bg-slate-900/60">
-                      <th>شناسه فروش</th>
-                      <th>تاریخ فروش</th>
+                      <th>شناسه</th>
+                      <th>تاریخ</th>
                       <th>مشتری</th>
                       <th>اقلام</th>
-                      <th>مبلغ نهایی</th>
-                      <th>وضعیت پرداخت</th>
-                      <th className="text-end">صدور فاکتور</th>
+                      <th>مبلغ</th>
+                      <th>پرداخت</th>
+                      <th className="text-end">عملیات</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -237,7 +237,7 @@ export default function Finance() {
                                 disabled={generateMutation.isPending}
                               >
                                 <FilePlus2 className="size-3.5" />
-                                ایجاد خودکار فاکتور
+                                صدور فاکتور
                               </button>
                             </Can>
                           </td>
@@ -271,19 +271,21 @@ export default function Finance() {
               />
             </div>
 
-            <select
-              className="select select-bordered select-sm text-xs"
+            <SearchableSelect
+              className="w-full sm:w-44"
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value)
+              onChange={(val) => {
+                setStatusFilter(val)
                 setPage(1)
               }}
-            >
-              <option value="">همه وضعیت‌ها</option>
-              <option value="issued">صادر شده</option>
-              <option value="paid">تسویه‌شده</option>
-              <option value="void">باطل‌شده</option>
-            </select>
+              placeholder="همه وضعیت‌ها"
+              searchPlaceholder="جستجوی وضعیت..."
+              options={[
+                { value: 'issued', label: 'صادر شده' },
+                { value: 'paid', label: 'تسویه‌شده' },
+                { value: 'void', label: 'باطل‌شده' },
+              ]}
+            />
 
             <div className="w-44">
               <DatePicker
@@ -322,11 +324,11 @@ export default function Finance() {
                   <table className="table table-hover">
                     <thead>
                       <tr className="border-b border-base-200 bg-slate-50 text-xs font-bold dark:bg-slate-900/60">
-                        <th>شماره فاکتور</th>
-                        <th>تاریخ صدور</th>
+                        <th>شماره</th>
+                        <th>تاریخ</th>
                         <th>مشتری</th>
-                        <th>مبلغ کل</th>
-                        <th>وضعیت فاکتور</th>
+                        <th>مبلغ</th>
+                        <th>وضعیت</th>
                         <th>صادرکننده</th>
                         <th className="text-end">عملیات</th>
                       </tr>

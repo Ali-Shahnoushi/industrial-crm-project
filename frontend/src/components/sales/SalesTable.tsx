@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { SearchInput } from '../ui/SearchInput'
+import { SearchableSelect } from '../ui/SearchableSelect'
 import { Pagination } from '../ui/Pagination'
 import { ConfirmDialog } from '../ui/Modal'
 import { EmptyState, TableSkeleton } from '../ui/Field'
@@ -135,41 +136,44 @@ export function SalesTable({
           />
         </div>
 
-        <select
-          className="select select-bordered select-sm text-xs"
+        <SearchableSelect
+          className="w-full sm:w-44"
           value={status}
-          onChange={(e) => onStatusChange(e.target.value)}
-        >
-          <option value="">همه وضعیت‌های سفارش</option>
-          <option value="confirmed">تایید شده</option>
-          <option value="draft">پیش‌نویس</option>
-          <option value="cancelled">لغو شده</option>
-        </select>
+          onChange={onStatusChange}
+          placeholder="همه وضعیت‌ها"
+          searchPlaceholder="جستجوی وضعیت..."
+          options={[
+            { value: 'confirmed', label: 'تایید شده' },
+            { value: 'draft', label: 'پیش‌نویس' },
+            { value: 'cancelled', label: 'لغو شده' },
+          ]}
+        />
 
-        <select
-          className="select select-bordered select-sm text-xs"
+        <SearchableSelect
+          className="w-full sm:w-44"
           value={paymentStatus}
-          onChange={(e) => onPaymentStatusChange(e.target.value)}
-        >
-          <option value="">همه وضعیت‌های پرداخت</option>
-          <option value="paid">پرداخت کامل</option>
-          <option value="partial">پرداخت جزئی</option>
-          <option value="unpaid">پرداخت‌نشده</option>
-        </select>
+          onChange={onPaymentStatusChange}
+          placeholder="همه پرداخت‌ها"
+          searchPlaceholder="جستجوی پرداخت..."
+          options={[
+            { value: 'paid', label: 'پرداخت کامل' },
+            { value: 'partial', label: 'پرداخت جزئی' },
+            { value: 'unpaid', label: 'پرداخت‌نشده' },
+          ]}
+        />
 
         {sellers.length > 0 && (
-          <select
-            className="select select-bordered select-sm text-xs"
+          <SearchableSelect
+            className="w-full sm:w-48"
             value={sellerId}
-            onChange={(e) => onSellerChange(e.target.value)}
-          >
-            <option value="">همه کارشناسان فروش</option>
-            {sellers.map((s) => (
-              <option key={s.id} value={String(s.id)}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+            onChange={onSellerChange}
+            placeholder="همه کارشناسان"
+            searchPlaceholder="جستجوی کارشناس..."
+            options={sellers.map((s) => ({
+              value: String(s.id),
+              label: s.name,
+            }))}
+          />
         )}
 
         <div className="ms-auto text-xs font-medium text-base-content/60">
@@ -205,19 +209,19 @@ export function SalesTable({
                     onClick={() => onSort('sale_date')}
                   >
                     <div className="flex items-center gap-1">
-                      <span>تاریخ فروش</span>
+                      <span>تاریخ</span>
                       <SortIcon col="sale_date" sortBy={sortBy} sortDir={sortDir} />
                     </div>
                   </th>
                   <th>مشتری</th>
-                  <th>اقلام / دستگاه</th>
+                  <th>اقلام</th>
                   <th>کارشناس</th>
                   <th
                     className="cursor-pointer select-none"
                     onClick={() => onSort('total')}
                   >
                     <div className="flex items-center gap-1">
-                      <span>مبلغ نهایی</span>
+                      <span>مبلغ</span>
                       <SortIcon col="total" sortBy={sortBy} sortDir={sortDir} />
                     </div>
                   </th>
@@ -276,7 +280,7 @@ export function SalesTable({
                           {firstItem?.part?.name || '—'}
                         </p>
                         <p className="text-[11px] text-base-content/60">
-                          تعداد کل: {num(totalQty)} عدد
+                          تعداد: {num(totalQty)} عدد
                           {firstItem?.customer_part?.serial_number && (
                             <span className="ms-1.5 font-mono ltr-text">
                               ({firstItem.customer_part.serial_number})

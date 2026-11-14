@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Cpu, LifeBuoy, Plus } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { SearchInput } from '../../components/ui/SearchInput'
+import { SearchableSelect } from '../../components/ui/SearchableSelect'
 import { EmptyState, TableSkeleton } from '../../components/ui/Field'
 import { Pagination } from '../../components/ui/Pagination'
 import { PortalCreateTicketModal } from '../../components/portal/PortalCreateTicketModal'
@@ -42,7 +43,6 @@ export default function PortalTickets() {
     <div className="space-y-6">
       <PageHeader
         title="تیکت‌ها و درخواست‌های تعمیر من"
-        subtitle="پیگیری لحظه‌ای وضعیت درخواست‌های تعمیر، پاسخ‌های واحد فنی و مکاتبات با واحد فروش"
         actions={
           <button
             type="button"
@@ -65,35 +65,37 @@ export default function PortalTickets() {
           placeholder="جستجو با کد رهگیری یا عنوان درخواست..."
         />
 
-        <select
-          className="select select-bordered select-sm h-10 w-full text-xs"
+        <SearchableSelect
           value={typeFilter}
-          onChange={(e) => {
-            setTypeFilter(e.target.value as TicketType | '')
+          onChange={(val) => {
+            setTypeFilter(val as TicketType | '')
             setPage(1)
           }}
-        >
-          <option value="">همه انواع درخواست</option>
-          <option value="repair_request">اعلام خرابی و درخواست تعمیر</option>
-          <option value="technical_support">پشتیبانی فنی</option>
-          <option value="sales_inquiry">ارتباط با واحد فروش</option>
-          <option value="general">سوال عمومی</option>
-        </select>
+          placeholder="همه انواع"
+          searchPlaceholder="جستجوی نوع..."
+          options={[
+            { value: 'repair_request', label: 'درخواست تعمیر' },
+            { value: 'technical_support', label: 'پشتیبانی فنی' },
+            { value: 'sales_inquiry', label: 'واحد فروش' },
+            { value: 'general', label: 'سوال عمومی' },
+          ]}
+        />
 
-        <select
-          className="select select-bordered select-sm h-10 w-full text-xs"
+        <SearchableSelect
           value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value)
+          onChange={(val) => {
+            setStatusFilter(val)
             setPage(1)
           }}
-        >
-          <option value="">همه وضعیت‌ها</option>
-          <option value="active_all">در جریان (باز)</option>
-          <option value="answered">پاسخ داده شده توسط کارشناس</option>
-          <option value="resolved">انجام‌شده / تکمیل سرویس</option>
-          <option value="closed">بسته شده</option>
-        </select>
+          placeholder="همه وضعیت‌ها"
+          searchPlaceholder="جستجوی وضعیت..."
+          options={[
+            { value: 'active_all', label: 'تیکت‌های باز' },
+            { value: 'answered', label: 'پاسخ داده شده' },
+            { value: 'resolved', label: 'رفع‌شده' },
+            { value: 'closed', label: 'بسته شده' },
+          ]}
+        />
       </div>
 
       {/* Tickets List */}

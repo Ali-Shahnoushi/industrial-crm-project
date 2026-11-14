@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '../components/ui/PageHeader'
 import { SearchInput } from '../components/ui/SearchInput'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { Pagination } from '../components/ui/Pagination'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import { Field, TableSkeleton, EmptyState } from '../components/ui/Field'
@@ -323,19 +324,18 @@ export default function Parts() {
     <div className="space-y-6">
       <PageHeader
         title="کاتالوگ و انبار دستگاه‌ها"
-        subtitle="تعریف مدل‌های دستگاه‌ها، مدیریت موجودی انبار، ثبت ورود/خروج کالا و گزارش جامع گردش انبار"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-primary/25 bg-primary/8 px-3 py-1.5 text-xs font-bold text-primary">
               <Boxes className="size-4" />
-              موجودی کل انبار: {num(totalWarehouseStock)} دستگاه
+              موجودی کل: {num(totalWarehouseStock)}
             </span>
             <Can permission="parts.manage">
-              <button className="btn btn-sm btn-primary gap-1.5" onClick={openCreate}>
-                <Plus className="size-4" /> تعریف دستگاه جدید
+              <button type="button" className="btn btn-sm btn-primary gap-1.5" onClick={openCreate}>
+                <Plus className="size-4" /> دستگاه جدید
               </button>
             </Can>
-          </div>
+          </>
         }
       />
 
@@ -427,7 +427,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>نام و مشخصات دستگاه</span>
+                          <span>دستگاه</span>
                           {sortField === 'name' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -440,7 +440,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>کد فنی (SKU)</span>
+                          <span>کد (SKU)</span>
                           {sortField === 'code' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -453,7 +453,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>موجودی انبار</span>
+                          <span>موجودی</span>
                           {sortField === 'stock' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -466,7 +466,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>دوره پوشش گارانتی</span>
+                          <span>دوره گارانتی</span>
                           {sortField === 'warranty' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -479,7 +479,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>تعداد تحویل‌شده به مشتریان</span>
+                          <span>تحویل‌شده</span>
                           {sortField === 'assigned' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -487,7 +487,7 @@ export default function Parts() {
                           )}
                         </div>
                       </th>
-                      <th>قیمت واحد (تومان)</th>
+                      <th>قیمت واحد</th>
                       <th
                         onClick={() => handleSort('status')}
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
@@ -501,7 +501,7 @@ export default function Parts() {
                           )}
                         </div>
                       </th>
-                      <th className="text-end">عملیات انبار و ویرایش</th>
+                      <th className="text-end">عملیات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-base-200/80">
@@ -543,7 +543,7 @@ export default function Parts() {
                                     : 'badge-success badge-soft',
                               )}
                             >
-                              {num(stock)} عدد
+                              {num(stock)}
                             </span>
                           </td>
 
@@ -556,7 +556,7 @@ export default function Parts() {
                           <td>
                             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600">
                               <Boxes className="size-3.5" />
-                              {num(assignedSum)} دستگاه
+                              {num(assignedSum)}
                             </span>
                           </td>
 
@@ -636,36 +636,37 @@ export default function Parts() {
               placeholder="جستجوی دستگاه، مشتری، کارمند یا شرح..."
             />
 
-            <select
-              className="select select-bordered select-sm h-9 w-full bg-base-100 text-xs"
+            <SearchableSelect
+              placeholder="همه دستگاه‌ها"
+              searchPlaceholder="جستجوی دستگاه..."
               value={logPartFilter}
-              onChange={(e) => {
-                setLogPartFilter(e.target.value)
+              options={parts.map((p) => ({
+                value: String(p.id),
+                label: p.name,
+                hint: p.code,
+              }))}
+              onChange={(val) => {
+                setLogPartFilter(val)
                 setLogPage(1)
               }}
-            >
-              <option value="">همه دستگاه‌ها</option>
-              {parts.map((p) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.name} ({p.code})
-                </option>
-              ))}
-            </select>
+            />
 
-            <select
-              className="select select-bordered select-sm h-9 w-full bg-base-100 text-xs"
+            <SearchableSelect
+              placeholder="همه عملیات"
+              searchPlaceholder="جستجو..."
               value={logTypeFilter}
-              onChange={(e) => {
-                setLogTypeFilter(e.target.value as InventoryOperationType | '')
+              options={[
+                { value: 'in', label: 'ورود (+)' },
+                { value: 'out_assign', label: 'تخصیص (-)' },
+                { value: 'out_manual', label: 'خروج دستی (-)' },
+                { value: 'return', label: 'بازگشت (+)' },
+                { value: 'adjustment', label: 'انبارگردانی (=)' },
+              ]}
+              onChange={(val) => {
+                setLogTypeFilter(val as InventoryOperationType | '')
                 setLogPage(1)
               }}
-            >
-              <option value="">همه انواع تراکنش انبار</option>
-              <option value="in">ورود به انبار (+)</option>
-              <option value="out_assign">خروج بابت تخصیص به مشتری (-)</option>
-              <option value="out_manual">خروج دستی از انبار (-)</option>
-              <option value="return">بازگشت به انبار (+)</option>
-            </select>
+            />
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-xs">
@@ -682,14 +683,14 @@ export default function Parts() {
                   <table className="table table-sm table-hover">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-900/60 text-xs font-bold text-base-content/75 border-b border-base-200">
-                        <th>تاریخ و ساعت</th>
+                        <th>تاریخ</th>
                         <th>دستگاه</th>
-                        <th>نوع عملیات</th>
+                        <th>نوع</th>
                         <th>تعداد</th>
-                        <th>موجودی پس از عملیات</th>
-                        <th>مشتری مرتبط</th>
-                        <th>کارمند ثبت‌کننده</th>
-                        <th>شرح تراکنش</th>
+                        <th>مانده</th>
+                        <th>مشتری</th>
+                        <th>کارشناس</th>
+                        <th>شرح</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-base-200/80">
@@ -723,7 +724,7 @@ export default function Parts() {
                                 {num(log.quantity)}
                               </span>
                             </td>
-                            <td className="font-bold">{num(log.balance_after)} عدد</td>
+                            <td className="font-bold">{num(log.balance_after)}</td>
                             <td>
                               {log.customer ? (
                                 <Link

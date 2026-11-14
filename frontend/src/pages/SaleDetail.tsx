@@ -188,12 +188,12 @@ export default function SaleDetail() {
               <table className="table">
                 <thead>
                   <tr className="bg-base-200/50 text-xs">
-                    <th>مدل دستگاه</th>
+                    <th>دستگاه</th>
                     <th>سریال / کد</th>
                     <th>تعداد</th>
                     <th>قیمت واحد</th>
-                    <th>تخفیف قلم</th>
-                    <th>جمع ردیف</th>
+                    <th>تخفیف</th>
+                    <th>جمع</th>
                   </tr>
                 </thead>
                 <tbody>

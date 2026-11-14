@@ -745,12 +745,12 @@ export default function CustomerDetail() {
                 <table className="table table-sm w-full">
                   <thead>
                     <tr className="text-base-content/60 text-xs">
-                      <th>شماره فروش</th>
+                      <th>#</th>
                       <th>تاریخ</th>
                       <th>اقلام</th>
-                      <th>مبلغ کل</th>
+                      <th>مبلغ</th>
                       <th>پرداخت</th>
-                      <th>وضعیت سفارش</th>
+                      <th>وضعیت</th>
                       <th>فاکتور</th>
                       <th>عملیات</th>
                     </tr>

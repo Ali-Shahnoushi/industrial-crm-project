@@ -106,7 +106,6 @@ export default function UsersAclPage() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <PageHeader
         title="مدیریت کارمندان، نقش‌ها و دسترسی‌ها"
-        subtitle="تعریف مدیر ارشد، مدیر، کارمند فروش و نصاب به همراه تفکیک محدوده مشتریان و مجوزهای عملیاتی"
         actions={
           <Link to="/settings/users/create" className="btn btn-sm btn-primary gap-1.5">
             <UserPlus className="size-4" /> تعریف کارمند جدید
@@ -134,10 +133,10 @@ export default function UsersAclPage() {
             <table className="table table-hover">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-900/60 text-xs font-bold text-base-content/75 border-b border-base-200">
-                  <th>کارمند و نقش</th>
-                  <th>ایمیل و شماره همراه</th>
-                  <th>محدوده مشتریان</th>
-                  <th>دسترسی‌ها</th>
+                  <th>کارمند</th>
+                  <th>تماس</th>
+                  <th>محدوده</th>
+                  <th>دسترسی</th>
                   <th>وضعیت</th>
                   <th className="text-end">عملیات</th>
                 </tr>
@@ -197,7 +196,7 @@ export default function UsersAclPage() {
                       <td>
                         {isAdminUser || scopeKey === 'all' ? (
                           <span className="badge badge-success badge-soft badge-xs font-bold">
-                            همه مشتریان سامانه
+                            همه مشتریان
                           </span>
                         ) : (
                           <div className="space-y-0.5">
@@ -235,7 +234,7 @@ export default function UsersAclPage() {
                             }
                           >
                             <ShieldCheck className="size-3.5" />
-                            {num(u.permissions?.length ?? 0)} دسترسی فعال
+                            {num(u.permissions?.length ?? 0)} دسترسی
                           </button>
                         )}
                       </td>
@@ -284,7 +283,7 @@ export default function UsersAclPage() {
                                 title="ویرایش نقش، محدوده مشتریان و مشخصات"
                               >
                                 <Pencil className="size-3.5" />
-                                <span className="hidden sm:inline">ویرایش کامل</span>
+                                <span className="hidden sm:inline">ویرایش</span>
                               </Link>
 
                               {!isCurrent && u.email !== 'admin@crm.local' && (
