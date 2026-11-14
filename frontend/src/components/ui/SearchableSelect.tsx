@@ -143,13 +143,21 @@ export function SearchableSelect({
           </span>
 
           <div className="flex items-center gap-1 shrink-0 ms-2">
-            {allowClear && selectedOption && !disabled && (
+            {allowClear && selectedOption && value !== '' && !disabled && (
               <span
                 role="button"
                 tabIndex={0}
                 onClick={handleClear}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onChange('')
+                  }
+                }}
                 className="p-0.5 rounded-full hover:bg-base-300/60 text-base-content/50 hover:text-base-content transition-colors"
                 title="پاک کردن"
+                aria-label="پاک کردن"
               >
                 <X className="size-3.5" />
               </span>
@@ -160,7 +168,7 @@ export function SearchableSelect({
 
         {/* Dropdown Menu */}
         {open && (
-          <div className="absolute top-full z-50 mt-1 w-full rounded-2xl border border-base-300 bg-base-100 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
+          <div className="absolute top-full z-50 mt-1 min-w-full w-max max-w-xs rounded-2xl border border-base-300 bg-base-100 p-2 shadow-xl animate-in fade-in zoom-in-95 duration-100">
             {/* Search Input */}
             <div className="relative mb-2">
               <Search className="absolute right-3 top-2.5 size-4 text-base-content/40" />

@@ -15,14 +15,13 @@ import {
   Users,
   Wrench,
 } from "lucide-react";
-import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Can } from "../components/common/Can";
 import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
 import { dashboardApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
-import { compactToman, customerDisplayName, cx, dateFa, num, relativeFa, toman, weekdayFa } from "../utils/format";
+import { compactToman, customerDisplayName, cx, num, relativeFa, toman } from "../utils/format";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
@@ -43,13 +42,10 @@ export default function Dashboard() {
     total_sms_sent: 0,
   };
 
-  const [today] = useState(() => new Date());
-
   return (
     <div className="space-y-6">
       <PageHeader
         title={`سلام، ${user?.name || "کاربر گرامی"} 👋`}
-        subtitle={`${weekdayFa(today)}، ${dateFa(today)} — خلاصه وضعیت مدیریت دستگاه‌ها و مشتریان`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Can permission="customers.create">

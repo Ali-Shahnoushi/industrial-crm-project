@@ -158,7 +158,6 @@ export default function Sales() {
     <div className="space-y-6">
       <PageHeader
         title="فروش و گزارش‌های تحلیلی"
-        subtitle="پایش لحظه‌ای درآمد، عملکرد کارشناسان فروش، نرخ تبدیل مشتریان و خروجی اکسل بر اساس بازه تاریخی"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Can permission="settings.manage">

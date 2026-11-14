@@ -189,7 +189,6 @@ export default function MyProfilePage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="حساب کاربری من"
-        subtitle="ویرایش مشخصات فردی، تصویر آواتار و مشاهده نقش و مجوزهای فعال اختصاص داده‌شده به شما"
       />
 
       {/* Profile Overview Card */}

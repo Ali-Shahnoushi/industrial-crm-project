@@ -139,7 +139,6 @@ export default function TicketingSettingsPage() {
     <div className="space-y-6">
       <PageHeader
         title="تنظیمات تیکتینگ و دپارتمان‌های پاسخگویی"
-        subtitle="تعریف دپارتمان‌های تخصصی، انتخاب کارشناسان پاسخگو در هر واحد و تنظیم الگوریتم توزیع خودکار تیکت‌ها"
         actions={
           <button className="btn btn-sm btn-primary gap-1.5" onClick={openCreate}>
             <Plus className="size-4" /> تعریف دپارتمان جدید

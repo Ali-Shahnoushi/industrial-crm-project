@@ -54,7 +54,6 @@ export default function PortalProfile() {
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
         title="اطلاعات حساب و تغییر رمز عبور"
-        subtitle="مشخصات ورود به پنل اختصاصی مشتریان و مدیریت گذرواژه امنیتی حساب شما"
       />
 
       <div className="rounded-2xl border border-base-200 bg-base-100 p-6 shadow-xs space-y-5">

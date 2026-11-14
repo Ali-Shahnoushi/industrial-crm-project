@@ -49,7 +49,6 @@ export default function PortalDevices() {
     <div className="space-y-6">
       <PageHeader
         title="دستگاه‌های مستقر و پوشش گارانتی"
-        subtitle="فهرست کامل دستگاه‌های تحویل‌شده به مجموعه شما، وضعیت اعتبار گارانتی، سوابق سرویس فنی و ثبت آنلاین درخواست تعمیر"
       />
 
       {devices.length === 0 ? (

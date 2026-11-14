@@ -140,11 +140,6 @@ export default function SystemSettingsPage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title={isAdministrator ? 'تنظیمات سیستم، برندینگ و نگهداری' : 'تنظیمات پوسته نمایشی'}
-        subtitle={
-          isAdministrator
-            ? 'مدیریت مشخصات شرکت، پالت رنگی، حالت روز/شب و بروزرسانی یک‌کلیکی پایگاه‌داده در هاست اشتراکی (cPanel)'
-            : 'شخصی‌سازی حالت روز یا شب (Light/Dark) سامانه متناسب با نور محیط کار'
-        }
         actions={
           <span className="badge badge-primary badge-soft font-bold px-3 py-3 text-xs">
             نسخه سامانه: {digits(appVersion)}

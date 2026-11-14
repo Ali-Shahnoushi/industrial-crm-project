@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react'
 
-export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
+export function PageHeader({ title, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-base-content/60">{subtitle}</p>}
-      </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <h1 className="min-w-0 text-2xl font-extrabold tracking-tight">{title}</h1>
+      {actions && (
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
+          {actions}
+        </div>
+      )}
     </div>
   )
 }

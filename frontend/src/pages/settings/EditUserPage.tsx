@@ -200,7 +200,6 @@ function EditUserLoadedForm({ targetUser }: { targetUser: User }) {
 
       <PageHeader
         title={`ویرایش مشخصات کارمند: ${targetUser.name}`}
-        subtitle="ویرایش اطلاعات هویتی، نقش سازمانی، محدوده دسترسی به مشتریان و مجوزهای عملیاتی"
         actions={
           !isCurrent && !isPrimaryAdmin && (isAdministrator || targetUser.user_type !== 'administrator') ? (
             <button

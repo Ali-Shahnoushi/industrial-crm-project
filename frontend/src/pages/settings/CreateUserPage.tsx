@@ -153,7 +153,6 @@ export default function CreateUserPage() {
 
       <PageHeader
         title="تعریف کارمند جدید"
-        subtitle="ایجاد حساب کاربری با تعیین نقش سازمانی، محدوده دسترسی به مشتریان و مجوزهای عملیاتی"
       />
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
