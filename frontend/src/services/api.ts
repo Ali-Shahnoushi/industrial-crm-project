@@ -111,6 +111,7 @@ export const customerApi = {
     province?: string
     city?: string
     has_devices?: string
+    created_by_user_id?: string | number
     sort_by?: string
     sort_direction?: string
     q?: string
@@ -146,6 +147,10 @@ export const customerApi = {
   delete: async (id: number | string) => {
     const { data } = await http.delete<{ message: string }>(`/customers/${id}`)
     return data
+  },
+  creatorOptions: async () => {
+    const { data } = await http.get<{ data: StaffOption[] }>('/customers-creator-options')
+    return data.data
   },
   staffOptions: async () => {
     const { data } = await http.get<{ data: StaffOption[] }>('/customers-staff-options')
