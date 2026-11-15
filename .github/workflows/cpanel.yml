@@ -1,7 +1,7 @@
 name: cPanel package
 on:
   push:
-    branches: [main, master, v2.0.0-cpanel-update, v2.2.0-unified-master]
+    branches: [main, master, disweb-production, v2.0.0-cpanel-update, v2.2.0-unified-master]
     paths: ["backend/**", "frontend/**", "deploy/cpanel/**", ".github/workflows/cpanel.yml", "BLUEPRINT.md"]
   pull_request:
     paths: ["backend/**", "frontend/**", "deploy/cpanel/**", ".github/workflows/cpanel.yml", "BLUEPRINT.md"]

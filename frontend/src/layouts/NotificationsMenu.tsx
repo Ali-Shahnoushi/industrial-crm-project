@@ -51,8 +51,7 @@ export function NotificationsMenu() {
   const user = useAuthStore((s) => s.user)
   const nav = useNavigate()
   const storageKey = `crm_seen_activities_${user?.id ?? 'guest'}`
-
-  const [seenIds, setSeenIds] = useState<Set<string>>(() => readSeenIds(storageKey))
+  const lowStockStorageKey = `crm_seen_low_stock_${user?.id ?? 'guest'}`
 
   const { data } = useQuery({
     queryKey: ['dashboard-stats'],
@@ -71,12 +70,41 @@ export function NotificationsMenu() {
     [data?.low_stock_parts],
   )
 
+  const lowStockSignature = useMemo(
+    () => lowStockParts.map((p) => `${p.id}:${p.stock_quantity}`).sort().join(','),
+    [lowStockParts],
+  )
+
+  const [currentStorageKey, setCurrentStorageKey] = useState(storageKey)
+  const [seenIds, setSeenIds] = useState<Set<string>>(() => readSeenIds(storageKey))
+  const [dismissedLowStockSig, setDismissedLowStockSig] = useState<string>(() => {
+    try {
+      return localStorage.getItem(lowStockStorageKey) || ''
+    } catch {
+      return ''
+    }
+  })
+
+  // Synchronize state when storageKey changes (e.g. user authenticates) without an effect
+  if (currentStorageKey !== storageKey) {
+    setCurrentStorageKey(storageKey)
+    setSeenIds(readSeenIds(storageKey))
+    try {
+      setDismissedLowStockSig(localStorage.getItem(lowStockStorageKey) || '')
+    } catch {
+      setDismissedLowStockSig('')
+    }
+  }
+
   const unread = useMemo(
     () => activities.filter((a) => !seenIds.has(String(a.id))),
     [activities, seenIds],
   )
 
-  const badgeCount = unread.length + lowStockParts.length
+  const hasUnreadLowStock = Boolean(
+    lowStockSignature && dismissedLowStockSig !== lowStockSignature,
+  )
+  const badgeCount = unread.length + (hasUnreadLowStock ? 1 : 0)
 
   const markRead = (id: string) => {
     setSeenIds((prev) => {
@@ -95,6 +123,14 @@ export function NotificationsMenu() {
       saveSeenIds(storageKey, next)
       return next
     })
+    if (lowStockSignature) {
+      try {
+        localStorage.setItem(lowStockStorageKey, lowStockSignature)
+      } catch {
+        // Ignore quota errors
+      }
+      setDismissedLowStockSig(lowStockSignature)
+    }
   }
 
   const openActivity = (act: CustomerHistory) => {
@@ -103,6 +139,19 @@ export function NotificationsMenu() {
     if (act.customer_id) {
       nav(`/customers/${act.customer_id}`)
     }
+  }
+
+  const openLowStock = () => {
+    if (lowStockSignature) {
+      try {
+        localStorage.setItem(lowStockStorageKey, lowStockSignature)
+      } catch {
+        // Ignore quota errors
+      }
+      setDismissedLowStockSig(lowStockSignature)
+    }
+    closeDropdown()
+    nav('/inventory?low=1')
   }
 
   return (
@@ -126,7 +175,7 @@ export function NotificationsMenu() {
       >
         <div className="flex items-center justify-between border-b border-base-300/60 px-4 py-3">
           <p className="font-bold text-sm">اعلان‌ها و رویدادهای سامانه</p>
-          {unread.length > 0 && (
+          {(unread.length > 0 || hasUnreadLowStock) && (
             <button className="btn btn-ghost btn-xs gap-1 text-primary" onClick={markAllRead}>
               <CheckCheck className="size-3.5" /> خواندن همه
             </button>
@@ -136,18 +185,23 @@ export function NotificationsMenu() {
           {lowStockParts.length > 0 && (
             <li className="mb-1">
               <button
-                onClick={() => {
-                  closeDropdown()
-                  nav('/inventory?low=1')
-                }}
-                className="flex w-full items-start gap-3 rounded-xl border border-warning/30 bg-warning/10 p-2.5 text-start transition-colors hover:bg-warning/20"
+                onClick={openLowStock}
+                className={cx(
+                  'flex w-full items-start gap-3 rounded-xl border p-2.5 text-start transition-colors',
+                  hasUnreadLowStock
+                    ? 'border-warning/40 bg-warning/15 hover:bg-warning/25'
+                    : 'border-base-200 bg-base-200/40 hover:bg-base-200/80 opacity-80',
+                )}
               >
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-warning/25 text-warning">
                   <AlertTriangle className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-extrabold text-base-content">
-                    هشدار کمبود موجودی انبار ({num(lowStockParts.length)} مدل)
+                  <span className="flex items-center justify-between">
+                    <span className="block text-xs font-extrabold text-base-content">
+                      هشدار کمبود موجودی انبار ({num(lowStockParts.length)} مدل)
+                    </span>
+                    {hasUnreadLowStock && <span className="size-2 shrink-0 rounded-full bg-warning" />}
                   </span>
                   <span className="block line-clamp-2 text-[11px] text-base-content/70 mt-0.5">
                     {lowStockParts
