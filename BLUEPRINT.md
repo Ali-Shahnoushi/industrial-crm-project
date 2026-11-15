@@ -23,18 +23,19 @@
 ## ۲. پشته فناوری (Technology Stack)
 
 ### بک‌اند (Backend):
-* **فریم‌ورک:** Laravel 11.31 بر پایه PHP 8.2+ (تست شده و سازگار با PHP 8.4)
-* **احراز هویت:** Laravel Sanctum (توکن‌های ایمن با کوکی HttpOnly و عمر ۳۰ روزه)
+* **فریم‌ورک:** Laravel 11 (محدوده `^11.31` در `composer.json`) بر پایه PHP 8.4.1 یا بالاتر — فایل قفل Composer به دلیل وابستگی‌های Symfony به PHP ‎≥ 8.4.1‎ نیاز دارد، هرچند `composer.json` حداقل 8.2 را اعلام می‌کند.
+* **احراز هویت:** Laravel Sanctum (توکن‌های ایمن با کوکی HttpOnly و عمر ۷ روزه؛ قابل تنظیم با `SANCTUM_EXPIRATION`)
 * **سطوح دسترسی (RBAC):** Spatie Laravel Permission با مدل پیاده‌سازی ۴ سطحی ایرانی
 * **مستندسازی خودکار API:** Dedoc Scramble در مسیر `/docs/api`
 * **ارتباط پیامکی:** سرویس یکپارچه ملی‌پیامک (Melipayamak REST API) با حالت شبیه‌ساز (Sandbox)
 * **تقویم و تاریخ:** تاریخ کاملاً بومی و دقیق جلالی (بدون لایبرری‌های سنگین خارجی)
-* **تست‌ها:** PHPUnit 11 (شامل ۱۸ تست Unit و Feature با ۱۷۲ Assertion موفق)
+* **تست‌ها:** PHPUnit 11 (شامل ۴۴ تست Unit و Feature با ۴۲۴ Assertion موفق)
 
 ### فرانت‌اند (Frontend):
 * **فریم‌ورک و هسته:** React 19 + TypeScript + Vite
 * **استایل‌دهی:** Tailwind CSS 4 + DaisyUI 5
 * **مدیریت دیتا و کش:** TanStack React Query v5
+* **نمودارها:** ECharts 6 برای نمودارهای فروش و درآمد
 * **فرم‌ها و ولیدیشن:** React Hook Form + Zod
 * **فونت و تایپوگرافی:** وزیرمتن با اعداد فارسی استاندارد (`@fontsource-variable/vazirmatn`)
 * **آیکون‌ها:** Lucide React
@@ -49,48 +50,76 @@
 │   ├── app/
 │   │   ├── Exports/                     # خروجی‌های اکسل و CSV با UTF-8 BOM
 │   │   │   ├── CustomersExport.php
-│   │   │   └── CustomersTemplateExport.php
+│   │   │   ├── CustomersTemplateExport.php
+│   │   │   └── SalesExport.php
+│   │   ├── Imports/CustomersImport.php  # درون‌ریزی اکسل مشتریان
 │   │   ├── Http/
 │   │   │   ├── Controllers/Api/V1/      # کلیه اندپوینت‌های RESTful
 │   │   │   │   ├── AuthController.php   # ورود با رمز/پیامک OTP، پروفایل
 │   │   │   │   ├── BackupController.php # بکاپ و ریستور JSON و دامپ SQL
 │   │   │   │   ├── CustomerController.php # مدیریت و فیلتربندی مشتریان
+│   │   │   │   ├── CustomerPortalController.php # پورتال ایزوله مشتری
 │   │   │   │   ├── DashboardController.php # آمارهای داشبورد مدیریتی
+│   │   │   │   ├── InvoiceController.php # صدور، مشاهده و ابطال فاکتور
 │   │   │   │   ├── PartController.php   # انبار، کاتالوگ و تخصیص قطعات
-│   │   │   │   ├── SettingController.php # تنظیمات پیامک و هویت شرکت
+│   │   │   │   ├── SalesController.php  # فروش، گزارش‌ها و خروجی اکسل
+│   │   │   │   ├── SettingController.php # تنظیمات پیامک، فروش و هویت شرکت
 │   │   │   │   ├── SmsController.php    # ارسال پترن و لاگ پیامک
+│   │   │   │   ├── TicketController.php # تیکت‌ها، پاسخ‌ها و یادداشت‌ها
+│   │   │   │   ├── TicketDepartmentController.php # دپارتمان‌ها و راهبرد تخصیص
 │   │   │   │   └── UserController.php   # مدیریت کارمندان و مجوزها
 │   │   │   └── Middleware/
-│   │   │       ├── EnsureUserIsActive.php # مسدودسازی آنی کاربران غیرفعال
+│   │   │       ├── AuthenticateFromCookie.php # احراز هویت از کوکی HttpOnly
+│   │   │       ├── EnsureActiveUser.php # مسدودسازی آنی کاربران غیرفعال (نام مستعار `active.user`)
+│   │   │       ├── EnsureCustomerPortalUser.php # ایزولاسیون پورتال مشتری
+│   │   │       ├── EnsureStaffUser.php # مسدودسازی پورتال از روت‌های کارکنان
 │   │   │       └── SecurityHeadersAndLockdown.php # هدرهای امنیتی و مسدودسازی فیلامنت
-│   │   ├── Models/                      # مدل‌های الکوئنت (Customer, Part, User, ...)
-│   │   └── Services/
-│   │       ├── Customers/CustomerService.php # تراکنش‌های امن انبار و تخصیص
-│   │       ├── Jalali/JalaliDate.php    # تبدیل تاریخ بدون باگ کبیسه
-│   │       └── Sms/MelipayamakService.php # ارتباط با وب‌سرویس ملی‌پیامک
+│   │   ├── Models/                      # مدل‌های الکوئنت (Customer, Part, Sale, SaleItem, Invoice, Ticket, TicketDepartment, User, ...)
+│   │   ├── Services/
+│   │   │   ├── Customers/CustomerService.php # تراکنش‌های امن انبار و تخصیص
+│   │   │   ├── Sales/               # SaleService، InvoiceService و SalesReportService
+│   │   │   ├── Tickets/TicketAssignmentService.php # تخصیص خودکار کارشناس تیکت
+│   │   │   └── Sms/MelipayamakService.php # ارتباط با وب‌سرویس ملی‌پیامک
+│   │   └── Support/JalaliDate.php         # تبدیل تاریخ بدون باگ کبیسه
 │   ├── database/migrations/             # مایگریشن‌های استاندارد دیتابیس
 │   ├── routes/api.php                   # تمامی روت‌های API
 │   └── tests/Feature/                   # تست‌های خودکار یکپارچه‌سازی
 ├── frontend/                            # برنامه فرانت‌اند تک‌صفحه‌ای (SPA)
 │   ├── src/
 │   │   ├── components/                  # کامپوننت‌های ماژولار و UI
+│   │   │   ├── common/                  # گاردهای دسترسی و مرز خطا
 │   │   │   ├── customers/               # مودال‌های مشتریان و درون‌ریزی
 │   │   │   ├── parts/                   # مودال‌های تخصیص دستگاه و سوابق سرویس
-│   │   │   └── ui/                      # المان‌های تقویم، سرچ، پیجینیشن، مودال
-│   │   ├── layouts/                     # سایدبار، هدر، سرچ سراسری و ناوبری
+│   │   │   ├── portal/                  # مودال ثبت تیکت در پورتال مشتری
+│   │   │   ├── sales/                   # فرم، جدول، کارت‌های شاخص و نمودارهای فروش
+│   │   │   ├── ui/                      # المان‌های تقویم، سرچ، پیجینیشن، مودال
+│   │   │   └── users/                   # پنل دسترسی مشتریان کارمند
+│   │   ├── layouts/                     # سایدبار، هدر، سرچ سراسری، ناوبری و چیدمان پورتال مشتری
 │   │   ├── pages/                       # صفحات اصلی سامانه
 │   │   │   ├── Customers.tsx            # جدول مشتریان با فیلترها و سورت
 │   │   │   ├── CustomerDetail.tsx       # پرونده ۳۶۰ درجه مشتری و دستگاه‌ها
 │   │   │   ├── Parts.tsx                # کاتالوگ و گزارش گردش انبار
+│   │   │   ├── Inventory.tsx            # انبار و کاردکس موجودی
+│   │   │   ├── Sales.tsx                # فروش و گزارش‌ها
+│   │   │   ├── SaleDetail.tsx           # جزئیات فروش
+│   │   │   ├── Finance.tsx              # مالی و فاکتورها
+│   │   │   ├── InvoicePrint.tsx         # نمای چاپ فاکتور
+│   │   │   ├── Tickets.tsx              # تیکت‌ها و درخواست تعمیر
+│   │   │   ├── TicketDetail.tsx         # جزئیات تیکت و پاسخ‌ها
 │   │   │   ├── Dashboard.tsx            # پیشخوان آماری و وضعیت انبار
 │   │   │   ├── SmsCenter.tsx            # مرکز ارسال و گزارشات پیامک
+│   │   │   ├── portal/                  # صفحات پورتال مشتری (داشبورد، دستگاه‌ها، تیکت‌ها، پروفایل)
 │   │   │   └── settings/
 │   │   │       ├── BackupPage.tsx       # پشتیبان‌گیری و بازیابی داده‌ها
 │   │   │       ├── UsersAclPage.tsx     # ماتریس دسترسی‌ها و کارمندان
+│   │   │       ├── CreateUserPage.tsx   # ایجاد کارمند
+│   │   │       ├── EditUserPage.tsx     # ویرایش کارمند
+│   │   │       ├── MyProfilePage.tsx    # پروفایل کاربری من
 │   │   │       ├── SmsSettingsPage.tsx  # تنظیمات ملی‌پیامک
+│   │   │       ├── TicketingSettingsPage.tsx # دپارتمان‌ها و راهبرد تخصیص تیکت
 │   │   │       └── SystemSettingsPage.tsx # پوسته و نام تجاری شرکت
-│   │   ├── services/api.ts              # ارتباط با API با Axios
-│   │   └── store/                       # حالت‌های سراسری Zustand (تم، کاربر، ...)
+│   │   ├── services/                    # api.ts و sales.ts — ارتباط با API با Axios
+│   │   └── store/                       # حالت‌های سراسری Zustand (تم، کاربر) و queryClient
 ├── deploy/cpanel/                       # اسکریپت‌های بیلد و پکیجینگ cPanel
 ├── .github/workflows/cpanel.yml         # خط لوله CI/CD بیلد و ساخت خودکار فایل‌های ZIP
 └── BLUEPRINT.md                         # همین مستند جامع
@@ -104,9 +133,10 @@
 
 ### نقش‌های استاندارد سیستم:
 1. **مدیر ارشد سامانه (`administrator`):** دسترسی نامحدود به کلیه بخش‌ها، تنظیمات سیستم، کارمندان و پشتیبان‌گیری کامل پایگاه داده.
-2. **مدیر فروش و عملیات (`manager`):** مشاهده همه مشتریان، تخصیص دستگاه، مدیریت کاتالوگ انبار، مدیریت کارمندان فروش (بدون امکان دسترسی به اکانت ادمین ارشد).
+2. **مدیر فروش و عملیات (`manager`):** مشاهده همه مشتریان، تخصیص دستگاه، مدیریت کاتالوگ انبار، فروش و تیکت‌ها؛ مدیریت کاربران ندارد (مجوز `users.manage` در پیش‌فرض مدیر نیست) و به اکانت ادمین ارشد دسترسی ندارد.
 3. **کارشناس فروش (`salesperson`):** پیش‌فرض مشاهده فقط پرونده‌های ثبت‌شده توسط خودش (`customer_scope: own`) مگر با استثنای دسترسی گرنت‌شده توسط مدیر.
 4. **تکنسین نصب و خدمات (`installer`):** فقط مشاهده اطلاعات و ثبت گزارش سرویس و تعمیرات دستگاه‌ها (امکان حذف مشتری یا ویرایش سایر بخش‌ها را ندارد).
+5. **مشتری (`customer`):** حساب پورتال مشتری؛ فقط به پرونده، دستگاه‌ها و تیکت‌های همان مشتری دسترسی دارد و به بخش‌های کارکنان راه ندارد.
 
 ### محدودیت دامنه مشتریان (Customer Scopes):
 * `all`: دسترسی به کلیه مشتریان سامانه.
@@ -116,12 +146,12 @@
 ### لایه‌های امنیتی سخت‌گیرانه:
 * **جلوگیری از Privilege Escalation:** هیچ کاربری نمی‌تواند مجوزی فراتر از مجوزهای خود به دیگری اعطا کند.
 * **قفل ادمین ارشد:** کاربران با نقش‌های پایین‌تر به‌هیچ‌وجه قادر به مشاهده یا تغییر وضعیت یا رمز عبور مدیر ارشد نیستند.
-* **میدلور `SecurityHeadersAndLockdown`:** اعمال هدرهای امنیتی (HSTS, CSP, X-Frame-Options, X-Content-Type-Options: nosniff) و بلاک کردن کامل روت‌های فیلامنت یا لایووایر.
-* **میدلور `EnsureUserIsActive`:** در صورت غیرفعال شدن حساب کاربری، در همان لحظه کلیه درخواست‌های API مسدود و سشن باطل می‌شود.
+* **میدلور `SecurityHeadersAndLockdown`:** اعمال هدرهای امنیتی (`X-Frame-Options: DENY`، `X-Content-Type-Options: nosniff`، `Referrer-Policy`، `Permissions-Policy` و `X-Permitted-Cross-Domain-Policies`) و بلاک کردن کامل روت‌های فیلامنت یا لایووایر (و `/docs*` در محیط `production`).
+* **میدلور `EnsureActiveUser` (نام مستعار `active.user`):** در صورت غیرفعال شدن حساب کاربری، در همان لحظه کلیه درخواست‌های API با خطای 401 مسدود می‌شوند.
 
 ---
 
-## ۵. راهنمای ماژول‌های جدید (v2.3.0)
+## ۵. راهنمای ماژول‌های جدید (v2.3.0 و v2.4.0)
 
 ### ۱. بخش پشتیبان‌گیری و بازیابی داده‌ها (`/settings/backup`):
 * **خروجی JSON:** دریافت فایل ساختاریافته کامل شامل تمامی فیلدهای مشتری، شرکت، تلفن‌ها، دستگاه‌های منتسب، شماره سریال، گارانتی و مبالغ فاکتور.
@@ -138,6 +168,17 @@
 ### ۳. تخصیص دستگاه با سریال اختیاری (`/customers/:id`):
 * شماره سریال دستگاه‌ها (`serial_number`) از حالت اجباری خارج شده و اختیاری است تا برای خریدهای عمده یا قطعات بدون سریال مشکلی ایجاد نکند.
 
+### ۴. ماژول فروش و فاکتورها (`/sales` و `/finance` — نسخه ۲.۴.۰):
+* جداول `sales` و `sale_items` و `invoices`؛ مدل‌های `Sale` و `SaleItem` و `Invoice`؛ سرویس‌های `SaleService`، `InvoiceService` و `SalesReportService`.
+* ثبت فروش چندقلمه با قیمت واحد دستگاه، وضعیت فروش (`draft`/`confirmed`/`cancelled`) و وضعیت پرداخت؛ مالیات پیش‌فرض ۱۰٪ قابل تنظیم در تنظیمات فروش.
+* تخصیص دستگاه به مشتری به‌صورت خودکار یک فروش مرتبط ایجاد می‌کند و مایگریشن بک‌فیل، تخصیص‌های قدیمی را به فروش تبدیل می‌کند.
+* شماره فاکتور به‌صورت `INV-{سال شمسی}-{ردیف ۴ رقمی}` صادر و در پرونده مشتری همگام می‌شود؛ ابطال فاکتور و نمای چاپ در `/invoices/:id/print`.
+* گزارش‌های فروش (`/sales/summary` و `/sales/charts`)، خروجی اکسل فروش و نمودارهای ECharts؛ مجوزهای `sales.view` و `sales.create` و `sales.manage`.
+
+### ۵. تیکتینگ و پورتال مشتری (`/tickets` و `/portal` — نسخه ۲.۳.۰):
+* دپارتمان‌های قابل‌پیکربندی با سه راهبرد تخصیص خودکار کارشناس (چرخشی، کم‌بارترین، تصادفی)؛ پاسخ کارکنان، یادداشت داخلی و انتقال دپارتمان.
+* پورتال ایزوله مشتری با میدل‌ویرهای `portal.customer` و `staff.only`؛ حساب پورتال فقط به داده‌های همان مشتری دسترسی دارد.
+
 ---
 
 ## ۶. گردش کار استقرار و بیلد خودکار CI/CD (GitHub Actions)
@@ -152,6 +193,10 @@
 6. ایجاد دو پکیج آماده آپلود در پوشه `cpanel-release/`:
    * `cpanel-public.zip` (محتویات پوشه `public_html`)
    * `cpanel-private.zip` (محتویات خارج از روت وب در پوشه اختصاصی کاربر)
+7. تست‌های HTTP ویزارد نصب واقعی (GET/POST، سناریوهای خطا و تلاش مجدد).
+8. آپلود زیپ‌ها به‌عنوان Artifact و انتشار/به‌روزرسانی ریلیز چرخان `latest-cpanel` روی برنچ `main`.
+
+پایپ‌لاین فقط برای تغییر در مسیرهای `backend/**`، `frontend/**`، `deploy/cpanel/**`، فایل ورک‌فلو و `BLUEPRINT.md` اجرا می‌شود؛ اجرای هم‌زمان با `cancel-in-progress` لغو و کامیت‌های دارای `[skip ci]` نادیده گرفته می‌شوند.
 
 ---
 
