@@ -75,7 +75,7 @@ class BackupController extends Controller
         $payload = [
             'metadata' => [
                 'system' => 'Industrial Equipment CRM',
-                'version' => '2.3.0',
+                'version' => '2.4.0',
                 'exported_at' => Carbon::now()->toIso8601String(),
                 'total_customers' => $customers->count(),
                 'total_devices' => $customers->sum(fn ($c) => $c->customerParts->count()),
