@@ -45,19 +45,28 @@ return new class extends Migration
             });
         }
 
-        // Backfill created_by_user_id for pre-existing customers from customer_histories
-        if (Schema::hasTable('customer_histories') && Schema::hasColumn('customers', 'created_by_user_id')) {
-            $creationLogs = DB::table('customer_histories')
-                ->where('action', 'created')
-                ->whereNotNull('user_id')
-                ->orderBy('id')
-                ->get(['customer_id', 'user_id']);
-
-            foreach ($creationLogs as $log) {
+        // Backfill created_by_user_id for pre-existing customers (from created_by column or customer_histories)
+        if (Schema::hasColumn('customers', 'created_by_user_id')) {
+            if (Schema::hasColumn('customers', 'created_by')) {
                 DB::table('customers')
-                    ->where('id', $log->customer_id)
                     ->whereNull('created_by_user_id')
-                    ->update(['created_by_user_id' => $log->user_id]);
+                    ->whereNotNull('created_by')
+                    ->update(['created_by_user_id' => DB::raw('created_by')]);
+            }
+
+            if (Schema::hasTable('customer_histories')) {
+                $creationLogs = DB::table('customer_histories')
+                    ->where('action', 'created')
+                    ->whereNotNull('user_id')
+                    ->orderBy('id')
+                    ->get(['customer_id', 'user_id']);
+
+                foreach ($creationLogs as $log) {
+                    DB::table('customers')
+                        ->where('id', $log->customer_id)
+                        ->whereNull('created_by_user_id')
+                        ->update(['created_by_user_id' => $log->user_id]);
+                }
             }
         }
 

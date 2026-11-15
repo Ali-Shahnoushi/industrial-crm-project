@@ -342,7 +342,10 @@ class BackupController extends Controller
 
         if ($driver === 'mysql' || $driver === 'mariadb') {
             $tableRows = DB::select("SHOW FULL TABLES WHERE Table_type = 'BASE TABLE'");
-            $tables = array_map(fn ($r) => (string) reset((array) $r), $tableRows);
+            $tables = array_map(function ($r) {
+                $arr = array_values((array) $r);
+                return (string) ($arr[0] ?? '');
+            }, $tableRows);
         } else {
             $tables = array_map(
                 fn ($t) => is_array($t) ? (string) ($t['name'] ?? reset($t)) : (string) $t,
@@ -351,7 +354,7 @@ class BackupController extends Controller
         }
 
         foreach ($tables as $table) {
-            if (in_array($table, ['sessions', 'cache', 'cache_locks', 'jobs', 'failed_jobs', 'sqlite_sequence'], true)) {
+            if (!$table || in_array($table, ['sessions', 'cache', 'cache_locks', 'jobs', 'failed_jobs', 'sqlite_sequence'], true)) {
                 continue;
             }
 
@@ -362,7 +365,12 @@ class BackupController extends Controller
                 if ($driver === 'mysql' || $driver === 'mariadb') {
                     $createRow = DB::select("SHOW CREATE TABLE `{$table}`");
                     if (!empty($createRow)) {
-                        $createSql = ((array) $createRow[0])['Create Table'] ?? null;
+                        $createArr = (array) $createRow[0];
+                        $createSql = $createArr['Create Table'] ?? $createArr['create table'] ?? null;
+                        if (!$createSql) {
+                            $vals = array_values($createArr);
+                            $createSql = $vals[1] ?? null;
+                        }
                         if ($createSql) {
                             $out .= $createSql . ";\n\n";
                         }

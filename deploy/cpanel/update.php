@@ -258,8 +258,27 @@ try {
                 $migrationLog .= "\nمدیر ارشد و مجوزهای سیستمی با موفقیت همگام‌سازی شدند.";
             }
         }
+
+        // ۴. انتقال شناسه‌های ثبت‌کننده مشتریان از نسخه قبلی (created_by به created_by_user_id)
+        if (\Illuminate\Support\Facades\Schema::hasColumn('customers', 'created_by') && \Illuminate\Support\Facades\Schema::hasColumn('customers', 'created_by_user_id')) {
+            $updatedCount = \Illuminate\Support\Facades\DB::table('customers')
+                ->whereNull('created_by_user_id')
+                ->whereNotNull('created_by')
+                ->update(['created_by_user_id' => \Illuminate\Support\Facades\DB::raw('created_by')]);
+            if ($updatedCount > 0) {
+                $migrationLog .= "\nتعداد {$updatedCount} مشتری با شناسه ثبت‌کننده نسخه قبلی (created_by) همگام‌سازی شدند.";
+            }
+        }
+        if ($admin && \Illuminate\Support\Facades\Schema::hasColumn('customers', 'created_by_user_id')) {
+            $orphanCount = \Illuminate\Support\Facades\DB::table('customers')
+                ->whereNull('created_by_user_id')
+                ->update(['created_by_user_id' => $admin->id]);
+            if ($orphanCount > 0) {
+                $migrationLog .= "\nتعداد {$orphanCount} مشتری بدون ثبت‌کننده به مدیر ارشد تخصیص یافتند.";
+            }
+        }
     } catch (\Throwable $syncEx) {
-        $migrationLog .= "\nهشدار در همگام‌سازی دسترسی‌ها: " . $syncEx->getMessage();
+        $migrationLog .= "\nهشدار در همگام‌سازی دسترسی‌ها و کارمندان: " . $syncEx->getMessage();
     }
 
 } catch (\Throwable $migEx) {
