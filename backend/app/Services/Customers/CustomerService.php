@@ -7,8 +7,10 @@ use App\Models\CustomerPart;
 use App\Models\Part;
 use App\Models\PartInventoryLog;
 use App\Models\PartServiceHistory;
+use App\Services\Sales\SaleService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class CustomerService
@@ -130,7 +132,17 @@ class CustomerService
                 ]);
             }
 
-            return $customerPart->load(['part', 'serviceHistories.performedBy']);
+            if (Schema::hasTable('sales') && Schema::hasTable('sale_items')) {
+                app(SaleService::class)->createFromAssignment(
+                    $customerPart,
+                    $customer,
+                    $lockedPart,
+                    $attributes,
+                    $userId
+                );
+            }
+
+            return $customerPart->load(['part', 'serviceHistories.performedBy', 'saleItem.sale']);
         });
     }
 
@@ -303,6 +315,23 @@ class CustomerService
                 'status' => $attributes['status'] ?? $lockedCp->status,
                 'notes' => array_key_exists('notes', $attributes) ? $attributes['notes'] : $lockedCp->notes,
             ]);
+
+            if (Schema::hasTable('sale_items') && ($saleItem = $lockedCp->saleItem()->with('sale')->first())) {
+                $linkedSale = $saleItem->sale;
+                if ($linkedSale && !$linkedSale->trashed() && $linkedSale->status !== 'cancelled') {
+                    $unitPrice = $saleItem->unit_price;
+                    if (array_key_exists('invoice_amount', $attributes) && $invoiceAmount !== null) {
+                        $unitPrice = (int) round(((float) $invoiceAmount) / max(1, $newQty));
+                    }
+                    $saleItem->update([
+                        'part_id' => $newPartId,
+                        'quantity' => $newQty,
+                        'unit_price' => $unitPrice,
+                        'line_total' => max(0, ($newQty * $unitPrice) - (int) $saleItem->discount_amount),
+                    ]);
+                    app(SaleService::class)->recalculateTotals($linkedSale);
+                }
+            }
 
             $customer->histories()->create([
                 'user_id' => $userId,

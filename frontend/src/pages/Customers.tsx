@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '../components/ui/PageHeader'
 import { SearchInput } from '../components/ui/SearchInput'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { Pagination } from '../components/ui/Pagination'
 import { ConfirmDialog } from '../components/ui/Modal'
 import { EmptyState, TableSkeleton } from '../components/ui/Field'
@@ -38,34 +39,12 @@ import { CustomerFormModal } from '../components/customers/CustomerFormModal'
 import { ImportModal } from '../components/customers/ImportModal'
 import { Can } from '../components/common/Can'
 import { customerApi } from '../services/api'
+import { IRAN_PROVINCES, IRAN_PROVINCES_DATA, getCitiesByProvince } from '../data/iranLocations'
 import { customerDisplayName, cx, dateShort, num, toEnDigits } from '../utils/format'
 import { useDebouncedValue } from '../utils/useDebouncedValue'
 import type { Customer, CustomerType } from '../types'
 
 const PAGE_SIZE = 10
-
-const PROVINCES = [
-  'تهران',
-  'اصفهان',
-  'خراسان رضوی',
-  'فارس',
-  'آذربایجان شرقی',
-  'مازندران',
-  'خوزستان',
-  'کرمان',
-  'گیلان',
-  'البرز',
-  'یزد',
-  'مرکزی',
-  'قزوین',
-  'قم',
-  'همدان',
-  'سمنان',
-  'بوشهر',
-  'هرمزگان',
-  'زنجان',
-  'لرستان',
-]
 
 type CustomerSortField = 'name' | 'customer_type' | 'contact' | 'city' | 'devices' | 'created_at'
 
@@ -83,11 +62,11 @@ export default function Customers() {
   const isNewFromUrl = Boolean(params.get('new'))
 
   // Advanced Minimal Filters
+  const [creatorFilter, setCreatorFilter] = useState<string>('')
   const [entityType, setEntityType] = useState<'all' | 'company' | 'individual'>('all')
   const [deviceFilter, setDeviceFilter] = useState<'all' | 'has_devices' | 'no_devices'>('all')
   const [provinceFilter, setProvinceFilter] = useState<string>('')
   const [cityFilter, setCityFilter] = useState<string>('')
-  const debouncedCity = useDebouncedValue(cityFilter, 300)
   const [showFilterPanel, setShowFilterPanel] = useState<boolean>(false)
 
   // Sorting State
@@ -143,15 +122,54 @@ export default function Customers() {
     }
   }
 
+  const { data: creatorOptions = [] } = useQuery({
+    queryKey: ['customer-creator-options'],
+    queryFn: customerApi.creatorOptions,
+  })
+
+  const creatorSelectOptions = useMemo(
+    () =>
+      creatorOptions.map((u) => ({
+        value: String(u.id),
+        label: u.name,
+        hint: u.role_label,
+      })),
+    [creatorOptions],
+  )
+
+  const selectedCreatorName = useMemo(
+    () => creatorOptions.find((u) => String(u.id) === creatorFilter)?.name,
+    [creatorOptions, creatorFilter],
+  )
+
+  const cityOptions = useMemo(() => {
+    if (provinceFilter) {
+      return getCitiesByProvince(provinceFilter)
+    }
+    const seen = new Set<string>()
+    const all: Array<{ value: string; label: string; hint: string }> = []
+    for (const prov of IRAN_PROVINCES_DATA) {
+      for (const c of prov.cities) {
+        if (!seen.has(c)) {
+          seen.add(c)
+          all.push({ value: c, label: c, hint: prov.name })
+        }
+      }
+    }
+    return all
+  }, [provinceFilter])
+
   const activeFiltersCount =
     (customerType !== 'all' ? 1 : 0) +
+    (creatorFilter ? 1 : 0) +
     (entityType !== 'all' ? 1 : 0) +
     (deviceFilter !== 'all' ? 1 : 0) +
     (provinceFilter ? 1 : 0) +
-    (debouncedCity ? 1 : 0)
+    (cityFilter ? 1 : 0)
 
   const clearAllFilters = () => {
     selectCustomerType('all')
+    setCreatorFilter('')
     setEntityType('all')
     setDeviceFilter('all')
     setProvinceFilter('')
@@ -164,10 +182,11 @@ export default function Customers() {
     queryKey: [
       'customers',
       customerType,
+      creatorFilter,
       entityType,
       deviceFilter,
       provinceFilter,
-      debouncedCity,
+      cityFilter,
       debouncedQ,
       sortField,
       sortOrder,
@@ -176,11 +195,12 @@ export default function Customers() {
     queryFn: () =>
       customerApi.list({
         customer_type: customerType === 'all' ? undefined : customerType,
+        created_by_user_id: creatorFilter || undefined,
         type: entityType === 'all' ? undefined : entityType,
         has_devices:
           deviceFilter === 'has_devices' ? 'yes' : deviceFilter === 'no_devices' ? 'no' : undefined,
         province: provinceFilter || undefined,
-        city: debouncedCity.trim() || undefined,
+        city: cityFilter || undefined,
         sort_by: sortField,
         sort_direction: sortOrder,
         q: toEnDigits(debouncedQ).trim() || undefined,
@@ -208,9 +228,8 @@ export default function Customers() {
     <div className="space-y-6">
       <PageHeader
         title="مدیریت مشتریان"
-        subtitle="فهرست مشتریان بالقوه و بالفعل (حقیقی و حقوقی)، دستگاه‌های تخصیص‌یافته، فیلترهای پیشرفته و خروجی اکسل / CSV"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <Can permission="settings.manage">
               <Link
                 to="/settings/backup"
@@ -218,7 +237,7 @@ export default function Customers() {
                 title="پشتیبان‌گیری و بازیابی پرونده‌ها (JSON و دیتابیس)"
               >
                 <Database className="size-4 text-primary" />
-                <span className="hidden sm:inline">پشتیبان‌گیری / بازیابی</span>
+                <span className="hidden sm:inline">پشتیبان‌گیری</span>
               </Link>
             </Can>
 
@@ -237,7 +256,7 @@ export default function Customers() {
                   ) : (
                     <Download className="size-4 text-emerald-600" />
                   )}
-                  خروجی لیست مشتریان
+                  خروجی
                   <ChevronDown className="size-3.5 opacity-70" />
                 </div>
                 <ul
@@ -284,13 +303,14 @@ export default function Customers() {
             </Can>
 
             <Can permission="customers.import">
-              <button className="btn btn-sm" onClick={() => setImportOpen(true)}>
-                <Upload className="size-4" /> ورود از اکسل / CSV
+              <button type="button" className="btn btn-sm" onClick={() => setImportOpen(true)}>
+                <Upload className="size-4" /> ورود از اکسل
               </button>
             </Can>
 
             <Can permission="customers.create">
               <button
+                type="button"
                 className="btn btn-sm btn-primary"
                 onClick={() => {
                   setEditing(undefined)
@@ -300,7 +320,7 @@ export default function Customers() {
                 <Plus className="size-4" /> مشتری جدید
               </button>
             </Can>
-          </div>
+          </>
         }
       />
 
@@ -315,7 +335,7 @@ export default function Customers() {
               onClick={() => selectCustomerType('all')}
             >
               <Users className="size-3.5" />
-              همه مشتریان
+              همه
             </button>
             <button
               role="tab"
@@ -326,7 +346,7 @@ export default function Customers() {
               onClick={() => selectCustomerType('effective')}
             >
               <UserCheck className="size-3.5 text-emerald-600" />
-              مشتریان بالفعل (خریدار دستگاه)
+              بالفعل
             </button>
             <button
               role="tab"
@@ -337,20 +357,20 @@ export default function Customers() {
               onClick={() => selectCustomerType('potential')}
             >
               <UserPlus className="size-3.5 text-amber-600" />
-              مشتریان بالقوه (سرنخ)
+              بالقوه
             </button>
           </div>
 
           {/* Search + Filter Toggle Button */}
           <div className="flex items-center gap-2 w-full lg:w-auto">
-            <div className="flex-1 lg:w-72">
+            <div className="flex-1 lg:w-80">
               <SearchInput
                 value={q}
                 onChange={(val) => {
                   setQ(toEnDigits(val))
                   setPage(1)
                 }}
-                placeholder="جستجوی نام، همراه، شرکت، کد ملی..."
+                placeholder="جستجو (نام، همراه، شرکت، کد ملی، کارشناس...)"
               />
             </div>
 
@@ -382,7 +402,7 @@ export default function Customers() {
             <div className="flex items-center justify-between border-b border-base-200/60 pb-2.5">
               <p className="text-xs font-extrabold text-base-content/80 flex items-center gap-2">
                 <Filter className="size-3.5 text-primary" />
-                فیلتربندی تخصصی مشتریان
+                فیلتر مشتریان
               </p>
               {activeFiltersCount > 0 && (
                 <button
@@ -391,91 +411,83 @@ export default function Customers() {
                   className="btn btn-ghost btn-xs text-error gap-1"
                 >
                   <RotateCcw className="size-3" />
-                  پاک‌سازی همه فیلترها
+                  پاک‌سازی همه
                 </button>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-              {/* Filter 1: Entity Type */}
-              <div className="space-y-1">
-                <label className="font-semibold text-base-content/70">نوع شخصیت مشتری</label>
-                <select
-                  value={entityType}
-                  onChange={(e) => {
-                    setEntityType(e.target.value as any)
-                    setPage(1)
-                  }}
-                  className="select select-bordered select-sm w-full"
-                >
-                  <option value="all">همه شخصیت‌ها (حقیقی و حقوقی)</option>
-                  <option value="company">فقط حقوقی (شرکت و کارخانه)</option>
-                  <option value="individual">فقط حقیقی (شخصی)</option>
-                </select>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* Filter 1: Creator / Expert */}
+              <SearchableSelect
+                label="کارشناس"
+                placeholder="همه کارشناسان"
+                searchPlaceholder="جستجوی نام کارشناس..."
+                value={creatorFilter}
+                options={creatorSelectOptions}
+                onChange={(val) => {
+                  setCreatorFilter(val)
+                  setPage(1)
+                }}
+              />
 
-              {/* Filter 2: Device Assignment Status */}
-              <div className="space-y-1">
-                <label className="font-semibold text-base-content/70">وضعیت دستگاه‌های تخصیصی</label>
-                <select
-                  value={deviceFilter}
-                  onChange={(e) => {
-                    setDeviceFilter(e.target.value as any)
-                    setPage(1)
-                  }}
-                  className="select select-bordered select-sm w-full"
-                >
-                  <option value="all">همه مشتریان</option>
-                  <option value="has_devices">دارای دستگاه تحویل‌شده</option>
-                  <option value="no_devices">بدون دستگاه تحویل‌شده</option>
-                </select>
-              </div>
+              {/* Filter 2: Entity Type */}
+              <SearchableSelect
+                label="نوع شخصیت"
+                placeholder="همه شخصیت‌ها"
+                searchPlaceholder="جستجو..."
+                value={entityType === 'all' ? '' : entityType}
+                options={[
+                  { value: 'company', label: 'حقوقی (شرکت)' },
+                  { value: 'individual', label: 'حقیقی (شخصی)' },
+                ]}
+                onChange={(val) => {
+                  setEntityType((val || 'all') as 'all' | 'company' | 'individual')
+                  setPage(1)
+                }}
+              />
 
-              {/* Filter 3: Province */}
-              <div className="space-y-1">
-                <label className="font-semibold text-base-content/70">استان</label>
-                <select
-                  value={provinceFilter}
-                  onChange={(e) => {
-                    setProvinceFilter(e.target.value)
-                    setPage(1)
-                  }}
-                  className="select select-bordered select-sm w-full"
-                >
-                  <option value="">همه استان‌ها</option>
-                  {PROVINCES.map((prov) => (
-                    <option key={prov} value={prov}>
-                      {prov}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Filter 3: Device Assignment Status */}
+              <SearchableSelect
+                label="وضعیت دستگاه"
+                placeholder="همه"
+                searchPlaceholder="جستجو..."
+                value={deviceFilter === 'all' ? '' : deviceFilter}
+                options={[
+                  { value: 'has_devices', label: 'دارای دستگاه' },
+                  { value: 'no_devices', label: 'بدون دستگاه' },
+                ]}
+                onChange={(val) => {
+                  setDeviceFilter((val || 'all') as 'all' | 'has_devices' | 'no_devices')
+                  setPage(1)
+                }}
+              />
 
-              {/* Filter 4: City Search */}
-              <div className="space-y-1">
-                <label className="font-semibold text-base-content/70">نام شهر</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={cityFilter}
-                    onChange={(e) => {
-                      setCityFilter(e.target.value)
-                      setPage(1)
-                    }}
-                    placeholder="مثال: اصفهان، کاشان..."
-                    className="input input-bordered input-sm w-full pr-7"
-                  />
-                  {cityFilter && (
-                    <button
-                      type="button"
-                      onClick={() => setCityFilter('')}
-                      className="absolute left-2 top-2 text-base-content/40 hover:text-base-content"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
+              {/* Filter 4: Province */}
+              <SearchableSelect
+                label="استان"
+                placeholder="همه استان‌ها"
+                searchPlaceholder="جستجوی استان..."
+                value={provinceFilter}
+                options={IRAN_PROVINCES}
+                onChange={(val) => {
+                  setProvinceFilter(val)
+                  setCityFilter('')
+                  setPage(1)
+                }}
+              />
+
+              {/* Filter 5: City */}
+              <SearchableSelect
+                label="شهر"
+                placeholder="همه شهرها"
+                searchPlaceholder="جستجوی شهر..."
+                value={cityFilter}
+                options={cityOptions}
+                onChange={(val) => {
+                  setCityFilter(val)
+                  setPage(1)
+                }}
+              />
             </div>
           </div>
         )}
@@ -487,8 +499,17 @@ export default function Customers() {
 
             {customerType !== 'all' && (
               <span className="badge badge-neutral badge-soft text-[11px] gap-1 py-1">
-                نوع: {customerType === 'effective' ? 'بالفعل' : 'بالقوه'}
+                وضعیت: {customerType === 'effective' ? 'بالفعل' : 'بالقوه'}
                 <button type="button" onClick={() => selectCustomerType('all')}>
+                  <X className="size-3" />
+                </button>
+              </span>
+            )}
+
+            {creatorFilter && (
+              <span className="badge badge-neutral badge-soft text-[11px] gap-1 py-1">
+                کارشناس: {selectedCreatorName || creatorFilter}
+                <button type="button" onClick={() => setCreatorFilter('')}>
                   <X className="size-3" />
                 </button>
               </span>
@@ -496,7 +517,7 @@ export default function Customers() {
 
             {entityType !== 'all' && (
               <span className="badge badge-neutral badge-soft text-[11px] gap-1 py-1">
-                شخصیت: {entityType === 'company' ? 'حقوقی (شرکت)' : 'حقیقی'}
+                شخصیت: {entityType === 'company' ? 'حقوقی' : 'حقیقی'}
                 <button type="button" onClick={() => setEntityType('all')}>
                   <X className="size-3" />
                 </button>
@@ -515,15 +536,21 @@ export default function Customers() {
             {provinceFilter && (
               <span className="badge badge-neutral badge-soft text-[11px] gap-1 py-1">
                 استان: {provinceFilter}
-                <button type="button" onClick={() => setProvinceFilter('')}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProvinceFilter('')
+                    setCityFilter('')
+                  }}
+                >
                   <X className="size-3" />
                 </button>
               </span>
             )}
 
-            {debouncedCity && (
+            {cityFilter && (
               <span className="badge badge-neutral badge-soft text-[11px] gap-1 py-1">
-                شهر: {debouncedCity}
+                شهر: {cityFilter}
                 <button type="button" onClick={() => setCityFilter('')}>
                   <X className="size-3" />
                 </button>
@@ -583,7 +610,7 @@ export default function Customers() {
                     className="cursor-pointer select-none group hover:bg-base-200/80 transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>نام و نوع مشتری</span>
+                      <span>مشتری</span>
                       {sortField === 'name' ? (
                         sortOrder === 'asc' ? (
                           <ArrowUp className="size-3.5 text-primary" />
@@ -601,7 +628,7 @@ export default function Customers() {
                     className="cursor-pointer select-none group hover:bg-base-200/80 transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>وضعیت مشتری</span>
+                      <span>وضعیت</span>
                       {sortField === 'customer_type' ? (
                         sortOrder === 'asc' ? (
                           <ArrowUp className="size-3.5 text-primary" />
@@ -619,7 +646,7 @@ export default function Customers() {
                     className="cursor-pointer select-none group hover:bg-base-200/80 transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>اطلاعات تماس</span>
+                      <span>تماس</span>
                       {sortField === 'contact' ? (
                         sortOrder === 'asc' ? (
                           <ArrowUp className="size-3.5 text-primary" />
@@ -637,7 +664,7 @@ export default function Customers() {
                     className="cursor-pointer select-none group hover:bg-base-200/80 transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>شهر و استان</span>
+                      <span>شهر / استان</span>
                       {sortField === 'city' ? (
                         sortOrder === 'asc' ? (
                           <ArrowUp className="size-3.5 text-primary" />
@@ -655,7 +682,7 @@ export default function Customers() {
                     className="cursor-pointer select-none group hover:bg-base-200/80 transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>دستگاه‌های تخصیص‌یافته</span>
+                      <span>دستگاه‌ها</span>
                       {sortField === 'devices' ? (
                         sortOrder === 'asc' ? (
                           <ArrowUp className="size-3.5 text-primary" />
@@ -673,7 +700,7 @@ export default function Customers() {
                     className="cursor-pointer select-none group hover:bg-base-200/80 transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
-                      <span>تاریخ ثبت</span>
+                      <span>تاریخ</span>
                       {sortField === 'created_at' ? (
                         sortOrder === 'asc' ? (
                           <ArrowUp className="size-3.5 text-primary" />
@@ -721,7 +748,7 @@ export default function Customers() {
                               </Link>
                               {c.portal_user && (
                                 <span className="badge badge-xs bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30 font-bold">
-                                  پورتال فعال
+                                  پورتال
                                 </span>
                               )}
                             </div>
@@ -741,11 +768,11 @@ export default function Customers() {
                       <td>
                         {c.customer_type === 'effective' ? (
                           <span className="badge badge-success badge-soft font-bold text-xs gap-1.5 whitespace-nowrap inline-flex items-center">
-                            <UserCheck className="size-3" /> مشتری بالفعل
+                            <UserCheck className="size-3" /> بالفعل
                           </span>
                         ) : (
                           <span className="badge badge-warning badge-soft font-bold text-xs gap-1.5 whitespace-nowrap inline-flex items-center">
-                            <UserPlus className="size-3" /> مشتری بالقوه
+                            <UserPlus className="size-3" /> بالقوه
                           </span>
                         )}
                       </td>
@@ -776,7 +803,7 @@ export default function Customers() {
                           className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline"
                         >
                           <Cpu className="size-3.5" />
-                          {num(totalDevices)} دستگاه
+                          {num(totalDevices)}
                         </Link>
                       </td>
 

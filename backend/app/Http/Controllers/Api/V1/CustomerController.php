@@ -55,6 +55,11 @@ class CustomerController extends Controller
             }
         }
 
+        $creatorId = $request->input('created_by_user_id', $request->input('creator_id'));
+        if ($creatorId !== null && $creatorId !== '') {
+            $query->where('created_by_user_id', (int) $creatorId);
+        }
+
         if ($request->filled('q')) {
             $term = trim((string) $request->q);
             $normTerm = $this->normalizeDigits($term) ?? $term;
@@ -72,7 +77,8 @@ class CustomerController extends Controller
                     ->orWhere('national_code', $op, "%{$normTerm}%")
                     ->orWhere('city', $op, "%{$term}%")
                     ->orWhere('province', $op, "%{$term}%")
-                    ->orWhereRaw("{$fullNameExpr} {$op} ?", ["%{$term}%"]);
+                    ->orWhereRaw("{$fullNameExpr} {$op} ?", ["%{$term}%"])
+                    ->orWhereHas('creator', fn ($cq) => $cq->where('name', $op, "%{$term}%"));
             });
         }
 
@@ -292,6 +298,54 @@ class CustomerController extends Controller
             'customer' => $fresh,
             'data' => $fresh,
         ]);
+    }
+
+    /**
+     * List staff members eligible to appear in the customer list "کارشناس" filter.
+     */
+    public function creatorOptions(Request $request): JsonResponse
+    {
+        $this->authorizePermission('customers.view');
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $creatorIds = Customer::accessibleBy($user)
+            ->whereNotNull('created_by_user_id')
+            ->distinct()
+            ->pluck('created_by_user_id')
+            ->all();
+
+        if (!$user->hasRestrictedCustomerScope()) {
+            $activeStaffIds = User::staffOnly()
+                ->where('is_active', true)
+                ->pluck('id')
+                ->all();
+            $creatorIds = array_merge($creatorIds, $activeStaffIds);
+        } else {
+            $creatorIds[] = $user->id;
+            if (\Illuminate\Support\Facades\Schema::hasTable('user_customer_staff_grants')) {
+                $creatorIds = array_merge($creatorIds, $user->grantedStaff()->pluck('users.id')->all());
+            }
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $creatorIds))));
+
+        $staff = empty($ids)
+            ? collect()
+            : User::whereIn('id', $ids)
+                ->select(['id', 'name', 'email', 'user_type'])
+                ->orderBy('name')
+                ->get()
+                ->map(fn (User $u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'email' => $u->email,
+                    'user_type' => $u->user_type,
+                    'role_label' => $u->role_label,
+                ]);
+
+        return response()->json(['data' => $staff]);
     }
 
     /**

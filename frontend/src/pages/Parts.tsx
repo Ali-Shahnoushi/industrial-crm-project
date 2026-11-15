@@ -1,8 +1,8 @@
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import {
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '../components/ui/PageHeader'
 import { SearchInput } from '../components/ui/SearchInput'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { Pagination } from '../components/ui/Pagination'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import { Field, TableSkeleton, EmptyState } from '../components/ui/Field'
@@ -32,8 +33,10 @@ import {
   customerDisplayName,
   cx,
   dateTimeFa,
+  formatNumericInput,
   num,
   toEnDigits,
+  toman,
 } from '../utils/format'
 import { inventoryTypeMeta } from '../utils/meta'
 import type { InventoryOperationType, Part } from '../types'
@@ -52,6 +55,7 @@ const schema = z.object({
       const n = Number(toEnDigits(v))
       return Number.isInteger(n) && n >= 1
     }, 'دوره سرویس باید حداقل ۱ ماه باشد'),
+  unit_price: z.string().optional(),
   stock_quantity: z.string().optional(),
   min_stock: z.string().optional(),
   unit: z.string().trim().optional(),
@@ -151,6 +155,8 @@ export default function Parts() {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PartFormValues>({
     resolver: zodResolver(schema),
@@ -158,6 +164,7 @@ export default function Parts() {
       name: '',
       code: '',
       periodic_service_months: '12',
+      unit_price: '0',
       stock_quantity: '0',
       min_stock: '0',
       unit: 'دستگاه',
@@ -166,12 +173,15 @@ export default function Parts() {
     },
   })
 
+  const unitPriceVal = useWatch({ control, name: 'unit_price' })
+
   const openCreate = () => {
     setEditingPart(null)
     reset({
       name: '',
       code: '',
       periodic_service_months: '12',
+      unit_price: '0',
       stock_quantity: '0',
       min_stock: '0',
       unit: 'دستگاه',
@@ -187,6 +197,7 @@ export default function Parts() {
       name: p.name,
       code: p.code,
       periodic_service_months: String(p.periodic_service_months),
+      unit_price: formatNumericInput(String(Math.round(Number(p.unit_price ?? 0)))),
       stock_quantity: String(p.stock_quantity ?? 0),
       min_stock: String(p.min_stock ?? 0),
       unit: p.unit || 'دستگاه',
@@ -248,10 +259,12 @@ export default function Parts() {
   })
 
   const onSubmit = async (values: PartFormValues) => {
+    const parsedUnitPrice = Number(toEnDigits(values.unit_price || '0').replace(/,/g, '')) || 0
     const payload: Partial<Part> = {
       name: values.name.trim(),
       code: toEnDigits(values.code).trim(),
       periodic_service_months: Number(toEnDigits(values.periodic_service_months)) || 12,
+      unit_price: Math.max(0, parsedUnitPrice),
       min_stock: Number(toEnDigits(values.min_stock || '0')) || 0,
       unit: values.unit?.trim() || 'دستگاه',
       description: values.description?.trim() || null,
@@ -311,19 +324,18 @@ export default function Parts() {
     <div className="space-y-6">
       <PageHeader
         title="کاتالوگ و انبار دستگاه‌ها"
-        subtitle="تعریف مدل‌های دستگاه‌ها، مدیریت موجودی انبار، ثبت ورود/خروج کالا و گزارش جامع گردش انبار"
         actions={
-          <div className="flex flex-wrap items-center gap-2">
+          <>
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-primary/25 bg-primary/8 px-3 py-1.5 text-xs font-bold text-primary">
               <Boxes className="size-4" />
-              موجودی کل انبار: {num(totalWarehouseStock)} دستگاه
+              موجودی کل: {num(totalWarehouseStock)}
             </span>
             <Can permission="parts.manage">
-              <button className="btn btn-sm btn-primary gap-1.5" onClick={openCreate}>
-                <Plus className="size-4" /> تعریف دستگاه جدید
+              <button type="button" className="btn btn-sm btn-primary gap-1.5" onClick={openCreate}>
+                <Plus className="size-4" /> دستگاه جدید
               </button>
             </Can>
-          </div>
+          </>
         }
       />
 
@@ -415,7 +427,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>نام و مشخصات دستگاه</span>
+                          <span>دستگاه</span>
                           {sortField === 'name' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -428,7 +440,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>کد فنی (SKU)</span>
+                          <span>کد (SKU)</span>
                           {sortField === 'code' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -441,7 +453,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>موجودی انبار</span>
+                          <span>موجودی</span>
                           {sortField === 'stock' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -454,7 +466,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>دوره پوشش گارانتی</span>
+                          <span>دوره گارانتی</span>
                           {sortField === 'warranty' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -467,7 +479,7 @@ export default function Parts() {
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
                       >
                         <div className="flex items-center gap-1.5">
-                          <span>تعداد تحویل‌شده به مشتریان</span>
+                          <span>تحویل‌شده</span>
                           {sortField === 'assigned' ? (
                             sortOrder === 'asc' ? <ArrowUp className="size-3.5 text-primary" /> : <ArrowDown className="size-3.5 text-primary" />
                           ) : (
@@ -475,6 +487,7 @@ export default function Parts() {
                           )}
                         </div>
                       </th>
+                      <th>قیمت واحد</th>
                       <th
                         onClick={() => handleSort('status')}
                         className="cursor-pointer select-none group hover:bg-base-200/70 transition-colors"
@@ -488,7 +501,7 @@ export default function Parts() {
                           )}
                         </div>
                       </th>
-                      <th className="text-end">عملیات انبار و ویرایش</th>
+                      <th className="text-end">عملیات</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-base-200/80">
@@ -530,7 +543,7 @@ export default function Parts() {
                                     : 'badge-success badge-soft',
                               )}
                             >
-                              {num(stock)} عدد
+                              {num(stock)}
                             </span>
                           </td>
 
@@ -543,8 +556,12 @@ export default function Parts() {
                           <td>
                             <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600">
                               <Boxes className="size-3.5" />
-                              {num(assignedSum)} دستگاه
+                              {num(assignedSum)}
                             </span>
+                          </td>
+
+                          <td className="font-mono text-xs font-bold text-base-content">
+                            {Number(p.unit_price ?? 0) > 0 ? toman(p.unit_price ?? 0) : <span className="text-base-content/40">—</span>}
                           </td>
 
                           <td>
@@ -619,36 +636,37 @@ export default function Parts() {
               placeholder="جستجوی دستگاه، مشتری، کارمند یا شرح..."
             />
 
-            <select
-              className="select select-bordered select-sm h-9 w-full bg-base-100 text-xs"
+            <SearchableSelect
+              placeholder="همه دستگاه‌ها"
+              searchPlaceholder="جستجوی دستگاه..."
               value={logPartFilter}
-              onChange={(e) => {
-                setLogPartFilter(e.target.value)
+              options={parts.map((p) => ({
+                value: String(p.id),
+                label: p.name,
+                hint: p.code,
+              }))}
+              onChange={(val) => {
+                setLogPartFilter(val)
                 setLogPage(1)
               }}
-            >
-              <option value="">همه دستگاه‌ها</option>
-              {parts.map((p) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.name} ({p.code})
-                </option>
-              ))}
-            </select>
+            />
 
-            <select
-              className="select select-bordered select-sm h-9 w-full bg-base-100 text-xs"
+            <SearchableSelect
+              placeholder="همه عملیات"
+              searchPlaceholder="جستجو..."
               value={logTypeFilter}
-              onChange={(e) => {
-                setLogTypeFilter(e.target.value as InventoryOperationType | '')
+              options={[
+                { value: 'in', label: 'ورود (+)' },
+                { value: 'out_assign', label: 'تخصیص (-)' },
+                { value: 'out_manual', label: 'خروج دستی (-)' },
+                { value: 'return', label: 'بازگشت (+)' },
+                { value: 'adjustment', label: 'انبارگردانی (=)' },
+              ]}
+              onChange={(val) => {
+                setLogTypeFilter(val as InventoryOperationType | '')
                 setLogPage(1)
               }}
-            >
-              <option value="">همه انواع تراکنش انبار</option>
-              <option value="in">ورود به انبار (+)</option>
-              <option value="out_assign">خروج بابت تخصیص به مشتری (-)</option>
-              <option value="out_manual">خروج دستی از انبار (-)</option>
-              <option value="return">بازگشت به انبار (+)</option>
-            </select>
+            />
           </div>
 
           <div className="overflow-hidden rounded-2xl border border-base-200 bg-base-100 shadow-xs">
@@ -665,14 +683,14 @@ export default function Parts() {
                   <table className="table table-sm table-hover">
                     <thead>
                       <tr className="bg-slate-50 dark:bg-slate-900/60 text-xs font-bold text-base-content/75 border-b border-base-200">
-                        <th>تاریخ و ساعت</th>
+                        <th>تاریخ</th>
                         <th>دستگاه</th>
-                        <th>نوع عملیات</th>
+                        <th>نوع</th>
                         <th>تعداد</th>
-                        <th>موجودی پس از عملیات</th>
-                        <th>مشتری مرتبط</th>
-                        <th>کارمند ثبت‌کننده</th>
-                        <th>شرح تراکنش</th>
+                        <th>مانده</th>
+                        <th>مشتری</th>
+                        <th>کارشناس</th>
+                        <th>شرح</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-base-200/80">
@@ -706,7 +724,7 @@ export default function Parts() {
                                 {num(log.quantity)}
                               </span>
                             </td>
-                            <td className="font-bold">{num(log.balance_after)} عدد</td>
+                            <td className="font-bold">{num(log.balance_after)}</td>
                             <td>
                               {log.customer ? (
                                 <Link
@@ -841,6 +859,18 @@ export default function Parts() {
               />
             </Field>
           </div>
+
+          <Field label="قیمت پایه فروش (تومان)" hint="هنگام تخصیص یا ثبت فروش به‌صورت خودکار پیشنهاد می‌شود">
+            <input
+              type="text"
+              inputMode="numeric"
+              dir="ltr"
+              className="input input-bordered w-full text-start font-mono font-bold"
+              placeholder="مثال: 25,000,000"
+              value={unitPriceVal || ''}
+              onChange={(e) => setValue('unit_price', formatNumericInput(e.target.value))}
+            />
+          </Field>
 
           {!editingPart && (
             <Field

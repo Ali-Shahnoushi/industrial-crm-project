@@ -40,17 +40,22 @@ export function formatNumericInput(raw: string): string {
   return Number(en).toLocaleString('en-US')
 }
 
-/** 1_250_000_000 → "۱٫۲۵ میلیارد" */
-export function compact(n: number): string {
-  const abs = Math.abs(n)
+/** 1_250_000_000 → "۱٫۳ میلیارد" */
+export function compact(n: number | string | null | undefined): string {
+  const numVal =
+    typeof n === 'string'
+      ? Number(toEnDigits(n).replace(/[,٬\s]/g, ''))
+      : Number(n ?? 0)
+  if (!Number.isFinite(numVal)) return nf.format(0)
+  const abs = Math.abs(numVal)
   const f = (v: number) => nf.format(Math.round(v * 10) / 10)
-  if (abs >= 1e12) return `${f(n / 1e12)} هزار میلیارد`
-  if (abs >= 1e9) return `${f(n / 1e9)} میلیارد`
-  if (abs >= 1e6) return `${f(n / 1e6)} میلیون`
-  if (abs >= 1e3) return `${f(n / 1e3)} هزار`
-  return nf.format(n)
+  if (abs >= 1e12) return `${f(numVal / 1e12)} هزار میلیارد`
+  if (abs >= 1e9) return `${f(numVal / 1e9)} میلیارد`
+  if (abs >= 1e6) return `${f(numVal / 1e6)} میلیون`
+  if (abs >= 1e3) return `${f(numVal / 1e3)} هزار`
+  return nf.format(numVal)
 }
-export const compactToman = (n: number) => `${compact(n)} تومان`
+export const compactToman = (n: number | string | null | undefined) => `${compact(n)} تومان`
 
 export function phoneFa(p: string | null | undefined): string {
   if (!p) return '—'

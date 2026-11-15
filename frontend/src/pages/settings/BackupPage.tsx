@@ -103,7 +103,6 @@ export default function BackupPage() {
     <div className="space-y-6">
       <PageHeader
         title="پشتیبان‌گیری و بازیابی داده‌ها (Backup & Restore)"
-        subtitle="پشتیبان‌گیری کامل و بازیابی پرونده مشتریان و دستگاه‌های تخصیص‌یافته به صورت JSON و دریافت خروجی دیتابیس"
         actions={
           <button
             onClick={() => refetch()}

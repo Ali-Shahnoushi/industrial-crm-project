@@ -95,7 +95,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       )}
       <aside
         className={cx(
-          'fixed inset-y-0 right-0 z-50 flex w-72 flex-col border-l border-base-300/60 bg-base-100 transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0',
+          'fixed inset-y-0 right-0 z-50 flex w-72 flex-col border-l border-base-300/60 bg-base-100 transition-transform duration-300 lg:static lg:z-auto lg:translate-x-0 print:hidden',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
         aria-label="منوی اصلی"

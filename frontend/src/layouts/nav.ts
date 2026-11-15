@@ -7,7 +7,9 @@ import {
   LifeBuoy,
   MessageSquare,
   Palette,
+  Receipt,
   ShieldCheck,
+  TrendingUp,
   User,
   Users,
 } from 'lucide-react'
@@ -36,6 +38,13 @@ export const MAIN_NAV: NavGroup[] = [
       { to: '/customers', label: 'مدیریت مشتریان', icon: Users, permission: 'customers.view' },
       { to: '/parts', label: 'کاتالوگ دستگاه‌ها', icon: Cpu, permission: 'parts.view' },
       { to: '/inventory', label: 'انبار و کاردکس موجودی', icon: Boxes, permission: 'parts.view' },
+    ],
+  },
+  {
+    title: 'فروش و مالی',
+    items: [
+      { to: '/sales', label: 'فروش و گزارش‌ها', icon: TrendingUp, permission: 'sales.view' },
+      { to: '/finance', label: 'مالی و فاکتورها', icon: Receipt, permission: 'sales.view' },
     ],
   },
   {

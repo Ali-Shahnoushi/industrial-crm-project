@@ -19,6 +19,10 @@ const Inventory = lazy(() => import('./pages/Inventory'))
 const Tickets = lazy(() => import('./pages/Tickets'))
 const TicketDetail = lazy(() => import('./pages/TicketDetail'))
 const SmsCenter = lazy(() => import('./pages/SmsCenter'))
+const Sales = lazy(() => import('./pages/Sales'))
+const SaleDetail = lazy(() => import('./pages/SaleDetail'))
+const Finance = lazy(() => import('./pages/Finance'))
+const InvoicePrint = lazy(() => import('./pages/InvoicePrint'))
 const TicketingSettingsPage = lazy(() => import('./pages/settings/TicketingSettingsPage'))
 const SmsSettingsPage = lazy(() => import('./pages/settings/SmsSettingsPage'))
 const UsersAclPage = lazy(() => import('./pages/settings/UsersAclPage'))
@@ -119,6 +123,38 @@ export default function App() {
                 element={
                   <PermissionRoute permission={['sms.send', 'sms.logs']}>
                     <SmsCenter />
+                  </PermissionRoute>
+                }
+              />
+              <Route
+                path="sales"
+                element={
+                  <PermissionRoute permission="sales.view">
+                    <Sales />
+                  </PermissionRoute>
+                }
+              />
+              <Route
+                path="sales/:id"
+                element={
+                  <PermissionRoute permission="sales.view">
+                    <SaleDetail />
+                  </PermissionRoute>
+                }
+              />
+              <Route
+                path="finance"
+                element={
+                  <PermissionRoute permission="sales.view">
+                    <Finance />
+                  </PermissionRoute>
+                }
+              />
+              <Route
+                path="invoices/:id/print"
+                element={
+                  <PermissionRoute permission="sales.view">
+                    <InvoicePrint />
                   </PermissionRoute>
                 }
               />

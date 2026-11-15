@@ -68,7 +68,6 @@ export default function SmsSettingsPage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="تنظیمات سامانه ملی‌پیامک"
-        subtitle="پیکربندی اطلاعات اتصال و مشخصات درگاه ملی‌پیامک (نام کاربری، کلمه عبور و شماره اختصاصی خط)"
       />
 
       <div className="card-surface p-6 sm:p-8">

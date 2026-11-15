@@ -85,7 +85,7 @@ class PartController extends Controller
     {
         $this->authorizePermission('parts.manage');
 
-        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity', 'min_stock']);
+        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity', 'min_stock', 'unit_price']);
 
         $validated = $request->validate([
             'name' => 'required|string|max:150',
@@ -94,6 +94,7 @@ class PartController extends Controller
             'stock_quantity' => 'nullable|integer|min:0',
             'min_stock' => 'nullable|integer|min:0',
             'unit' => 'nullable|string|max:30',
+            'unit_price' => 'nullable|numeric|min:0',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ], [
@@ -107,8 +108,9 @@ class PartController extends Controller
         $initialStock = (int) ($validated['stock_quantity'] ?? 0);
         $minStock = (int) ($validated['min_stock'] ?? 0);
         $unit = trim((string) ($validated['unit'] ?? '')) ?: 'دستگاه';
+        $unitPrice = (int) round((float) ($validated['unit_price'] ?? 0));
 
-        $part = DB::transaction(function () use ($validated, $initialStock, $minStock, $unit, $request) {
+        $part = DB::transaction(function () use ($validated, $initialStock, $minStock, $unit, $unitPrice, $request) {
             $created = Part::create([
                 'name' => $validated['name'],
                 'code' => $validated['code'],
@@ -116,6 +118,7 @@ class PartController extends Controller
                 'stock_quantity' => 0,
                 'min_stock' => $minStock,
                 'unit' => $unit,
+                'unit_price' => $unitPrice,
                 'description' => $validated['description'] ?? null,
                 'is_active' => $validated['is_active'] ?? true,
             ]);
@@ -160,7 +163,7 @@ class PartController extends Controller
     {
         $this->authorizePermission('parts.manage');
 
-        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity', 'min_stock']);
+        $this->normalizeNumericFields($request, ['periodic_service_months', 'stock_quantity', 'min_stock', 'unit_price']);
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:150',
@@ -169,6 +172,7 @@ class PartController extends Controller
             'stock_quantity' => 'nullable|integer|min:0',
             'min_stock' => 'nullable|integer|min:0',
             'unit' => 'nullable|string|max:30',
+            'unit_price' => 'sometimes|nullable|numeric|min:0',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
         ], [
@@ -182,6 +186,9 @@ class PartController extends Controller
         }
         if (array_key_exists('min_stock', $validated)) {
             $validated['min_stock'] = (int) ($validated['min_stock'] ?? 0);
+        }
+        if (array_key_exists('unit_price', $validated)) {
+            $validated['unit_price'] = (int) round((float) ($validated['unit_price'] ?? 0));
         }
 
         DB::transaction(function () use ($part, $validated, $request) {
@@ -373,7 +380,15 @@ class PartController extends Controller
         $this->authorizePermission('parts.assign');
         $this->authorizeCustomerAccess($customer);
 
-        $this->normalizeNumericFields($request, ['quantity', 'invoice_amount', 'warranty_months']);
+        $this->normalizeNumericFields($request, [
+            'quantity',
+            'invoice_amount',
+            'warranty_months',
+            'unit_price',
+            'discount_amount',
+            'tax_percent',
+            'paid_amount',
+        ]);
         if ($request->exists('invoice_number')) {
             $invNo = trim((string) $this->normalizeDigits((string) $request->input('invoice_number', '')));
             $request->merge(['invoice_number' => $invNo !== '' ? $invNo : null]);
@@ -390,6 +405,13 @@ class PartController extends Controller
             'warranty_expire_date' => 'nullable|date',
             'status' => 'nullable|in:active,under_repair,replaced,retired',
             'notes' => 'nullable|string',
+            'unit_price' => 'nullable|numeric|min:0',
+            'discount_amount' => 'nullable|numeric|min:0',
+            'tax_percent' => 'nullable|numeric|min:0|max:100',
+            'sale_status' => 'nullable|in:draft,confirmed,cancelled',
+            'payment_status' => 'nullable|in:unpaid,partial,paid',
+            'paid_amount' => 'nullable|numeric|min:0',
+            'send_sms' => 'nullable|boolean',
         ], [
             'part_id.required' => 'انتخاب مدل دستگاه الزامی است.',
             'serial_number.required' => 'وارد کردن شماره سریال یا کد یکتای دستگاه الزامی است.',
@@ -406,7 +428,7 @@ class PartController extends Controller
         $customerPart = $this->customerService->assignPart(
             $customer,
             $part,
-            $validated['serial_number'],
+            $validated['serial_number'] ?? null,
             $validated,
             $request->user()->id
         );
@@ -414,6 +436,7 @@ class PartController extends Controller
         return response()->json([
             'message' => "دستگاه «{$part->name}» (تعداد: {$customerPart->quantity} عدد) با موفقیت به مشتری تخصیص داده شد و از موجودی انبار کسر گردید.",
             'customer_part' => $customerPart,
+            'sale' => $customerPart->saleItem?->sale?->load(['customer', 'seller', 'items.part', 'activeInvoice']),
             'data' => $customerPart,
             'customer_type' => $customer->fresh()->customer_type,
         ], 201);

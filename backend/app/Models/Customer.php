@@ -164,4 +164,9 @@ class Customer extends Model
     {
         return $this->hasMany(PartInventoryLog::class)->latest();
     }
+
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class)->latest('sale_date');
+    }
 }

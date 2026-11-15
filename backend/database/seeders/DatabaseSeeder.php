@@ -35,6 +35,9 @@ class DatabaseSeeder extends Seeder
             'tickets.view',
             'tickets.reply',
             'tickets.manage',
+            'sales.view',
+            'sales.create',
+            'sales.manage',
             'sms.send',
             'sms.logs',
             'users.manage',
@@ -140,6 +143,7 @@ class DatabaseSeeder extends Seeder
                 'stock_quantity' => 15,
                 'min_stock' => 4,
                 'unit' => 'دستگاه',
+                'unit_price' => 240000000,
                 'description' => 'بازدید خازن‌ها، فن خنک‌کننده و کالیبراسیون دور موتور هر ۶ ماه',
                 'is_active' => true,
             ],
@@ -150,6 +154,7 @@ class DatabaseSeeder extends Seeder
                 'stock_quantity' => 8,
                 'min_stock' => 3,
                 'unit' => 'دستگاه',
+                'unit_price' => 195000000,
                 'description' => 'بررسی اورینگ‌ها، فشار روغن و تعویض فیلتر هیدرولیک هر ۳ ماه',
                 'is_active' => true,
             ],
@@ -160,6 +165,7 @@ class DatabaseSeeder extends Seeder
                 'stock_quantity' => 12,
                 'min_stock' => 3,
                 'unit' => 'دستگاه',
+                'unit_price' => 215000000,
                 'description' => 'بکاپ برنامه، تست باتری پشتیبان و بررسی اتصالات شبکه صنعتی سالانه',
                 'is_active' => true,
             ],
@@ -170,6 +176,7 @@ class DatabaseSeeder extends Seeder
                 'stock_quantity' => 2, // Intentionally <= min_stock (5) to exercise low-stock alerts
                 'min_stock' => 5,
                 'unit' => 'دستگاه',
+                'unit_price' => 620000000,
                 'description' => 'تعویض سپراتور، فیلتر هوا و آنالیز ارتعاش واحد هواساز هر ۴ ماه',
                 'is_active' => true,
             ],
@@ -180,6 +187,7 @@ class DatabaseSeeder extends Seeder
                 'stock_quantity' => 9,
                 'min_stock' => 2,
                 'unit' => 'عدد',
+                'unit_price' => 98000000,
                 'description' => 'کالیبراسیون پنل لمسی و بروزرسانی فرم‌ویر سالانه',
                 'is_active' => true,
             ],
@@ -396,6 +404,8 @@ class DatabaseSeeder extends Seeder
                     'body' => 'سلام جناب مهندس، درخواست شما بررسی شد و قطعه فن اورجینال رزرو گردید. فردا صبح در محل کارخانه حضور خواهیم داشت.',
                 ]);
             }
+
+            $this->call(SalesDemoSeeder::class);
         }
     }
 }

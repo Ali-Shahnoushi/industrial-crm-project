@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CustomerPart extends Model
 {
@@ -52,5 +53,10 @@ class CustomerPart extends Model
     public function inventoryLogs(): HasMany
     {
         return $this->hasMany(PartInventoryLog::class)->latest();
+    }
+
+    public function saleItem(): HasOne
+    {
+        return $this->hasOne(SaleItem::class);
     }
 }

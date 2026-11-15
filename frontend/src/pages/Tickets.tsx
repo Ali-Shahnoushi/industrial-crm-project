@@ -17,6 +17,7 @@ import {
 import { PageHeader } from '../components/ui/PageHeader'
 import { StatCard } from '../components/ui/StatCard'
 import { SearchInput } from '../components/ui/SearchInput'
+import { SearchableSelect } from '../components/ui/SearchableSelect'
 import { EmptyState, Field, TableSkeleton } from '../components/ui/Field'
 import { Modal } from '../components/ui/Modal'
 import { Pagination } from '../components/ui/Pagination'
@@ -148,7 +149,6 @@ export default function Tickets() {
     <div className="space-y-6">
       <PageHeader
         title="مرکز تیکتینگ و درخواست‌های تعمیر"
-        subtitle="مدیریت متمرکز درخواست‌های تعمیر دستگاه‌ها، پشتیبانی فنی و پیام‌های مشتریان با ارجاع هوشمند دپارتمانی"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Can permission="settings.manage">
@@ -260,69 +260,70 @@ export default function Tickets() {
             placeholder="جستجوی کد رهگیری، موضوع، مشتری، سریال..."
           />
 
-          <select
-            className="select select-bordered select-sm h-10 w-full text-xs"
+          <SearchableSelect
             value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value)
+            onChange={(val) => {
+              setStatusFilter(val)
               setPage(1)
             }}
-          >
-            <option value="">همه وضعیت‌ها</option>
-            <option value="active_all">همه تیکت‌های باز (فعال)</option>
-            <option value="open">جدید (منتظر بررسی)</option>
-            <option value="customer_reply">پاسخ مشتری</option>
-            <option value="in_progress">در دست اقدام فنی</option>
-            <option value="answered">پاسخ داده شده</option>
-            <option value="resolved">رفع‌شده / تکمیل سرویس</option>
-            <option value="closed">بسته شده</option>
-          </select>
+            placeholder="همه وضعیت‌ها"
+            searchPlaceholder="جستجوی وضعیت..."
+            options={[
+              { value: 'active_all', label: 'تیکت‌های باز' },
+              { value: 'open', label: 'جدید' },
+              { value: 'customer_reply', label: 'پاسخ مشتری' },
+              { value: 'in_progress', label: 'در دست اقدام' },
+              { value: 'answered', label: 'پاسخ داده شده' },
+              { value: 'resolved', label: 'رفع‌شده' },
+              { value: 'closed', label: 'بسته شده' },
+            ]}
+          />
 
-          <select
-            className="select select-bordered select-sm h-10 w-full text-xs"
+          <SearchableSelect
             value={typeFilter}
-            onChange={(e) => {
-              setTypeFilter(e.target.value)
+            onChange={(val) => {
+              setTypeFilter(val)
               setPage(1)
             }}
-          >
-            <option value="">همه انواع درخواست</option>
-            <option value="repair_request">اعلام خرابی و درخواست تعمیر</option>
-            <option value="technical_support">پشتیبانی فنی و کالیبراسیون</option>
-            <option value="sales_inquiry">ارتباط با واحد فروش پروژه</option>
-            <option value="general">سوال عمومی</option>
-          </select>
+            placeholder="همه انواع"
+            searchPlaceholder="جستجوی نوع..."
+            options={[
+              { value: 'repair_request', label: 'درخواست تعمیر' },
+              { value: 'technical_support', label: 'پشتیبانی فنی' },
+              { value: 'sales_inquiry', label: 'واحد فروش' },
+              { value: 'general', label: 'سوال عمومی' },
+            ]}
+          />
 
-          <select
-            className="select select-bordered select-sm h-10 w-full text-xs"
+          <SearchableSelect
             value={deptFilter}
-            onChange={(e) => {
-              setDeptFilter(e.target.value)
+            onChange={(val) => {
+              setDeptFilter(val)
               setPage(1)
             }}
-          >
-            <option value="">همه دپارتمان‌ها</option>
-            {departments.map((d) => (
-              <option key={d.id} value={String(d.id)}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+            placeholder="همه دپارتمان‌ها"
+            searchPlaceholder="جستجوی دپارتمان..."
+            options={departments.map((d) => ({
+              value: String(d.id),
+              label: d.name,
+            }))}
+          />
 
-          <select
-            className="select select-bordered select-sm h-10 w-full text-xs"
+          <SearchableSelect
             value={priorityFilter}
-            onChange={(e) => {
-              setPriorityFilter(e.target.value)
+            onChange={(val) => {
+              setPriorityFilter(val)
               setPage(1)
             }}
-          >
-            <option value="">همه اولویت‌ها</option>
-            <option value="urgent">فوری (توقف دستگاه)</option>
-            <option value="high">مهم</option>
-            <option value="medium">متوسط</option>
-            <option value="low">عادی</option>
-          </select>
+            placeholder="همه اولویت‌ها"
+            searchPlaceholder="جستجوی اولویت..."
+            options={[
+              { value: 'urgent', label: 'فوری' },
+              { value: 'high', label: 'مهم' },
+              { value: 'medium', label: 'متوسط' },
+              { value: 'low', label: 'عادی' },
+            ]}
+          />
         </div>
       </div>
 
@@ -342,13 +343,13 @@ export default function Tickets() {
               <table className="table table-sm">
                 <thead>
                   <tr className="bg-base-200/60 text-xs font-bold text-base-content/75">
-                    <th>کد رهگیری / موضوع</th>
+                    <th>کد / موضوع</th>
                     <th>مشتری</th>
-                    <th>دستگاه مرتبط</th>
-                    <th>دپارتمان / کارشناس پاسخگو</th>
+                    <th>دستگاه</th>
+                    <th>دپارتمان / پاسخگو</th>
                     <th>اولویت</th>
                     <th>وضعیت</th>
-                    <th>آخرین بروزرسانی</th>
+                    <th>بروزرسانی</th>
                     <th className="text-left">عملیات</th>
                   </tr>
                 </thead>
@@ -424,7 +425,7 @@ export default function Tickets() {
                             </div>
                           ) : (
                             <span className="text-[11px] text-warning font-semibold">
-                              در انتظار تخصیص کارشناس
+                              بدون کارشناس
                             </span>
                           )}
                         </td>
@@ -447,7 +448,7 @@ export default function Tickets() {
 
                         <td className="text-left">
                           <Link to={`/tickets/${t.id}`} className="btn btn-xs btn-primary">
-                            مشاهده و پاسخ
+                            مشاهده
                           </Link>
                         </td>
                       </tr>

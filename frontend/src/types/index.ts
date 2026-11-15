@@ -139,6 +139,7 @@ export interface Part {
   stock_quantity?: number
   min_stock?: number
   unit?: string
+  unit_price?: number
   is_low_stock?: boolean
   description?: string | null
   is_active: boolean
@@ -259,7 +260,17 @@ export interface DashboardStats {
     low_stock_parts_count?: number
     open_tickets_count?: number
     pending_repair_tickets_count?: number
+    sales_revenue_total?: number
+    sales_count_total?: number
+    sales_revenue_30d?: number
+    sales_unpaid_total?: number
   }
+  sales_summary?: {
+    total_revenue: number
+    sales_count: number
+    revenue_last_30_days: number
+    unpaid_amount: number
+  } | null
   low_stock_parts?: Part[]
   recent_activities: CustomerHistory[]
   recent_sms: SmsLog[]
