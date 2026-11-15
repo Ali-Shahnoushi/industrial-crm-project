@@ -85,7 +85,7 @@ class BackupAndNullableSerialTest extends TestCase
         $admin = User::where('email', 'admin@crm.local')->firstOrFail();
 
         $jsonPayload = [
-            'metadata' => ['version' => '2.3.0'],
+            'metadata' => ['version' => '2.4.0'],
             'customers' => [
                 [
                     'type' => 'company',
@@ -126,7 +126,7 @@ class BackupAndNullableSerialTest extends TestCase
 
         // Restoring a second device of the same model WITHOUT serial_number must NOT overwrite RESTORE-SN-999
         $secondPayload = [
-            'metadata' => ['version' => '2.3.0'],
+            'metadata' => ['version' => '2.4.0'],
             'customers' => [
                 [
                     'type' => 'company',
