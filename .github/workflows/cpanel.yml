@@ -214,7 +214,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="latest-cpanel"
-          TITLE="آخرین بسته‌های آماده نصب در cPanel (ساخت خودکار v2.3.0)"
+          TITLE="آخرین بسته‌های آماده نصب در cPanel (ساخت خودکار v2.4.0)"
           NOTES="فایل‌های تست‌شده \`cpanel-public.zip\` و \`cpanel-private.zip\` به‌صورت خودکار از شاخه اصلی ساخته شده‌اند. همچنین این فایل‌ها مستقیماً داخل پوشه \`cpanel-release/\` مخزن نیز قرار دارند."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" \
