@@ -90,8 +90,8 @@ npx oxlint --deny-warnings
 ## 📦 نحوه ساخت پکیج جدید برای هاست cPanel
 
 هر زمان که کدهای فرانت‌اند یا بک‌اند را تغییر دادید و خواستید خروجی جدید برای هاست cPanel بسازید:
-در PowerShell دستور زیر را اجرا کنید:
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy/cpanel/build.ps1
+```bash
+bash deploy/cpanel/build.sh
 ```
+در ویندوز این دستور داخل **WSL 2 + Ubuntu** اجرا می‌شود (راهنمای کامل: [`deploy/cpanel/WINDOWS-BUILD-GUIDE.fa.md`](../deploy/cpanel/WINDOWS-BUILD-GUIDE.fa.md))؛ یا بگذارید GitHub Actions بسته‌ها را بسازد.
 بسته‌های فشرده‌شده `cpanel-public.zip` و `cpanel-private.zip` همراه با شناسنامه بیلد در پوشه `cpanel-release/` ایجاد می‌شوند.

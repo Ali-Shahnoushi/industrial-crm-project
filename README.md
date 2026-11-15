@@ -113,14 +113,10 @@
 - **`cpanel-public.zip`:** فرانت‌اند بهینه‌شده، فایل‌های وب و اسکریپت‌های نصب و آپدیت (داخل `public_html` یا پوشه دامنه اکسترکت می‌شود).
 
 ### ۲. ساخت بسته استقرار روی کامپیوتر شما (Build Script)
-- **در ویندوز (PowerShell):**
-  ```powershell
-  powershell -ExecutionPolicy Bypass -File deploy/cpanel/build.ps1
-  ```
-- **در لینوکس / مک (Bash):**
-  ```bash
-  bash deploy/cpanel/build.sh
-  ```
+```bash
+bash deploy/cpanel/build.sh
+```
+در ویندوز این اسکریپت داخل **WSL 2 + Ubuntu** اجرا می‌شود — راهنمای گام‌به‌گام: [`deploy/cpanel/WINDOWS-BUILD-GUIDE.fa.md`](deploy/cpanel/WINDOWS-BUILD-GUIDE.fa.md). یا بگذارید GitHub Actions بسته‌ها را به‌صورت خودکار بسازد (بخش ۱ بالا).
 
 ### ۳. نصب اولیه در ۳ گام
 1. فایل `cpanel-private.zip` را در یک پوشه خارج از وب (مثلاً `/home/USER/crm-private`) آپلود و Extract کنید.
@@ -317,8 +313,7 @@ npx oxlint --deny-warnings
 │   │   ├── services/api.ts, sales.ts # اینترفیس‌های تایپ‌شده Axios (عمومی و فروش)
 │   │   └── store/useAuthStore.ts# مدیریت استیت احراز هویت
 ├── deploy/cpanel/               # ابزارها و اسکریپت‌های استقرار cPanel
-│   ├── build.ps1                # اسکریپت بیلد در ویندوز با PowerShell
-│   ├── build.sh                 # اسکریپت بیلد در لینوکس با Bash
+│   ├── build.sh                 # اسکریپت بیلد (لینوکس/مک و WSL در ویندوز)
 │   ├── install.php              # ویزارد نصب گرافیکی تحت وب
 │   ├── update.php               # اسکریپت خودکار به‌روزرسانی دیتابیس
 │   └── setup-check.php          # ابزار بررسی سلامت و نیازمندی‌های هاست

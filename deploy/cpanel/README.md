@@ -6,20 +6,15 @@
 
 ---
 
-## 🛠️ ساخت روی کامپیوتر توسعه‌دهنده (دو روش)
+## 🛠️ ساخت روی کامپیوتر توسعه‌دهنده
 
-### روش اول — مستقیم در PowerShell ویندوز (سریع و تک‌کلیکی):
-اگر روی ویندوز خود ابزارهای PHP 8.4، Composer و Node را دارید (مثلاً با نرم‌افزار Laragon):
-```powershell
-powershell -ExecutionPolicy Bypass -File deploy/cpanel/build.ps1
-```
-این اسکریپت به صورت خودکار بیلد React را تهیه کرده، وابستگی‌های Composer تولید را نصب می‌کند و دو بسته `cpanel-public.zip` و `cpanel-private.zip` به همراه فایل `SHA256SUMS` را در پوشه `cpanel-release/` ایجاد می‌کند.
-
-### روش دوم — با WSL 2 و لینوکس Ubuntu (یا در مک و لینوکس):
-آموزش کامل نصب ابزارها در WSL، ساخت محلی دو ZIP، انتقال به ویندوز و آپلود مستقیم به هاست: [راهنمای ویندوز](WINDOWS-BUILD-GUIDE.fa.md).
 ```bash
 bash deploy/cpanel/build.sh
 ```
+
+این اسکریپت به صورت خودکار بیلد React را تهیه کرده، وابستگی‌های Composer تولید را نصب می‌کند و دو بسته `cpanel-public.zip` و `cpanel-private.zip` به همراه فایل `SHA256SUMS` را در پوشه `cpanel-release/` ایجاد می‌کند.
+
+در ویندوز، این اسکریپت داخل **WSL 2 + Ubuntu** اجرا می‌شود. آموزش کامل نصب ابزارها در WSL، ساخت محلی دو ZIP، انتقال به ویندوز و آپلود مستقیم به هاست: [راهنمای ویندوز](WINDOWS-BUILD-GUIDE.fa.md).
 
 ---
 
