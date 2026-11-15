@@ -29,8 +29,10 @@ function envValue(string $file, string $key): ?string
     return null;
 }
 
-$requiredExtensions = ['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'ctype', 'json'];
-$recommendedExtensions = ['gd', 'intl', 'zip', 'bcmath'];
+// با checkEnvironment() در install.php همگام نگه دارید: نصب‌کننده در صورت
+// نبود هر یک از این افزونه‌ها یا پایین‌تر بودن نسخه PHP از 8.4.1 متوقف می‌شود.
+$requiredExtensions = ['pdo_mysql', 'mbstring', 'openssl', 'fileinfo', 'curl', 'tokenizer', 'xml', 'dom', 'xmlreader', 'xmlwriter', 'zip', 'gd', 'intl', 'ctype', 'iconv', 'simplexml'];
+$recommendedExtensions = ['bcmath'];
 
 $db = [
     'host'     => envValue($envPath, 'DB_HOST') ?: '127.0.0.1',
@@ -100,7 +102,7 @@ th { background: #090d16; padding: 12px 14px; text-align: right; color: #94a3b8;
     </thead>
     <tbody>
       <?php
-      echo row('نسخه PHP (حداقل 8.2 — پیشنهادی 8.4+)', version_compare(PHP_VERSION, '8.2.0', '>=') ? 'ok' : 'fail', PHP_VERSION);
+      echo row('نسخه PHP (حداقل 8.4.1)', version_compare(PHP_VERSION, '8.4.1', '>=') ? 'ok' : 'fail', PHP_VERSION);
       $nativePsr = extension_loaded('psr') || interface_exists('PsrExt\\Log\\LoggerInterface', false)
           || interface_exists('Psr\\Log\\LoggerInterface', false);
       echo row('عدم تداخل افزونه بومی psr/PsrExt', $nativePsr ? 'fail' : 'ok', $nativePsr
@@ -124,7 +126,7 @@ th { background: #090d16; padding: 12px 14px; text-align: right; color: #94a3b8;
     </tbody>
   </table>
   <div style="padding:16px 24px;background:#090d16;font-size:13px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #334155">
-    <span>اگر همه موارد سبز هستند، محیط هاست شما کاملاً آماده است. 🎉</span>
+    <span>اگر همه موارد الزامی سبز هستند، محیط شما پیش‌نیازهای نصب‌کننده (install.php) را دارد. 🎉</span>
     <a href="update.php" class="btn">ورود به فرم به‌روزرسانی (update.php) ←</a>
   </div>
 </div>

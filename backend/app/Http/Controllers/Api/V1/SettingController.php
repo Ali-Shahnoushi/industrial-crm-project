@@ -75,7 +75,7 @@ class SettingController extends Controller
         return response()->json([
             'company_name' => $companyName ?: null,
             'company_logo_url' => $companyLogoUrl,
-            'app_version' => config('app.version', '2.3.0'),
+            'app_version' => config('app.version', '2.4.0'),
         ]);
     }
 
@@ -151,7 +151,7 @@ class SettingController extends Controller
             'message' => 'تنظیمات برندینگ شرکت با موفقیت ذخیره شد.',
             'company_name' => Setting::get('company_name') ?: null,
             'company_logo_url' => $companyLogoUrl,
-            'app_version' => config('app.version', '2.3.0'),
+            'app_version' => config('app.version', '2.4.0'),
         ]);
     }
 
@@ -169,12 +169,12 @@ class SettingController extends Controller
         $migrateOutput = trim(Artisan::output());
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        Setting::set('app_version', config('app.version', '2.3.0'));
+        Setting::set('app_version', config('app.version', '2.4.0'));
         Artisan::call('optimize:clear');
 
         return response()->json([
             'message' => 'ارتقای ساختار پایگاه داده (Zero Data Loss) و پاکسازی کش سامانه با موفقیت انجام شد.',
-            'version' => config('app.version', '2.3.0'),
+            'version' => config('app.version', '2.4.0'),
             'output' => $migrateOutput,
         ]);
     }
