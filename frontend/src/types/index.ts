@@ -195,6 +195,7 @@ export interface CustomerPart {
   status: CustomerPartStatus
   notes?: string | null
   part?: Part
+  customer?: Customer
   service_histories?: PartServiceHistory[]
   created_at?: string
 }

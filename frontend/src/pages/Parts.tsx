@@ -28,6 +28,7 @@ import { Pagination } from '../components/ui/Pagination'
 import { Modal, ConfirmDialog } from '../components/ui/Modal'
 import { Field, TableSkeleton, EmptyState } from '../components/ui/Field'
 import { Can } from '../components/common/Can'
+import { AssignedCustomersModal } from '../components/parts/AssignedCustomersModal'
 import { partApi } from '../services/api'
 import {
   customerDisplayName,
@@ -76,6 +77,7 @@ export default function Parts() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingPart, setEditingPart] = useState<Part | null>(null)
   const [deletingPart, setDeletingPart] = useState<Part | null>(null)
+  const [assignedModalPart, setAssignedModalPart] = useState<Part | null>(null)
 
   // Manual Stock In / Out / Adjustment Modal
   const [stockTarget, setStockTarget] = useState<Part | null>(null)
@@ -554,10 +556,15 @@ export default function Parts() {
                           </td>
 
                           <td>
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600">
-                              <Boxes className="size-3.5" />
-                              {num(assignedSum)}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setAssignedModalPart(p)}
+                              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors group"
+                              title="مشاهده مشتریان و افراد تحویل‌گیرنده"
+                            >
+                              <Boxes className="size-3.5 transition-transform group-hover:scale-110" />
+                              <span>{num(assignedSum)}</span>
+                            </button>
                           </td>
 
                           <td className="font-mono text-xs font-bold text-base-content">
@@ -1047,6 +1054,12 @@ export default function Parts() {
         confirmText="بله، حذف کن"
         tone="error"
         loading={deleteMutation.isPending}
+      />
+
+      {/* View Assigned Customers Modal */}
+      <AssignedCustomersModal
+        part={assignedModalPart}
+        onClose={() => setAssignedModalPart(null)}
       />
     </div>
   )

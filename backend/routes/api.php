@@ -64,6 +64,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/inventory/summary', [PartController::class, 'inventorySummary']);
             Route::get('/inventory-logs', [PartController::class, 'inventoryLogs']);
             Route::get('/parts/inventory-logs', [PartController::class, 'inventoryLogs']);
+            Route::get('/parts/{part}/assigned-customers', [PartController::class, 'assignedCustomers']);
             Route::post('/parts/{part}/stock', [PartController::class, 'adjustStock']);
             Route::post('/parts/{part}/adjust-stock', [PartController::class, 'adjustStock']);
             Route::apiResource('parts', PartController::class);

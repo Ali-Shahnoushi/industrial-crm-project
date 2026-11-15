@@ -258,6 +258,20 @@ export const partApi = {
     const { data } = await http.delete<{ message: string }>(`/parts/${id}`)
     return data
   },
+  assignedCustomers: async (partId: number | string) => {
+    const { data } = await http.get<{
+      part: {
+        id: number | string
+        name: string
+        code: string
+        unit?: string
+        stock_quantity?: number
+      }
+      assignments: CustomerPart[]
+      total_assigned_quantity: number
+    }>(`/parts/${partId}/assigned-customers`)
+    return data
+  },
   adjustStock: async (
     partId: number | string,
     body: {

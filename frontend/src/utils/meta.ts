@@ -1,5 +1,6 @@
 import type {
   AssignmentStrategy,
+  CustomerPartStatus,
   CustomerScope,
   InventoryOperationType,
   TicketPriority,
@@ -246,6 +247,28 @@ export const invoiceStatusMeta: Record<
   },
   void: {
     label: 'باطل‌شده',
+    badgeClass: 'badge-error badge-soft',
+  },
+}
+
+export const customerPartStatusMeta: Record<
+  CustomerPartStatus,
+  { label: string; badgeClass: string }
+> = {
+  active: {
+    label: 'فعال / تحویل‌شده',
+    badgeClass: 'badge-success badge-soft',
+  },
+  under_repair: {
+    label: 'در حال تعمیر',
+    badgeClass: 'badge-warning badge-soft',
+  },
+  replaced: {
+    label: 'تعویض‌شده',
+    badgeClass: 'badge-info badge-soft',
+  },
+  retired: {
+    label: 'اسقاط / خارج از رده',
     badgeClass: 'badge-error badge-soft',
   },
 }

@@ -96,6 +96,14 @@ class DeviceInventoryAndAssignmentTest extends TestCase
         $this->assertSame('INV-1405-01', $assignRes->json('customer_part.invoice_number'));
         $this->assertEquals(125000000, (float) $assignRes->json('customer_part.invoice_amount'));
 
+        // Verify assigned-customers endpoint returns customer details and assigned count
+        $assignedRes = $this->actingAs($this->admin, 'sanctum')->getJson("/api/v1/parts/{$partId}/assigned-customers");
+        $assignedRes->assertOk();
+        $assignedRes->assertJsonFragment(['total_assigned_quantity' => 4]);
+        $this->assertCount(1, $assignedRes->json('assignments'));
+        $this->assertSame($customer->id, $assignedRes->json('assignments.0.customer.id'));
+        $this->assertSame('گروه صنعتی پارس', $assignedRes->json('assignments.0.customer.company_name'));
+
         // 4. Edit assignment: increase quantity 4 -> 6 (deducts 2 more -> stock = 6)
         $this->actingAs($this->admin, 'sanctum')->putJson("/api/v1/customer-parts/{$cpId}", [
             'quantity' => 6,

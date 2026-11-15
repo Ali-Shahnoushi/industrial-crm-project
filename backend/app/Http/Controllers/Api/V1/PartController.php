@@ -159,6 +159,40 @@ class PartController extends Controller
         return response()->json($part);
     }
 
+    /**
+     * Get customer assignments for a device model with customer profiles and delivery details.
+     */
+    public function assignedCustomers(Request $request, Part $part): JsonResponse
+    {
+        $this->authorizePermission('parts.view');
+
+        $user = $request->user();
+
+        $query = $part->customerParts()
+            ->with([
+                'customer:id,first_name,last_name,company_name,type,mobile,phone,province,city,created_by_user_id',
+            ])
+            ->latest('id');
+
+        if ($user) {
+            $query->whereHas('customer', fn ($q) => $q->accessibleBy($user));
+        }
+
+        $assignments = $query->get();
+
+        return response()->json([
+            'part' => [
+                'id' => $part->id,
+                'name' => $part->name,
+                'code' => $part->code,
+                'unit' => $part->unit,
+                'stock_quantity' => $part->stock_quantity,
+            ],
+            'assignments' => $assignments,
+            'total_assigned_quantity' => (int) $assignments->sum('quantity'),
+        ]);
+    }
+
     public function update(Request $request, Part $part): JsonResponse
     {
         $this->authorizePermission('parts.manage');

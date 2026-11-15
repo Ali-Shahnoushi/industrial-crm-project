@@ -21,6 +21,7 @@ import { Pagination } from '../components/ui/Pagination'
 import { Modal } from '../components/ui/Modal'
 import { Field, TableSkeleton, EmptyState } from '../components/ui/Field'
 import { Can } from '../components/common/Can'
+import { AssignedCustomersModal } from '../components/parts/AssignedCustomersModal'
 import { partApi } from '../services/api'
 import { customerDisplayName, cx, dateTimeFa, num, toEnDigits } from '../utils/format'
 import { inventoryTypeMeta } from '../utils/meta'
@@ -40,6 +41,7 @@ export default function Inventory() {
 
   // Stock Modal state
   const [targetPart, setTargetPart] = useState<Part | null>(null)
+  const [assignedModalPart, setAssignedModalPart] = useState<Part | null>(null)
   const [mode, setMode] = useState<StockModalMode>('in')
   const [qtyInput, setQtyInput] = useState('1')
   const [desc, setDesc] = useState('')
@@ -302,9 +304,16 @@ export default function Inventory() {
                         )}
                       </td>
                       <td>
-                        <span className="font-semibold">
-                          {num(Number(p.assigned_quantity_sum ?? 0))} {unitLabel}
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setAssignedModalPart(p)}
+                          className="inline-flex items-center gap-1.5 font-bold text-xs text-blue-600 hover:text-blue-800 hover:underline cursor-pointer transition-colors group"
+                          title="مشاهده مشتریان و افراد تحویل‌گیرنده"
+                        >
+                          <Boxes className="size-3.5 transition-transform group-hover:scale-110" />
+                          <span>{num(Number(p.assigned_quantity_sum ?? 0))}</span>
+                          <span className="text-[11px] text-base-content/50 font-normal">{unitLabel}</span>
+                        </button>
                       </td>
                       <td>
                         <Can
@@ -544,6 +553,12 @@ export default function Inventory() {
           </form>
         )}
       </Modal>
+
+      {/* View Assigned Customers Modal */}
+      <AssignedCustomersModal
+        part={assignedModalPart}
+        onClose={() => setAssignedModalPart(null)}
+      />
     </div>
   )
 }
