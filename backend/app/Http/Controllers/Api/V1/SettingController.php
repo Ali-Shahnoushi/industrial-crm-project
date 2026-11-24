@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
+use App\Support\ChangelogParser;
+use App\Support\SessionManager;
+use App\Support\SystemFeatures;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -75,7 +78,20 @@ class SettingController extends Controller
         return response()->json([
             'company_name' => $companyName ?: null,
             'company_logo_url' => $companyLogoUrl,
-            'app_version' => config('app.version', '2.4.0'),
+            'app_version' => config('app.version', '2.5.0'),
+            'features' => SystemFeatures::all(),
+            'max_sessions' => SessionManager::MAX_ACTIVE_SESSIONS,
+        ]);
+    }
+
+    /**
+     * Get parsed version history / changelog timeline (public endpoint).
+     */
+    public function getChangelog(): JsonResponse
+    {
+        return response()->json([
+            'current_version' => config('app.version', '2.5.0'),
+            'releases' => ChangelogParser::parse(),
         ]);
     }
 
@@ -151,7 +167,53 @@ class SettingController extends Controller
             'message' => 'تنظیمات برندینگ شرکت با موفقیت ذخیره شد.',
             'company_name' => Setting::get('company_name') ?: null,
             'company_logo_url' => $companyLogoUrl,
-            'app_version' => config('app.version', '2.4.0'),
+            'app_version' => config('app.version', '2.5.0'),
+            'features' => SystemFeatures::all(),
+            'max_sessions' => SessionManager::MAX_ACTIVE_SESSIONS,
+        ]);
+    }
+
+    /**
+     * Get system feature flags & metadata (Administrator only).
+     */
+    public function getSystemFeatures(): JsonResponse
+    {
+        $callingUser = auth()->user();
+        if (!$callingUser || !$callingUser->isAdministrator()) {
+            abort(403, 'فقط مدیر ارشد سامانه مجاز به مشاهده و مدیریت ماژول‌های سیستم است.');
+        }
+
+        return response()->json([
+            'features' => SystemFeatures::all(),
+            'items' => SystemFeatures::listDetailed(),
+        ]);
+    }
+
+    /**
+     * Enable or disable system modules/features (Administrator only).
+     */
+    public function updateSystemFeatures(Request $request): JsonResponse
+    {
+        $callingUser = auth()->user();
+        if (!$callingUser || !$callingUser->isAdministrator()) {
+            abort(403, 'فقط مدیر ارشد سامانه مجاز به فعال یا غیرفعال‌سازی ماژول‌های سیستم است.');
+        }
+
+        $validKeys = array_keys(SystemFeatures::definitions());
+        $rules = [
+            'features' => 'required|array',
+        ];
+        foreach ($validKeys as $key) {
+            $rules["features.{$key}"] = 'sometimes|boolean';
+        }
+
+        $validated = $request->validate($rules);
+        $updated = SystemFeatures::update($validated['features']);
+
+        return response()->json([
+            'message' => 'وضعیت ماژول‌ها و امکانات سامانه با موفقیت ذخیره شد.',
+            'features' => $updated,
+            'items' => SystemFeatures::listDetailed(),
         ]);
     }
 
@@ -169,12 +231,12 @@ class SettingController extends Controller
         $migrateOutput = trim(Artisan::output());
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
-        Setting::set('app_version', config('app.version', '2.4.0'));
+        Setting::set('app_version', config('app.version', '2.5.0'));
         Artisan::call('optimize:clear');
 
         return response()->json([
             'message' => 'ارتقای ساختار پایگاه داده (Zero Data Loss) و پاکسازی کش سامانه با موفقیت انجام شد.',
-            'version' => config('app.version', '2.4.0'),
+            'version' => config('app.version', '2.5.0'),
             'output' => $migrateOutput,
         ]);
     }

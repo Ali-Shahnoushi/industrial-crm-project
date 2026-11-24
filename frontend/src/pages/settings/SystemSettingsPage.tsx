@@ -1,23 +1,34 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   Building2,
   Check,
   CheckCircle2,
+  Cpu,
+  Database,
   DatabaseZap,
+  KeyRound,
+  LifeBuoy,
+  MessageSquare,
   Moon,
   Palette,
   RefreshCw,
   Save,
+  ShieldCheck,
+  Sliders,
   Sun,
+  TrendingUp,
 } from 'lucide-react'
 import { PageHeader } from '../../components/ui/PageHeader'
 import { FilePondLogo } from '../../components/ui/FilePondLogo'
 import { useThemeStore, type ThemeColor } from '../../store/useThemeStore'
 import { useAuthStore } from '../../store/useAuthStore'
+import { useSystemConfig } from '../../hooks/useSystemConfig'
 import { settingsApi } from '../../services/api'
-import { cx, digits } from '../../utils/format'
+import { cx, digits, num } from '../../utils/format'
+import type { SystemFeatureKey } from '../../types'
 
 interface ColorOption {
   id: ThemeColor
@@ -58,14 +69,25 @@ const COLOR_OPTIONS: ColorOption[] = [
   },
 ]
 
+const FEATURE_ICONS: Record<SystemFeatureKey, typeof Cpu> = {
+  parts: Cpu,
+  sales: TrendingUp,
+  tickets: LifeBuoy,
+  sms: MessageSquare,
+  customer_portal: ShieldCheck,
+  backup: Database,
+  otp_login: KeyRound,
+}
+
 export default function SystemSettingsPage() {
   const { theme, setTheme, color, setColor } = useThemeStore()
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
+  const { companySettings, appVersion } = useSystemConfig()
   const qc = useQueryClient()
 
-  const { data: companySettings } = useQuery({
-    queryKey: ['company-settings'],
-    queryFn: settingsApi.getCompanySettings,
+  const { data: featureData, isLoading: featuresLoading } = useQuery({
+    queryKey: ['system-features'],
+    queryFn: settingsApi.getSystemFeatures,
     enabled: isAdministrator,
   })
 
@@ -73,6 +95,7 @@ export default function SystemSettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [removeLogo, setRemoveLogo] = useState(false)
   const [upgradeOutput, setUpgradeOutput] = useState<string | null>(null)
+  const [togglingKey, setTogglingKey] = useState<SystemFeatureKey | null>(null)
 
   const companyName =
     companyNameDraft !== null ? companyNameDraft : companySettings?.company_name || ''
@@ -108,6 +131,24 @@ export default function SystemSettingsPage() {
     },
   })
 
+  const updateFeatureMutation = useMutation({
+    mutationFn: async ({ key, enabled }: { key: SystemFeatureKey; enabled: boolean }) => {
+      setTogglingKey(key)
+      return settingsApi.updateSystemFeatures({ [key]: enabled })
+    },
+    onSuccess: (res) => {
+      setTogglingKey(null)
+      toast.success(res.message)
+      qc.invalidateQueries({ queryKey: ['system-features'] })
+      qc.invalidateQueries({ queryKey: ['company-settings'] })
+      qc.invalidateQueries({ queryKey: ['dashboard-stats'] })
+    },
+    onError: (err: any) => {
+      setTogglingKey(null)
+      toast.error(err.response?.data?.message || 'خطا در بروزرسانی وضعیت ماژول')
+    },
+  })
+
   const upgradeSystemMutation = useMutation({
     mutationFn: () => settingsApi.upgradeSystem(),
     onSuccess: (res) => {
@@ -134,18 +175,118 @@ export default function SystemSettingsPage() {
   }
 
   const currentLogoUrl = removeLogo ? null : companySettings?.company_logo_url
-  const appVersion = companySettings?.app_version || '2.4.0'
+  const featureItems = featureData?.items ?? []
+  const enabledFeaturesCount = featureItems.filter((item) => item.enabled).length
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
-        title={isAdministrator ? 'تنظیمات سیستم، برندینگ و نگهداری' : 'تنظیمات پوسته نمایشی'}
+        title={isAdministrator ? 'تنظیمات سیستم، ماژول‌ها، برندینگ و نگهداری' : 'تنظیمات پوسته نمایشی'}
         actions={
-          <span className="badge badge-primary badge-soft font-bold px-3 py-3 text-xs">
+          <Link
+            to="/changelog"
+            className="badge badge-primary badge-soft font-bold px-3 py-3 text-xs hover:opacity-85 transition-opacity"
+            title="مشاهده تاریخچه نسخه‌ها و تغییرات سامانه"
+          >
             نسخه سامانه: {digits(appVersion)}
-          </span>
+          </Link>
         }
       />
+
+      {/* System Feature Toggles — Administrator Role Only */}
+      {isAdministrator && (
+        <div className="card-surface p-6 sm:p-8 space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div>
+              <h3 className="text-base font-bold text-base-content flex items-center gap-2">
+                <Sliders className="size-4 text-primary" />
+                مدیریت فعال و غیرفعال‌سازی ماژول‌های سامانه
+              </h3>
+              <p className="text-xs text-base-content/60 mt-1">
+                بخش‌هایی که غیرفعال شوند از منوها، داشبورد و API برای تمام کاربران (از جمله مدیران) تا زمان فعال‌سازی مجدد مخفی و مسدود می‌شوند.
+              </p>
+            </div>
+
+            {!featuresLoading && featureItems.length > 0 && (
+              <span className="badge badge-sm badge-primary badge-soft font-bold shrink-0">
+                {num(enabledFeaturesCount)} از {num(featureItems.length)} ماژول فعال
+              </span>
+            )}
+          </div>
+
+          {featuresLoading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-xs text-base-content/60">
+              <span className="loading loading-spinner loading-sm text-primary" />
+              در حال بارگذاری لیست ماژول‌های سیستم...
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {featureItems.map((item) => {
+                const Icon = FEATURE_ICONS[item.key] || Sliders
+                const isBusy = updateFeatureMutation.isPending && togglingKey === item.key
+
+                return (
+                  <div
+                    key={item.key}
+                    className={cx(
+                      'flex items-start justify-between gap-3 rounded-2xl border p-4 transition-all',
+                      item.enabled
+                        ? 'border-base-200 bg-base-100'
+                        : 'border-warning/30 bg-warning/5',
+                    )}
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span
+                        className={cx(
+                          'flex size-10 shrink-0 items-center justify-center rounded-xl',
+                          item.enabled
+                            ? 'bg-primary/10 text-primary'
+                            : 'bg-base-200 text-base-content/40',
+                        )}
+                      >
+                        <Icon className="size-5" />
+                      </span>
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="font-bold text-xs text-base-content">{item.label}</p>
+                          <span
+                            className={cx(
+                              'badge badge-xs font-bold',
+                              item.enabled ? 'badge-success badge-soft' : 'badge-warning badge-soft',
+                            )}
+                          >
+                            {item.enabled ? 'فعال' : 'غیرفعال'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-base-content/60">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                      {isBusy && <span className="loading loading-spinner loading-xs text-primary" />}
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-primary toggle-sm"
+                        checked={item.enabled}
+                        disabled={updateFeatureMutation.isPending}
+                        aria-label={`تغییر وضعیت ${item.label}`}
+                        onChange={(e) =>
+                          updateFeatureMutation.mutate({
+                            key: item.key,
+                            enabled: e.target.checked,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Company Branding - Admins Only */}
       {isAdministrator && (

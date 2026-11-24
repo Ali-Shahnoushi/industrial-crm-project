@@ -1,29 +1,23 @@
 import { useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import {
   ChevronDown,
   Cpu,
   Settings,
   X,
 } from 'lucide-react'
-import { MAIN_NAV, SETTINGS_NAV } from './nav'
+import { MAIN_NAV, SETTINGS_NAV, type NavItem } from './nav'
 import { useAuthStore } from '../store/useAuthStore'
+import { useSystemConfig } from '../hooks/useSystemConfig'
 import { Avatar } from '../components/ui/Avatar'
-import { settingsApi } from '../services/api'
 import { cx, digits } from '../utils/format'
 import { userTypeMeta } from '../utils/meta'
 
 export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
-  const { data: companySettings } = useQuery({
-    queryKey: ['company-settings'],
-    queryFn: settingsApi.getCompanySettings,
-    staleTime: 5 * 60 * 1000,
-  })
+  const { companySettings, appVersion } = useSystemConfig()
 
   const companyName = companySettings?.company_name || 'سی‌آر‌ام دستگاه‌ها'
   const logoUrl = companySettings?.company_logo_url
-  const appVersion = companySettings?.app_version || '2.4.0'
 
   return (
     <div className="flex items-center gap-3 min-w-0">
@@ -51,7 +45,14 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
           {companyName}
         </p>
         <p className="text-[11px] text-base-content/50 truncate">
-          مدیریت مشتریان و دستگاه‌ها • نسخه {digits(appVersion)}
+          مدیریت مشتریان و دستگاه‌ها •{' '}
+          <Link
+            to="/changelog"
+            className="hover:text-primary hover:underline transition-colors font-semibold"
+            title="مشاهده تاریخچه نسخه‌ها و تغییرات سامانه"
+          >
+            نسخه {digits(appVersion)}
+          </Link>
         </p>
       </div>
     </div>
@@ -61,6 +62,7 @@ export function Logo({ size = 'md' }: { size?: 'md' | 'lg' }) {
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const user = useAuthStore((s) => s.user)
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const { isFeatureEnabled } = useSystemConfig()
   const location = useLocation()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -68,14 +70,15 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const isSettingsActive = location.pathname.startsWith('/settings')
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
 
-  const checkItemPermission = (perm?: string | string[]) => {
-    if (!perm) return true
-    return Array.isArray(perm) ? perm.some((p) => hasPermission(p)) : hasPermission(perm)
+  const isItemVisible = (item: NavItem) => {
+    if (item.feature && !isFeatureEnabled(item.feature)) return false
+    if (!item.permission) return true
+    return Array.isArray(item.permission)
+      ? item.permission.some((p) => hasPermission(p))
+      : hasPermission(item.permission)
   }
 
-  const visibleSettingsItems = SETTINGS_NAV.filter((item) =>
-    checkItemPermission(item.permission),
-  ).map((item) => {
+  const visibleSettingsItems = SETTINGS_NAV.filter((item) => isItemVisible(item)).map((item) => {
     if (item.to === '/settings/system' && !isAdministrator) {
       return { ...item, label: 'تنظیمات پوسته نمایشی' }
     }
@@ -113,7 +116,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
           {MAIN_NAV.map((group) => {
-            const visibleItems = group.items.filter((item) => checkItemPermission(item.permission))
+            const visibleItems = group.items.filter((item) => isItemVisible(item))
             if (!visibleItems.length) return null
 
             return (

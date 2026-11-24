@@ -8,6 +8,45 @@ export type TicketType = 'repair_request' | 'sales_inquiry' | 'technical_support
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent'
 export type TicketStatus = 'open' | 'in_progress' | 'answered' | 'customer_reply' | 'resolved' | 'closed'
 
+export type SystemFeatureKey =
+  | 'parts'
+  | 'sales'
+  | 'tickets'
+  | 'sms'
+  | 'customer_portal'
+  | 'backup'
+  | 'otp_login'
+
+export type SystemFeatureMap = Record<SystemFeatureKey, boolean>
+
+export interface SystemFeatureItem {
+  key: SystemFeatureKey
+  label: string
+  description: string
+  enabled: boolean
+}
+
+export interface UserSession {
+  id: number
+  name: string
+  device_name: string
+  browser: string
+  platform: string
+  ip_address?: string | null
+  user_agent?: string | null
+  is_current: boolean
+  last_used_at?: string | null
+  created_at?: string | null
+}
+
+export interface SessionLimitChallenge {
+  code: 'MAX_SESSIONS_REACHED'
+  message: string
+  max_sessions: number
+  challenge_token: string
+  sessions: UserSession[]
+}
+
 export interface User {
   id: string
   name: string
@@ -24,6 +63,7 @@ export interface User {
   is_customer_portal?: boolean
   customer_id?: number | null
   permissions: string[]
+  active_sessions_count?: number
   created_at?: string
   user_type?: UserType
   role_label?: string
@@ -47,6 +87,26 @@ export interface CompanySettings {
   company_name: string | null
   company_logo_url: string | null
   app_version?: string
+  features?: Partial<SystemFeatureMap>
+  max_sessions?: number
+}
+
+export interface ChangelogSection {
+  title: string
+  items: string[]
+}
+
+export interface ChangelogRelease {
+  version: string
+  jalali_date: string
+  gregorian_date: string | null
+  is_current: boolean
+  sections: ChangelogSection[]
+}
+
+export interface ChangelogResponse {
+  current_version: string
+  releases: ChangelogRelease[]
 }
 
 export type CustomerType = 'potential' | 'effective'

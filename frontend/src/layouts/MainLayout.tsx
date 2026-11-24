@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useState, type ReactNode } from 'react'
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { LogOut, Menu, MessageSquare, Moon, Palette, ShieldCheck, Sun, User } from 'lucide-react'
@@ -11,6 +11,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { PageSkeleton } from '../components/ui/Field'
 import { useAuthStore } from '../store/useAuthStore'
 import { useThemeStore } from '../store/useThemeStore'
+import { useSystemConfig } from '../hooks/useSystemConfig'
 import { roleLabel } from '../utils/meta'
 
 const closeDropdown = () => (document.activeElement as HTMLElement | null)?.blur()
@@ -56,6 +57,7 @@ function UserMenu() {
   const logout = useAuthStore((s) => s.logout)
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
+  const { isFeatureEnabled } = useSystemConfig()
   const nav = useNavigate()
 
   const displayRole =
@@ -99,7 +101,7 @@ function UserMenu() {
             <User className="size-4" /> پروفایل من
           </button>
         </li>
-        {hasPermission('settings.manage') && (
+        {hasPermission('settings.manage') && isFeatureEnabled('sms') && (
           <li>
             <button
               onClick={() => {
@@ -111,7 +113,7 @@ function UserMenu() {
             </button>
           </li>
         )}
-        {hasPermission('users.manage') && (
+        {(hasPermission('users.manage') || hasPermission('users.sessions')) && (
           <li>
             <button
               onClick={() => {
@@ -152,7 +154,7 @@ function UserMenu() {
   )
 }
 
-export function MainLayout() {
+export function MainLayout({ children }: { children?: ReactNode } = {}) {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
 
@@ -187,7 +189,7 @@ export function MainLayout() {
             className="mx-auto max-w-[1500px]"
           >
             <Suspense fallback={<PageSkeleton />}>
-              <Outlet />
+              {children ?? <Outlet />}
             </Suspense>
           </motion.div>
         </main>

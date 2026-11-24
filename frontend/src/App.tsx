@@ -1,16 +1,18 @@
-import { lazy, useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
-import { ProtectedRoute } from './layouts/MainLayout'
+import { MainLayout, ProtectedRoute } from './layouts/MainLayout'
 import { PortalProtectedRoute } from './layouts/CustomerPortalLayout'
 import { PermissionRoute } from './components/common/PermissionRoute'
 import { ErrorBoundary } from './components/common/ErrorBoundary'
+import { PageSkeleton } from './components/ui/Field'
 import { useAuthStore } from './store/useAuthStore'
 import { queryClient } from './store/queryClient'
 
 // Route-level code splitting — Staff & Admin CRM
 const Login = lazy(() => import('./pages/Login'))
+const Changelog = lazy(() => import('./pages/Changelog'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Customers = lazy(() => import('./pages/Customers'))
 const CustomerDetail = lazy(() => import('./pages/CustomerDetail'))
@@ -42,6 +44,25 @@ const PortalProfile = lazy(() => import('./pages/portal/PortalProfile'))
 import AccessDenied from './pages/AccessDenied'
 const NotFound = lazy(() => import('./pages/NotFound'))
 
+function ChangelogRoute() {
+  const user = useAuthStore((s) => s.user)
+  const isStaff = Boolean(user && !user.is_customer_portal && user.user_type !== 'customer')
+
+  if (isStaff) {
+    return (
+      <MainLayout>
+        <Changelog />
+      </MainLayout>
+    )
+  }
+
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <Changelog standalone />
+    </Suspense>
+  )
+}
+
 export default function App() {
   const initAuth = useAuthStore((s) => s.initAuth)
 
@@ -55,6 +76,7 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/changelog" element={<ChangelogRoute />} />
 
             {/* Strictly Isolated Customer Portal Subtree (`/portal/*`) */}
             <Route path="/portal" element={<PortalProtectedRoute />}>
@@ -89,7 +111,7 @@ export default function App() {
               <Route
                 path="parts"
                 element={
-                  <PermissionRoute permission="parts.view">
+                  <PermissionRoute permission="parts.view" feature="parts">
                     <Parts />
                   </PermissionRoute>
                 }
@@ -97,7 +119,7 @@ export default function App() {
               <Route
                 path="inventory"
                 element={
-                  <PermissionRoute permission="parts.view">
+                  <PermissionRoute permission="parts.view" feature="parts">
                     <Inventory />
                   </PermissionRoute>
                 }
@@ -105,7 +127,7 @@ export default function App() {
               <Route
                 path="tickets"
                 element={
-                  <PermissionRoute permission="tickets.view">
+                  <PermissionRoute permission="tickets.view" feature="tickets">
                     <Tickets />
                   </PermissionRoute>
                 }
@@ -113,7 +135,7 @@ export default function App() {
               <Route
                 path="tickets/:id"
                 element={
-                  <PermissionRoute permission="tickets.view">
+                  <PermissionRoute permission="tickets.view" feature="tickets">
                     <TicketDetail />
                   </PermissionRoute>
                 }
@@ -121,7 +143,7 @@ export default function App() {
               <Route
                 path="sms"
                 element={
-                  <PermissionRoute permission={['sms.send', 'sms.logs']}>
+                  <PermissionRoute permission={['sms.send', 'sms.logs']} feature="sms">
                     <SmsCenter />
                   </PermissionRoute>
                 }
@@ -129,7 +151,7 @@ export default function App() {
               <Route
                 path="sales"
                 element={
-                  <PermissionRoute permission="sales.view">
+                  <PermissionRoute permission="sales.view" feature="sales">
                     <Sales />
                   </PermissionRoute>
                 }
@@ -137,7 +159,7 @@ export default function App() {
               <Route
                 path="sales/:id"
                 element={
-                  <PermissionRoute permission="sales.view">
+                  <PermissionRoute permission="sales.view" feature="sales">
                     <SaleDetail />
                   </PermissionRoute>
                 }
@@ -145,7 +167,7 @@ export default function App() {
               <Route
                 path="finance"
                 element={
-                  <PermissionRoute permission="sales.view">
+                  <PermissionRoute permission="sales.view" feature="sales">
                     <Finance />
                   </PermissionRoute>
                 }
@@ -153,18 +175,18 @@ export default function App() {
               <Route
                 path="invoices/:id/print"
                 element={
-                  <PermissionRoute permission="sales.view">
+                  <PermissionRoute permission="sales.view" feature="sales">
                     <InvoicePrint />
                   </PermissionRoute>
                 }
               />
 
               {/* Separated Settings Pages */}
-              <Route path="settings" element={<Navigate to="/settings/ticketing" replace />} />
+              <Route path="settings" element={<Navigate to="/settings/system" replace />} />
               <Route
                 path="settings/ticketing"
                 element={
-                  <PermissionRoute permission="settings.manage">
+                  <PermissionRoute permission="settings.manage" feature="tickets">
                     <TicketingSettingsPage />
                   </PermissionRoute>
                 }
@@ -172,7 +194,7 @@ export default function App() {
               <Route
                 path="settings/sms"
                 element={
-                  <PermissionRoute permission="settings.manage">
+                  <PermissionRoute permission="settings.manage" feature="sms">
                     <SmsSettingsPage />
                   </PermissionRoute>
                 }
@@ -180,7 +202,7 @@ export default function App() {
               <Route
                 path="settings/users"
                 element={
-                  <PermissionRoute permission="users.manage">
+                  <PermissionRoute permission={['users.manage', 'users.sessions']}>
                     <UsersAclPage />
                   </PermissionRoute>
                 }
@@ -206,7 +228,7 @@ export default function App() {
               <Route
                 path="settings/backup"
                 element={
-                  <PermissionRoute permission="settings.manage">
+                  <PermissionRoute permission="settings.manage" feature="backup">
                     <BackupPage />
                   </PermissionRoute>
                 }

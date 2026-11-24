@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type {
   AssignmentStrategy,
+  ChangelogResponse,
   CompanySettings,
   Customer,
   CustomerLookupItem,
@@ -18,6 +19,9 @@ import type {
   SmsLog,
   SmsSettings,
   StaffOption,
+  SystemFeatureItem,
+  SystemFeatureKey,
+  SystemFeatureMap,
   SystemPermission,
   Ticket,
   TicketDepartment,
@@ -27,6 +31,7 @@ import type {
   TicketSummary,
   TicketType,
   User,
+  UserSession,
   UserType,
 } from '../types'
 
@@ -82,6 +87,30 @@ export const authApi = {
     data.user.id = String(data.user.id)
     return data as { user: User; token?: string; message: string }
   },
+  resolveSessionLimit: async (
+    challengeToken: string,
+    revokeTokenIds: number | number[],
+  ) => {
+    const payload = Array.isArray(revokeTokenIds)
+      ? { challenge_token: challengeToken, revoke_token_ids: revokeTokenIds }
+      : { challenge_token: challengeToken, revoke_token_id: revokeTokenIds }
+    const { data } = await http.post<{ user: any; token?: string; message: string }>(
+      '/auth/sessions/resolve',
+      payload,
+    )
+    data.user.id = String(data.user.id)
+    return data as { user: User; token?: string; message: string }
+  },
+  mySessions: async () => {
+    const { data } = await http.get<{ max_sessions: number; sessions: UserSession[] }>('/auth/sessions')
+    return data
+  },
+  revokeMySession: async (tokenId: number) => {
+    const { data } = await http.delete<{ message: string; revoked_current: boolean }>(
+      `/auth/sessions/${tokenId}`,
+    )
+    return data
+  },
   me: async () => {
     const { data } = await http.get<{ user: any }>('/auth/me')
     data.user.id = String(data.user.id)
@@ -91,9 +120,9 @@ export const authApi = {
     await http.post('/auth/logout')
   },
   updateProfile: async (body: FormData) => {
-    const { data } = await http.post<{ message: string; user: any }>('/auth/me', body)
+    const { data } = await http.post<{ message: string; force_logout?: boolean; user: any }>('/auth/me', body)
     data.user.id = String(data.user.id)
-    return data as { message: string; user: User }
+    return data as { message: string; force_logout?: boolean; user: User }
   },
 }
 
@@ -550,6 +579,10 @@ export const settingsApi = {
     const { data } = await http.get<CompanySettings>('/settings/company')
     return data
   },
+  getChangelog: async () => {
+    const { data } = await http.get<ChangelogResponse>('/settings/changelog')
+    return data
+  },
   updateCompanySettings: async (body: FormData) => {
     const { data } = await http.post<{
       message: string
@@ -562,6 +595,20 @@ export const settingsApi = {
     const { data } = await http.post<{ message: string; version: string; output: string }>(
       '/settings/system/upgrade',
     )
+    return data
+  },
+  getSystemFeatures: async () => {
+    const { data } = await http.get<{ features: SystemFeatureMap; items: SystemFeatureItem[] }>(
+      '/settings/features',
+    )
+    return data
+  },
+  updateSystemFeatures: async (features: Partial<Record<SystemFeatureKey, boolean>>) => {
+    const { data } = await http.put<{
+      message: string
+      features: SystemFeatureMap
+      items: SystemFeatureItem[]
+    }>('/settings/features', { features })
     return data
   },
 }
@@ -599,7 +646,10 @@ export const usersApi = {
           is_active?: boolean
         },
   ) => {
-    const { data } = await http.post<{ message: string; user: User }>(`/users/${id}`, body)
+    const { data } = await http.post<{ message: string; force_logged_out?: boolean; user: User }>(
+      `/users/${id}`,
+      body,
+    )
     return data
   },
   delete: async (id: number | string) => {
@@ -619,10 +669,12 @@ export const usersApi = {
         },
   ) => {
     const body = Array.isArray(payload) ? { permissions: payload } : payload
-    const { data } = await http.put<{ message: string; permissions: string[]; user?: User }>(
-      `/users/${userId}/permissions`,
-      body,
-    )
+    const { data } = await http.put<{
+      message: string
+      force_logged_out?: boolean
+      permissions: string[]
+      user?: User
+    }>(`/users/${userId}/permissions`, body)
     return data
   },
   toggleActive: async (userId: number | string) => {
@@ -633,6 +685,31 @@ export const usersApi = {
   },
   getAvailablePermissions: async () => {
     const { data } = await http.get<SystemPermission[]>('/permissions')
+    return data
+  },
+  getSessions: async (userId: number | string) => {
+    const { data } = await http.get<{
+      user: { id: number; name: string; email: string; role_label: string; user_type?: UserType }
+      max_sessions: number
+      sessions: UserSession[]
+    }>(`/users/${userId}/sessions`)
+    return data
+  },
+  revokeSession: async (userId: number | string, tokenId: number) => {
+    const { data } = await http.delete<{
+      message: string
+      revoked_current: boolean
+      active_sessions_count: number
+    }>(`/users/${userId}/sessions/${tokenId}`)
+    return data
+  },
+  revokeAllSessions: async (userId: number | string) => {
+    const { data } = await http.delete<{
+      message: string
+      revoked_count: number
+      revoked_current: boolean
+      active_sessions_count: number
+    }>(`/users/${userId}/sessions`)
     return data
   },
 }
