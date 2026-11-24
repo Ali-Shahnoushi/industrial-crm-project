@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  PowerOff,
   ShieldCheck,
   Sun,
   User,
@@ -18,6 +19,7 @@ import { Avatar } from '../components/ui/Avatar'
 import { PageSkeleton } from '../components/ui/Field'
 import { useAuthStore } from '../store/useAuthStore'
 import { useThemeStore } from '../store/useThemeStore'
+import { useSystemConfig } from '../hooks/useSystemConfig'
 import { cx } from '../utils/format'
 
 const PORTAL_NAV = [
@@ -55,6 +57,7 @@ function CustomerPortalLayout() {
   const user = useAuthStore((s) => s.user)!
   const logout = useAuthStore((s) => s.logout)
   const { theme, toggle } = useThemeStore()
+  const { isFeatureEnabled } = useSystemConfig()
   const nav = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -64,6 +67,31 @@ function CustomerPortalLayout() {
     await logout()
     toast.success('از پنل کاربری مشتریان خارج شدید')
     nav('/login', { replace: true })
+  }
+
+  if (!isFeatureEnabled('customer_portal')) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-base-200/70 p-6">
+        <div className="card-surface max-w-md w-full p-8 text-center space-y-4">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-warning/15 text-warning">
+            <PowerOff className="size-7" />
+          </div>
+          <h2 className="text-lg font-extrabold text-base-content">
+            پنل اختصاصی مشتریان غیرفعال است
+          </h2>
+          <p className="text-xs leading-relaxed text-base-content/65">
+            در حال حاضر دسترسی به پنل کاربری مشتریان توسط مدیر سامانه غیرفعال شده است. لطفاً بعداً مجدداً تلاش کنید.
+          </p>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="btn btn-sm btn-error btn-outline gap-1.5"
+          >
+            <LogOut className="size-4" /> خروج از حساب
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -17,6 +17,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'active.user' => \App\Http\Middleware\EnsureActiveUser::class,
             'staff.only' => \App\Http\Middleware\EnsureStaffUser::class,
             'portal.customer' => \App\Http\Middleware\EnsureCustomerPortalUser::class,
+            'feature' => \App\Http\Middleware\EnsureFeatureEnabled::class,
         ]);
         $middleware->api(prepend: [
             \App\Http\Middleware\AuthenticateFromCookie::class,

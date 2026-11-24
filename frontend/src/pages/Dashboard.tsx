@@ -21,11 +21,18 @@ import { PageHeader } from "../components/ui/PageHeader";
 import { StatCard } from "../components/ui/StatCard";
 import { dashboardApi } from "../services/api";
 import { useAuthStore } from "../store/useAuthStore";
+import { useSystemConfig } from "../hooks/useSystemConfig";
 import { compactToman, customerDisplayName, cx, num, relativeFa, toman } from "../utils/format";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
+  const { isFeatureEnabled } = useSystemConfig();
   const nav = useNavigate();
+
+  const partsEnabled = isFeatureEnabled("parts");
+  const salesEnabled = isFeatureEnabled("sales");
+  const ticketsEnabled = isFeatureEnabled("tickets");
+  const smsEnabled = isFeatureEnabled("sms");
 
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-stats"],
@@ -56,14 +63,16 @@ export default function Dashboard() {
                 <UserPlus className="size-4" /> مشتری جدید
               </button>
             </Can>
-            <Can permission="sms.send">
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={() => nav("/sms?new=1")}
-              >
-                <Send className="size-4" /> ارسال پیامک الگو
-              </button>
-            </Can>
+            {smsEnabled && (
+              <Can permission="sms.send">
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => nav("/sms?new=1")}
+                >
+                  <Send className="size-4" /> ارسال پیامک الگو
+                </button>
+              </Can>
+            )}
           </div>
         }
       />
@@ -97,40 +106,47 @@ export default function Dashboard() {
           loading={isLoading}
           to="/customers?type=potential"
         />
-        <StatCard
-          title="کاتالوگ و انبار دستگاه‌ها"
-          value={num(stats.total_parts)}
-          icon={Cpu}
-          tone="secondary"
-          hint={`موجودی کل انبار: ${num(stats.total_stock_quantity ?? 0)} عدد`}
-          loading={isLoading}
-          to="/inventory"
-        />
-        <StatCard
-          title="دستگاه‌های تخصیص‌یافته"
-          value={num(stats.assigned_parts)}
-          icon={Boxes}
-          tone="primary"
-          hint="تحویل‌شده به مشتریان"
-          loading={isLoading}
-          to="/parts"
-        />
-        <StatCard
-          title="تیکت‌ها و درخواست تعمیر"
-          value={num(stats.open_tickets_count ?? 0)}
-          icon={LifeBuoy}
-          tone={(stats.pending_repair_tickets_count ?? 0) > 0 ? "warning" : "primary"}
-          hint={
-            (stats.pending_repair_tickets_count ?? 0) > 0
-              ? `${num(stats.pending_repair_tickets_count ?? 0)} درخواست تعمیر باز`
-              : "مرکز تیکتینگ و پشتیبانی"
-          }
-          loading={isLoading}
-          to="/tickets"
-        />
+        {partsEnabled && (
+          <>
+            <StatCard
+              title="کاتالوگ و انبار دستگاه‌ها"
+              value={num(stats.total_parts)}
+              icon={Cpu}
+              tone="secondary"
+              hint={`موجودی کل انبار: ${num(stats.total_stock_quantity ?? 0)} عدد`}
+              loading={isLoading}
+              to="/inventory"
+            />
+            <StatCard
+              title="دستگاه‌های تخصیص‌یافته"
+              value={num(stats.assigned_parts)}
+              icon={Boxes}
+              tone="primary"
+              hint="تحویل‌شده به مشتریان"
+              loading={isLoading}
+              to="/parts"
+            />
+          </>
+        )}
+        {ticketsEnabled && (
+          <StatCard
+            title="تیکت‌ها و درخواست تعمیر"
+            value={num(stats.open_tickets_count ?? 0)}
+            icon={LifeBuoy}
+            tone={(stats.pending_repair_tickets_count ?? 0) > 0 ? "warning" : "primary"}
+            hint={
+              (stats.pending_repair_tickets_count ?? 0) > 0
+                ? `${num(stats.pending_repair_tickets_count ?? 0)} درخواست تعمیر باز`
+                : "مرکز تیکتینگ و پشتیبانی"
+            }
+            loading={isLoading}
+            to="/tickets"
+          />
+        )}
       </div>
 
       {/* Sales & Finance Summary Widget */}
+      {salesEnabled && (
       <Can permission="sales.view">
         <div className="rounded-2xl border border-emerald-500/25 bg-gradient-to-l from-emerald-500/10 via-base-100 to-base-100 p-4 sm:p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -209,9 +225,10 @@ export default function Dashboard() {
           })()}
         </div>
       </Can>
+      )}
 
       {/* Low Stock Warehouse Alert Banner */}
-      {(data?.low_stock_parts?.length ?? 0) > 0 && (
+      {partsEnabled && (data?.low_stock_parts?.length ?? 0) > 0 && (
         <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-warning/20 text-warning">
@@ -309,6 +326,7 @@ export default function Dashboard() {
 
         {/* Right Column: Melipayamak Dispatched Logs & Quick Status */}
         <div className="lg:col-span-5 space-y-6">
+          {smsEnabled && (
           <Can permission="sms.logs">
             <div className="bg-base-100 rounded-2xl border border-base-200/80 p-5 shadow-xs">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-base-200">
@@ -380,6 +398,7 @@ export default function Dashboard() {
             )}
             </div>
           </Can>
+          )}
 
           {/* Quick Info Box on Periodic Service Policy */}
           <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-5 dark:border-indigo-900/40 dark:bg-indigo-950/40">

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Bell, CheckCheck, Cog, History, Sparkles, UserCheck, UserPlus, Wrench } from 'lucide-react'
 import { dashboardApi } from '../services/api'
 import { useAuthStore } from '../store/useAuthStore'
+import { useSystemConfig } from '../hooks/useSystemConfig'
 import { customerDisplayName, cx, num, relativeFa } from '../utils/format'
 import type { CustomerHistory } from '../types'
 
@@ -49,6 +50,7 @@ function activityVisual(action: string) {
 
 export function NotificationsMenu() {
   const user = useAuthStore((s) => s.user)
+  const { isFeatureEnabled } = useSystemConfig()
   const nav = useNavigate()
   const storageKey = `crm_seen_activities_${user?.id ?? 'guest'}`
   const lowStockStorageKey = `crm_seen_low_stock_${user?.id ?? 'guest'}`
@@ -65,9 +67,10 @@ export function NotificationsMenu() {
     [data?.recent_activities],
   )
 
+  const partsEnabled = isFeatureEnabled('parts')
   const lowStockParts = useMemo(
-    () => data?.low_stock_parts ?? [],
-    [data?.low_stock_parts],
+    () => (partsEnabled ? (data?.low_stock_parts ?? []) : []),
+    [data?.low_stock_parts, partsEnabled],
   )
 
   const lowStockSignature = useMemo(

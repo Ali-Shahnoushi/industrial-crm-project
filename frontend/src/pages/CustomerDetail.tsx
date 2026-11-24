@@ -37,6 +37,7 @@ import { Can } from '../components/common/Can'
 import { customerApi, partApi } from '../services/api'
 import { salesApi } from '../services/sales'
 import { useAuthStore } from '../store/useAuthStore'
+import { useSystemConfig } from '../hooks/useSystemConfig'
 import {
   paymentStatusMeta,
   saleStatusMeta,
@@ -57,16 +58,21 @@ export default function CustomerDetail() {
   const currentUser = useAuthStore((s) => s.user)
   const hasPermission = useAuthStore((s) => s.hasPermission)
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
+  const { isFeatureEnabled } = useSystemConfig()
+
+  const partsFeatureEnabled = isFeatureEnabled('parts')
+  const portalFeatureEnabled = isFeatureEnabled('customer_portal')
+  const smsFeatureEnabled = isFeatureEnabled('sms')
 
   const canTransferOwner =
     hasPermission('customers.edit') &&
     (isAdministrator ||
       (currentUser?.user_type === 'manager' && currentUser?.customer_scope === 'all'))
-  const canViewSmsLogs = hasPermission('sms.logs')
-  const canViewTickets = hasPermission('tickets.view')
-  const canViewSales = hasPermission('sales.view')
+  const canViewSmsLogs = smsFeatureEnabled && hasPermission('sms.logs')
+  const canViewTickets = isFeatureEnabled('tickets') && hasPermission('tickets.view')
+  const canViewSales = isFeatureEnabled('sales') && hasPermission('sales.view')
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('parts')
+  const [activeTab, setActiveTab] = useState<ActiveTab>(partsFeatureEnabled ? 'parts' : 'audit')
   const [editOpen, setEditOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [ownerModalOpen, setOwnerModalOpen] = useState(false)
@@ -274,19 +280,21 @@ export default function CustomerDetail() {
 
           {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-2">
-            <Can permission="parts.assign">
-              <button
-                className="btn btn-sm btn-primary gap-1.5"
-                onClick={() => {
-                  setEditingAssignedPart(null)
-                  setAssignPartOpen(true)
-                }}
-              >
-                <Plus className="size-4" /> تخصیص دستگاه جدید
-              </button>
-            </Can>
+            {partsFeatureEnabled && (
+              <Can permission="parts.assign">
+                <button
+                  className="btn btn-sm btn-primary gap-1.5"
+                  onClick={() => {
+                    setEditingAssignedPart(null)
+                    setAssignPartOpen(true)
+                  }}
+                >
+                  <Plus className="size-4" /> تخصیص دستگاه جدید
+                </button>
+              </Can>
+            )}
 
-            {customer.mobile && (
+            {smsFeatureEnabled && customer.mobile && (
               <Can permission="sms.send">
                 <Link
                   to={`/sms?mobile=${customer.mobile}&customer_id=${customer.id}`}
@@ -297,27 +305,29 @@ export default function CustomerDetail() {
               </Can>
             )}
 
-            <Can permission="customers.edit">
-              <button
-                type="button"
-                className={cx(
-                  'btn btn-sm gap-1.5',
-                  customer.portal_enabled ? 'btn-outline btn-success' : 'btn-outline',
-                )}
-                onClick={() => {
-                  setPortalEnabled(Boolean(customer.portal_enabled ?? true))
-                  setPortalPassword('')
-                  setPortalLoginPhone(customer.portal_user?.phone || customer.mobile || '')
-                  setPortalSalesMgrId(
-                    customer.sales_manager_user_id ? String(customer.sales_manager_user_id) : '',
-                  )
-                  setPortalModalOpen(true)
-                }}
-                title="تنظیم دسترسی پنل کاربری اختصاصی مشتری"
-              >
-                <KeyRound className="size-4" /> پنل مشتری
-              </button>
-            </Can>
+            {portalFeatureEnabled && (
+              <Can permission="customers.edit">
+                <button
+                  type="button"
+                  className={cx(
+                    'btn btn-sm gap-1.5',
+                    customer.portal_enabled ? 'btn-outline btn-success' : 'btn-outline',
+                  )}
+                  onClick={() => {
+                    setPortalEnabled(Boolean(customer.portal_enabled ?? true))
+                    setPortalPassword('')
+                    setPortalLoginPhone(customer.portal_user?.phone || customer.mobile || '')
+                    setPortalSalesMgrId(
+                      customer.sales_manager_user_id ? String(customer.sales_manager_user_id) : '',
+                    )
+                    setPortalModalOpen(true)
+                  }}
+                  title="تنظیم دسترسی پنل کاربری اختصاصی مشتری"
+                >
+                  <KeyRound className="size-4" /> پنل مشتری
+                </button>
+              </Can>
+            )}
 
             {canTransferOwner && (
               <button
@@ -364,14 +374,16 @@ export default function CustomerDetail() {
       {/* Tabs Bar */}
       <div className="border-b border-base-200">
         <div role="tablist" className="tabs tabs-border">
-          <button
-            role="tab"
-            className={cx('tab gap-2 font-bold text-xs', activeTab === 'parts' && 'tab-active')}
-            onClick={() => setActiveTab('parts')}
-          >
-            <Cpu className="size-4" />
-            دستگاه‌ها، فاکتورها و سوابق خدمات ({num(customerParts.length)})
-          </button>
+          {partsFeatureEnabled && (
+            <button
+              role="tab"
+              className={cx('tab gap-2 font-bold text-xs', activeTab === 'parts' && 'tab-active')}
+              onClick={() => setActiveTab('parts')}
+            >
+              <Cpu className="size-4" />
+              دستگاه‌ها، فاکتورها و سوابق خدمات ({num(customerParts.length)})
+            </button>
+          )}
           {canViewTickets && (
             <button
               role="tab"

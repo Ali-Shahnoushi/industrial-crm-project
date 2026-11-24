@@ -10,6 +10,7 @@ use App\Models\Part;
 use App\Models\Sale;
 use App\Models\SmsLog;
 use App\Models\Ticket;
+use App\Support\SystemFeatures;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -28,21 +29,28 @@ class DashboardController extends Controller
         $effectiveCustomers = (clone $accessibleCustomers)->where('customer_type', 'effective')->count();
         $potentialCustomers = (clone $accessibleCustomers)->where('customer_type', 'potential')->count();
 
-        $totalParts = Part::count();
-        $totalStockQuantity = Schema::hasColumn('parts', 'stock_quantity')
+        $partsEnabled = SystemFeatures::isEnabled('parts');
+        $smsEnabled = SystemFeatures::isEnabled('sms');
+        $ticketsEnabled = SystemFeatures::isEnabled('tickets');
+        $salesEnabled = SystemFeatures::isEnabled('sales');
+
+        $totalParts = $partsEnabled ? Part::count() : 0;
+        $totalStockQuantity = ($partsEnabled && Schema::hasColumn('parts', 'stock_quantity'))
             ? (int) Part::sum('stock_quantity')
             : 0;
-        $assignedParts = Schema::hasColumn('customer_parts', 'quantity')
-            ? (int) (clone $accessibleParts)->sum('quantity')
-            : (int) (clone $accessibleParts)->count();
+        $assignedParts = $partsEnabled
+            ? (Schema::hasColumn('customer_parts', 'quantity')
+                ? (int) (clone $accessibleParts)->sum('quantity')
+                : (int) (clone $accessibleParts)->count())
+            : 0;
 
-        $canViewParts = !$user || $user->hasSafePermission('parts.view');
+        $canViewParts = $partsEnabled && (!$user || $user->hasSafePermission('parts.view'));
         $lowStockParts = $canViewParts
             ? Part::where('is_active', true)->orderBy('stock_quantity')->get()->filter(fn (Part $p) => $p->is_low_stock)->values()
             : collect();
 
-        $canViewSmsLogs = !$user || $user->hasSafePermission('sms.logs');
-        $canViewTickets = !$user || $user->hasSafePermission('tickets.view');
+        $canViewSmsLogs = $smsEnabled && (!$user || $user->hasSafePermission('sms.logs'));
+        $canViewTickets = $ticketsEnabled && (!$user || $user->hasSafePermission('tickets.view'));
 
         $totalSmsSent = 0;
         $recentSms = collect();
@@ -84,7 +92,7 @@ class DashboardController extends Controller
             ->take(8)
             ->get();
 
-        $canViewSales = !$user || $user->hasSafePermission('sales.view');
+        $canViewSales = $salesEnabled && (!$user || $user->hasSafePermission('sales.view'));
         $salesStats = null;
         if ($canViewSales && Schema::hasTable('sales')) {
             $salesBase = Sale::accessibleBy($user)->where('status', Sale::STATUS_CONFIRMED);

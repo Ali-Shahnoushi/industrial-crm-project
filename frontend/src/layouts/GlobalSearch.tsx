@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Cpu, Search, User, X } from 'lucide-react'
 import { customerApi, partApi } from '../services/api'
 import { useAuthStore } from '../store/useAuthStore'
+import { useSystemConfig } from '../hooks/useSystemConfig'
 import { Avatar } from '../components/ui/Avatar'
 import { customerDisplayName, digits, num } from '../utils/format'
 import { useDebouncedValue } from '../utils/useDebouncedValue'
@@ -14,9 +15,10 @@ export function GlobalSearch() {
   const inputRef = useRef<HTMLInputElement>(null)
   const nav = useNavigate()
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const { isFeatureEnabled } = useSystemConfig()
 
   const canViewCustomers = hasPermission('customers.view')
-  const canViewParts = hasPermission('parts.view')
+  const canViewParts = isFeatureEnabled('parts') && hasPermission('parts.view')
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
