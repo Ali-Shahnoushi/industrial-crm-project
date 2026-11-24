@@ -41,6 +41,7 @@ class DatabaseSeeder extends Seeder
             'sms.send',
             'sms.logs',
             'users.manage',
+            'users.sessions',
             'settings.manage',
         ];
 

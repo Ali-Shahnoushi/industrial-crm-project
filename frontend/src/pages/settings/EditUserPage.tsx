@@ -124,6 +124,11 @@ function EditUserLoadedForm({ targetUser }: { targetUser: User }) {
     mutationFn: (formData: FormData) => usersApi.update(targetUser.id, formData),
     onSuccess: (res) => {
       toast.success(res.message)
+      if (isCurrent && res.force_logged_out) {
+        useAuthStore.getState().forceClearSession()
+        nav('/login', { replace: true })
+        return
+      }
       qc.invalidateQueries({ queryKey: ['system-users'] })
       qc.invalidateQueries({ queryKey: ['system-user', String(targetUser.id)] })
       if (isCurrent) {

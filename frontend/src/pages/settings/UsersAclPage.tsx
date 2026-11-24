@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import {
   KeyRound,
+  MonitorSmartphone,
   Pencil,
   ShieldCheck,
   Trash2,
@@ -14,6 +15,7 @@ import { PageHeader } from '../../components/ui/PageHeader'
 import { Modal, ConfirmDialog } from '../../components/ui/Modal'
 import { TableSkeleton } from '../../components/ui/Field'
 import { Avatar } from '../../components/ui/Avatar'
+import { UserSessionsModal } from '../../components/users/UserSessionsModal'
 import AccessDenied from '../AccessDenied'
 import { usersApi } from '../../services/api'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -23,18 +25,25 @@ import type { User } from '../../types'
 
 export default function UsersAclPage() {
   const qc = useQueryClient()
+  const nav = useNavigate()
   const currentUser = useAuthStore((s) => s.user)
   const hasPermission = useAuthStore((s) => s.hasPermission)
+  const forceClearSession = useAuthStore((s) => s.forceClearSession)
   const isAdministrator = useAuthStore((s) => s.isAdministrator)()
+
+  const canManageUsers = hasPermission('users.manage')
+  const canManageSessions = hasPermission('users.sessions')
+  const canAccessPage = canManageUsers || canManageSessions
 
   const [permModalUser, setPermModalUser] = useState<User | null>(null)
   const [selectedPerms, setSelectedPerms] = useState<string[]>([])
+  const [sessionsModalUser, setSessionsModalUser] = useState<User | null>(null)
   const [deletingUser, setDeletingUser] = useState<User | null>(null)
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['system-users'],
     queryFn: usersApi.list,
-    enabled: hasPermission('users.manage'),
+    enabled: canAccessPage,
   })
 
   const visibleUsers = isAdministrator
@@ -44,10 +53,11 @@ export default function UsersAclPage() {
   const { data: availablePermissions = [] } = useQuery({
     queryKey: ['available-permissions'],
     queryFn: usersApi.getAvailablePermissions,
-    enabled: hasPermission('users.manage'),
+    enabled: canManageUsers,
   })
 
   const openPermModal = (u: User) => {
+    if (!canManageUsers) return
     if (!isAdministrator && u.user_type === 'administrator') {
       toast.error('مدیران عادی امکان ویرایش دسترسی‌های مدیر ارشد را ندارند.')
       return
@@ -65,10 +75,15 @@ export default function UsersAclPage() {
   const savePermsMutation = useMutation({
     mutationFn: ({ userId, perms }: { userId: number | string; perms: string[] }) =>
       usersApi.updatePermissions(userId, perms),
-    onSuccess: (res) => {
+    onSuccess: (res, vars) => {
       toast.success(res.message)
-      qc.invalidateQueries({ queryKey: ['system-users'] })
       setPermModalUser(null)
+      if (res.force_logged_out && currentUser?.id === String(vars.userId)) {
+        forceClearSession()
+        nav('/login', { replace: true })
+        return
+      }
+      qc.invalidateQueries({ queryKey: ['system-users'] })
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'خطا در ذخیره مجوزها')
@@ -98,18 +113,20 @@ export default function UsersAclPage() {
     },
   })
 
-  if (!hasPermission('users.manage')) {
-    return <AccessDenied requiredPermission="users.manage" />
+  if (!canAccessPage) {
+    return <AccessDenied requiredPermission="users.manage / users.sessions" />
   }
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       <PageHeader
-        title="مدیریت کارمندان، نقش‌ها و دسترسی‌ها"
+        title="مدیریت کارمندان، نقش‌ها، دسترسی‌ها و نشست‌ها"
         actions={
-          <Link to="/settings/users/create" className="btn btn-sm btn-primary gap-1.5">
-            <UserPlus className="size-4" /> تعریف کارمند جدید
-          </Link>
+          canManageUsers ? (
+            <Link to="/settings/users/create" className="btn btn-sm btn-primary gap-1.5">
+              <UserPlus className="size-4" /> تعریف کارمند جدید
+            </Link>
+          ) : undefined
         }
       />
 
@@ -126,7 +143,7 @@ export default function UsersAclPage() {
 
         {isLoading ? (
           <div className="p-5">
-            <TableSkeleton rows={4} cols={6} />
+            <TableSkeleton rows={4} cols={7} />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -137,6 +154,7 @@ export default function UsersAclPage() {
                   <th>تماس</th>
                   <th>محدوده</th>
                   <th>دسترسی</th>
+                  {canManageSessions && <th>نشست‌های فعال</th>}
                   <th>وضعیت</th>
                   <th className="text-end">عملیات</th>
                 </tr>
@@ -152,6 +170,7 @@ export default function UsersAclPage() {
                   const sMeta = customerScopeMeta[scopeKey]
                   const staffGrantsCount = u.granted_staff_ids?.length || 0
                   const custGrantsCount = u.granted_customer_ids?.length || 0
+                  const sessionsCount = u.active_sessions_count ?? 0
 
                   return (
                     <tr key={u.id} className="transition-colors hover:bg-base-200/40 text-xs">
@@ -221,16 +240,18 @@ export default function UsersAclPage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => canManageThisUser && openPermModal(u)}
-                            disabled={!canManageThisUser}
+                            onClick={() => canManageUsers && canManageThisUser && openPermModal(u)}
+                            disabled={!canManageUsers || !canManageThisUser}
                             className={cx(
                               'badge badge-primary badge-soft font-bold text-xs gap-1 py-1 px-2.5 whitespace-nowrap inline-flex items-center',
-                              canManageThisUser
+                              canManageUsers && canManageThisUser
                                 ? 'cursor-pointer hover:opacity-85 transition-opacity'
                                 : 'cursor-default opacity-80',
                             )}
                             title={
-                              canManageThisUser ? 'مشاهده یا ویرایش سریع مجوزها' : 'غیرقابل ویرایش'
+                              canManageUsers && canManageThisUser
+                                ? 'مشاهده یا ویرایش سریع مجوزها'
+                                : 'غیرقابل ویرایش'
                             }
                           >
                             <ShieldCheck className="size-3.5" />
@@ -239,13 +260,38 @@ export default function UsersAclPage() {
                         )}
                       </td>
 
+                      {canManageSessions && (
+                        <td>
+                          <button
+                            type="button"
+                            disabled={!canManageThisUser}
+                            onClick={() => canManageThisUser && setSessionsModalUser(u)}
+                            className={cx(
+                              'badge font-bold text-xs gap-1 py-1 px-2.5 whitespace-nowrap inline-flex items-center',
+                              sessionsCount > 0
+                                ? 'badge-info badge-soft'
+                                : 'bg-base-200 text-base-content/60 border border-base-300',
+                              canManageThisUser
+                                ? 'cursor-pointer hover:opacity-85 transition-opacity'
+                                : 'cursor-not-allowed opacity-60',
+                            )}
+                            title="مشاهده نشست‌ها و خروج اجباری"
+                          >
+                            <MonitorSmartphone className="size-3.5" />
+                            {num(sessionsCount)} دستگاه
+                          </button>
+                        </td>
+                      )}
+
                       <td>
                         <button
-                          onClick={() => canManageThisUser && toggleActiveMutation.mutate(u.id)}
-                          disabled={isCurrent || !canManageThisUser}
+                          onClick={() =>
+                            canManageUsers && canManageThisUser && toggleActiveMutation.mutate(u.id)
+                          }
+                          disabled={isCurrent || !canManageUsers || !canManageThisUser}
                           className={cx(
                             'badge badge-xs font-bold transition-opacity',
-                            isCurrent || !canManageThisUser
+                            isCurrent || !canManageUsers || !canManageThisUser
                               ? 'cursor-not-allowed opacity-80'
                               : 'cursor-pointer hover:opacity-80',
                             u.is_active ? 'badge-success badge-soft' : 'badge-error badge-soft',
@@ -253,8 +299,8 @@ export default function UsersAclPage() {
                           title={
                             isCurrent
                               ? 'امکان تغییر وضعیت حساب خودتان وجود ندارد'
-                              : !canManageThisUser
-                                ? 'عدم دسترسی به تغییر وضعیت مدیر ارشد'
+                              : !canManageUsers || !canManageThisUser
+                                ? 'عدم دسترسی به تغییر وضعیت این کاربر'
                                 : 'کلیک برای تغییر وضعیت'
                           }
                         >
@@ -266,7 +312,19 @@ export default function UsersAclPage() {
                         <div className="flex items-center justify-end gap-1.5">
                           {canManageThisUser ? (
                             <>
-                              {!isAdminUser && (
+                              {canManageSessions && (
+                                <button
+                                  type="button"
+                                  className="btn btn-xs btn-outline btn-info gap-1"
+                                  onClick={() => setSessionsModalUser(u)}
+                                  title="مدیریت نشست‌ها و خروج اجباری کاربر"
+                                >
+                                  <MonitorSmartphone className="size-3.5" />
+                                  <span className="hidden md:inline">نشست‌ها</span>
+                                </button>
+                              )}
+
+                              {canManageUsers && !isAdminUser && (
                                 <button
                                   className="btn btn-xs btn-outline btn-primary gap-1"
                                   onClick={() => openPermModal(u)}
@@ -277,16 +335,18 @@ export default function UsersAclPage() {
                                 </button>
                               )}
 
-                              <Link
-                                to={`/settings/users/${u.id}/edit`}
-                                className="btn btn-xs btn-ghost gap-1"
-                                title="ویرایش نقش، محدوده مشتریان و مشخصات"
-                              >
-                                <Pencil className="size-3.5" />
-                                <span className="hidden sm:inline">ویرایش</span>
-                              </Link>
+                              {canManageUsers && (
+                                <Link
+                                  to={`/settings/users/${u.id}/edit`}
+                                  className="btn btn-xs btn-ghost gap-1"
+                                  title="ویرایش نقش، محدوده مشتریان و مشخصات"
+                                >
+                                  <Pencil className="size-3.5" />
+                                  <span className="hidden sm:inline">ویرایش</span>
+                                </Link>
+                              )}
 
-                              {!isCurrent && u.email !== 'admin@crm.local' && (
+                              {canManageUsers && !isCurrent && u.email !== 'admin@crm.local' && (
                                 <button
                                   className="btn btn-xs btn-ghost text-error hover:bg-error/10 gap-1"
                                   onClick={() => setDeletingUser(u)}
@@ -309,6 +369,13 @@ export default function UsersAclPage() {
           </div>
         )}
       </div>
+
+      {/* Modal: Active Sessions & Force Logout */}
+      <UserSessionsModal
+        open={Boolean(sessionsModalUser)}
+        onClose={() => setSessionsModalUser(null)}
+        targetUser={sessionsModalUser}
+      />
 
       {/* Modal: Quick Direct Permissions Management */}
       <Modal
@@ -340,7 +407,7 @@ export default function UsersAclPage() {
       >
         <div className="space-y-4">
           <p className="text-xs text-base-content/70">
-            تیک دسترسی‌های مدنظر را فعال یا غیرفعال نمایید. برای تغییر نقش یا محدوده دسترسی به مشتریان، از گزینه «ویرایش کامل» استفاده کنید.
+            تیک دسترسی‌های مدنظر را فعال یا غیرفعال نمایید. توجه: با هرگونه تغییر در مجوزها، کاربر به‌صورت خودکار از تمامی دستگاه‌ها خارج می‌شود تا دسترسی جدید اعمال گردد.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1">
@@ -377,7 +444,7 @@ export default function UsersAclPage() {
       <ConfirmDialog
         open={Boolean(deletingUser)}
         title="حذف کارمند"
-        message={`آیا از حذف کارمند «${deletingUser?.name}» اطمینان دارید؟ پرونده مشتریان ثبت‌شده توسط این کاربر در سیستم باقی می‌ماند.`}
+        message={`آیا از حذف کارمند «${deletingUser?.name}» اطمینان دارید؟ پرونده مشتریان و داده‌های ثبت‌شده توسط این کاربر در سیستم باقی می‌ماند.`}
         confirmText="حذف کارمند"
         danger
         loading={deleteUserMutation.isPending}

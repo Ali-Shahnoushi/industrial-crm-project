@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Lock, Save } from 'lucide-react'
@@ -10,8 +11,10 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { digits, toEnDigits } from '../../utils/format'
 
 export default function PortalProfile() {
+  const nav = useNavigate()
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
+  const forceClearSession = useAuthStore((s) => s.forceClearSession)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -24,7 +27,12 @@ export default function PortalProfile() {
       return authApi.updateProfile(fd)
     },
     onSuccess: (res) => {
-      toast.success('رمز عبور پنل کاربری شما با موفقیت تغییر یافت.')
+      toast.success(res.message || 'رمز عبور پنل کاربری شما با موفقیت تغییر یافت.')
+      if (res.force_logout) {
+        forceClearSession()
+        nav('/login', { replace: true })
+        return
+      }
       setUser(res.user)
       setCurrentPassword('')
       setNewPassword('')

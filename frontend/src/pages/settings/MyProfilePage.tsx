@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +8,7 @@ import toast from 'react-hot-toast'
 import {
   Check,
   KeyRound,
+  MonitorSmartphone,
   Save,
   User as UserIcon,
 } from 'lucide-react'
@@ -15,6 +17,7 @@ import { Field, PageSkeleton } from '../../components/ui/Field'
 import { FilePondAvatar } from '../../components/ui/FilePondAvatar'
 import { PasswordRulesTooltip } from '../../components/ui/PasswordRulesTooltip'
 import { Avatar } from '../../components/ui/Avatar'
+import { UserSessionsModal } from '../../components/users/UserSessionsModal'
 import { authApi } from '../../services/api'
 import { useAuthStore } from '../../store/useAuthStore'
 import { customerScopeMeta, roleLabel, userTypeMeta } from '../../utils/meta'
@@ -34,9 +37,13 @@ const PERMISSION_LABELS_FA: Record<string, string> = {
   'tickets.view': 'مشاهده تیکت‌ها و درخواست‌های پشتیبانی/تعمیر',
   'tickets.reply': 'ثبت تیکت، پاسخگویی و یادداشت داخلی تیکت‌ها',
   'tickets.manage': 'مدیریت کامل تیکت‌ها (تغییر کارشناس، دپارتمان و وضعیت)',
+  'sales.view': 'مشاهده فروش‌ها، نمودارها، فاکتورها و خروجی اکسل فروش',
+  'sales.create': 'ثبت فروش، ویرایش مبالغ و صدور فاکتور',
+  'sales.manage': 'مدیریت کامل فروش و مالی (لغو فروش و ابطال فاکتور)',
   'sms.send': 'ارسال پیامک الگو',
   'sms.logs': 'مشاهده سوابق پیامک',
   'users.manage': 'مدیریت کارمندان، نقش‌ها و دسترسی‌ها',
+  'users.sessions': 'مشاهده نشست‌های فعال و خروج اجباری کاربران',
   'settings.manage': 'مدیریت تنظیمات سیستم',
 }
 
@@ -91,11 +98,14 @@ type ProfileFormValues = z.infer<typeof schema>
 
 export default function MyProfilePage() {
   const qc = useQueryClient()
+  const nav = useNavigate()
   const authUser = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
+  const forceClearSession = useAuthStore((s) => s.forceClearSession)
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
+  const [sessionsOpen, setSessionsOpen] = useState(false)
 
   const { data: profileUser, isLoading } = useQuery({
     queryKey: ['my-profile'],
@@ -141,6 +151,11 @@ export default function MyProfilePage() {
     mutationFn: (formData: FormData) => authApi.updateProfile(formData),
     onSuccess: async (res) => {
       toast.success(res.message || 'مشخصات حساب شما با موفقیت بروزرسانی شد.')
+      if (res.force_logout) {
+        forceClearSession()
+        nav('/login', { replace: true })
+        return
+      }
       setUser(res.user)
       qc.invalidateQueries({ queryKey: ['my-profile'] })
       qc.invalidateQueries({ queryKey: ['system-users'] })
@@ -189,6 +204,16 @@ export default function MyProfilePage() {
     <div className="space-y-6 max-w-4xl mx-auto">
       <PageHeader
         title="حساب کاربری من"
+        actions={
+          <button
+            type="button"
+            onClick={() => setSessionsOpen(true)}
+            className="btn btn-sm btn-outline btn-primary gap-1.5"
+          >
+            <MonitorSmartphone className="size-4" />
+            نشست‌ها و دستگاه‌های فعال من
+          </button>
+        }
       />
 
       {/* Profile Overview Card */}
@@ -364,6 +389,12 @@ export default function MyProfilePage() {
           )}
         </div>
       </div>
+
+      <UserSessionsModal
+        open={sessionsOpen}
+        onClose={() => setSessionsOpen(false)}
+        selfMode
+      />
     </div>
   )
 }

@@ -1,20 +1,100 @@
 import { create } from 'zustand'
 import { authApi } from '../services/api'
 import { queryClient } from './queryClient'
-import type { User, UserType } from '../types'
+import type { SessionLimitChallenge, User, UserType } from '../types'
+
+type LoginResult =
+  | { ok: true }
+  | { ok: false; error: string; sessionLimit?: SessionLimitChallenge }
 
 interface AuthState {
   user: User | null
   isInitialized: boolean
   initAuth: () => Promise<void>
-  login: (login: string, password: string) => Promise<{ ok: true } | { ok: false; error: string }>
-  loginWithOtp: (phone: string, code: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  login: (login: string, password: string) => Promise<LoginResult>
+  loginWithOtp: (phone: string, code: string) => Promise<LoginResult>
+  resolveSessionLimit: (
+    challengeToken: string,
+    revokeTokenIds: number | number[],
+  ) => Promise<LoginResult>
   logout: () => Promise<void>
+  forceClearSession: () => void
   refreshMe: () => Promise<void>
   setUser: (user: User | null) => void
   hasPermission: (permission: string) => boolean
   isAdministrator: () => boolean
   hasRole: (role: UserType) => boolean
+}
+
+function parseErrorData(raw: unknown): Record<string, any> | null {
+  if (raw && typeof raw === 'object') {
+    return raw as Record<string, any>
+  }
+  if (typeof raw === 'string') {
+    const jsonStart = raw.indexOf('{')
+    if (jsonStart !== -1) {
+      try {
+        const parsed = JSON.parse(raw.slice(jsonStart))
+        if (parsed && typeof parsed === 'object') {
+          return parsed as Record<string, any>
+        }
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
+}
+
+function extractSessionLimit(err: any): SessionLimitChallenge | undefined {
+  const data = parseErrorData(err?.response?.data)
+  if (err?.response?.status === 409 && data?.code === 'MAX_SESSIONS_REACHED' && data?.challenge_token) {
+    return data as SessionLimitChallenge
+  }
+  return undefined
+}
+
+function formatAuthError(err: any, mode: 'password' | 'otp' | 'resolve'): string {
+  if (!err?.response) {
+    return 'امکان برقراری ارتباط با سرور وجود ندارد. لطفاً مطمئن شوید سرور بک‌اند در حال اجرا است.'
+  }
+
+  const status: number = err.response.status
+  const data = parseErrorData(err.response.data)
+
+  const serverMessage =
+    data?.message ||
+    data?.errors?.login?.[0] ||
+    data?.errors?.code?.[0] ||
+    data?.errors?.phone?.[0]
+
+  if (serverMessage) {
+    return String(serverMessage)
+  }
+
+  if (status === 429) {
+    return 'تعداد تلاش‌های ورود بیش از حد مجاز است. لطفاً یک دقیقه دیگر مجدداً تلاش کنید.'
+  }
+  if (status === 403) {
+    return 'دسترسی ورود به این حساب کاربری مسدود یا غیرفعال شده است.'
+  }
+  if (status === 409) {
+    return 'تعداد دستگاه‌های فعال شما به حد مجاز رسیده است. لطفاً یکی از نشست‌های قبلی را خارج کنید.'
+  }
+  if (status >= 500) {
+    return 'خطای داخلی سرور هنگام پردازش درخواست ورود رخ داد. لطفاً لاگ سرور را بررسی کنید.'
+  }
+  if (status === 401 || status === 422) {
+    if (mode === 'otp') {
+      return 'کد وارد شده اشتباه است یا منقضی شده است.'
+    }
+    if (mode === 'resolve') {
+      return 'نشست انتخاب‌شده معتبر نیست یا منقضی شده است.'
+    }
+    return 'نام کاربری یا رمز عبور اشتباه است.'
+  }
+
+  return 'خطای نامشخص در ورود به سامانه. لطفاً مجدداً تلاش کنید.'
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
@@ -45,11 +125,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ user: res.user, isInitialized: true })
       return { ok: true }
     } catch (err: any) {
-      const msg =
-        err.response?.data?.message ||
-        err.response?.data?.errors?.login?.[0] ||
-        'نام کاربری یا رمز عبور اشتباه است.'
-      return { ok: false, error: msg }
+      const sessionLimit = extractSessionLimit(err)
+      if (sessionLimit) {
+        return { ok: false, error: sessionLimit.message, sessionLimit }
+      }
+      return { ok: false, error: formatAuthError(err, 'password') }
     }
   },
 
@@ -60,12 +140,26 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       set({ user: res.user, isInitialized: true })
       return { ok: true }
     } catch (err: any) {
-      const msg =
-        err.response?.data?.message ||
-        err.response?.data?.errors?.code?.[0] ||
-        err.response?.data?.errors?.phone?.[0] ||
-        'کد وارد شده اشتباه است یا منقضی شده است.'
-      return { ok: false, error: msg }
+      const sessionLimit = extractSessionLimit(err)
+      if (sessionLimit) {
+        return { ok: false, error: sessionLimit.message, sessionLimit }
+      }
+      return { ok: false, error: formatAuthError(err, 'otp') }
+    }
+  },
+
+  async resolveSessionLimit(challengeToken, revokeTokenIds) {
+    try {
+      const res = await authApi.resolveSessionLimit(challengeToken, revokeTokenIds)
+      queryClient.clear()
+      set({ user: res.user, isInitialized: true })
+      return { ok: true }
+    } catch (err: any) {
+      const sessionLimit = extractSessionLimit(err)
+      if (sessionLimit) {
+        return { ok: false, error: sessionLimit.message, sessionLimit }
+      }
+      return { ok: false, error: formatAuthError(err, 'resolve') }
     }
   },
 
@@ -78,6 +172,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       queryClient.clear()
       set({ user: null, isInitialized: true })
     }
+  },
+
+  forceClearSession() {
+    queryClient.clear()
+    set({ user: null, isInitialized: true })
   },
 
   async refreshMe() {

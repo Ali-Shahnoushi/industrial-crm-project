@@ -5,19 +5,24 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\Sms\MelipayamakService;
+use App\Support\SessionManager;
+use App\Support\SystemFeatures;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
     public const MAX_OTP_ATTEMPTS = 5;
 
-    public function __construct(protected MelipayamakService $melipayamakService)
-    {
+    public function __construct(
+        protected MelipayamakService $melipayamakService,
+        protected SessionManager $sessionManager,
+    ) {
     }
 
     /**
@@ -50,6 +55,14 @@ class AuthController extends Controller
         if (!$user->is_active) {
             return response()->json([
                 'message' => 'حساب کاربری شما غیرفعال شده است. لطفاً با مدیر سیستم تماس بگیرید.',
+            ], 403);
+        }
+
+        if ($user->isCustomerPortalUser() && !SystemFeatures::isEnabled('customer_portal')) {
+            return response()->json([
+                'code' => 'FEATURE_DISABLED',
+                'feature' => 'customer_portal',
+                'message' => 'پنل اختصاصی مشتریان در حال حاضر توسط مدیر ارشد سامانه غیرفعال شده است.',
             ], 403);
         }
 
@@ -140,14 +153,30 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if ($user->isCustomerPortalUser() && (!$user->customer || !$user->customer->portal_enabled)) {
-            return response()->json([
-                'message' => 'دسترسی پنل کاربری شما غیرفعال شده است. لطفاً با مسئول فروش خود تماس بگیرید.',
-            ], 403);
+        if ($user->isCustomerPortalUser()) {
+            if (!SystemFeatures::isEnabled('customer_portal')) {
+                return response()->json([
+                    'code' => 'FEATURE_DISABLED',
+                    'feature' => 'customer_portal',
+                    'message' => 'پنل اختصاصی مشتریان در حال حاضر توسط مدیر ارشد سامانه غیرفعال شده است.',
+                ], 403);
+            }
+
+            if (!$user->customer || !$user->customer->portal_enabled) {
+                return response()->json([
+                    'message' => 'دسترسی پنل کاربری شما غیرفعال شده است. لطفاً با مسئول فروش خود تماس بگیرید.',
+                ], 403);
+            }
         }
 
-        $user->tokens()->where('created_at', '<', now()->subDays(30))->delete();
-        $token = $user->createToken('api-token')->plainTextToken;
+        if ($this->sessionManager->hasReachedSessionLimit($user)) {
+            return response()->json(
+                $this->sessionManager->createSessionLimitChallenge($user),
+                409
+            );
+        }
+
+        $token = $this->sessionManager->issueToken($user, $request)->plainTextToken;
         $cookie = $this->createAuthCookie($token);
 
         return response()->json([
@@ -194,20 +223,171 @@ class AuthController extends Controller
             ], 403);
         }
 
-        if ($user->isCustomerPortalUser() && (!$user->customer || !$user->customer->portal_enabled)) {
-            return response()->json([
-                'message' => 'دسترسی پنل کاربری شما غیرفعال شده است. لطفاً با مسئول فروش خود تماس بگیرید.',
-            ], 403);
+        if ($user->isCustomerPortalUser()) {
+            if (!SystemFeatures::isEnabled('customer_portal')) {
+                return response()->json([
+                    'code' => 'FEATURE_DISABLED',
+                    'feature' => 'customer_portal',
+                    'message' => 'پنل اختصاصی مشتریان در حال حاضر توسط مدیر ارشد سامانه غیرفعال شده است.',
+                ], 403);
+            }
+
+            if (!$user->customer || !$user->customer->portal_enabled) {
+                return response()->json([
+                    'message' => 'دسترسی پنل کاربری شما غیرفعال شده است. لطفاً با مسئول فروش خود تماس بگیرید.',
+                ], 403);
+            }
         }
 
-        $user->tokens()->where('created_at', '<', now()->subDays(30))->delete();
-        $token = $user->createToken('api-token')->plainTextToken;
+        if ($this->sessionManager->hasReachedSessionLimit($user)) {
+            return response()->json(
+                $this->sessionManager->createSessionLimitChallenge($user),
+                409
+            );
+        }
+
+        $token = $this->sessionManager->issueToken($user, $request)->plainTextToken;
         $cookie = $this->createAuthCookie($token);
 
         return response()->json([
             'user' => $user->serializeForApi(),
             'token' => $token,
         ])->withCookie($cookie);
+    }
+
+    /**
+     * Resolve a max-concurrent-devices (3 devices) login challenge by revoking one or more prior sessions.
+     */
+    public function resolveSessionLimit(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'challenge_token' => 'required|string|min:16|max:128',
+            'revoke_token_id' => 'nullable|integer|min:1',
+            'revoke_token_ids' => 'nullable|array|min:1',
+            'revoke_token_ids.*' => 'integer|min:1',
+        ], [
+            'challenge_token.required' => 'توکن تأیید نشست نامعتبر است. لطفاً مجدداً وارد شوید.',
+        ]);
+
+        $tokenIds = [];
+        if (!empty($validated['revoke_token_id'])) {
+            $tokenIds[] = (int) $validated['revoke_token_id'];
+        }
+        if (!empty($validated['revoke_token_ids'])) {
+            foreach ($validated['revoke_token_ids'] as $tid) {
+                $tokenIds[] = (int) $tid;
+            }
+        }
+        $tokenIds = array_values(array_unique(array_filter($tokenIds)));
+
+        if (empty($tokenIds)) {
+            return response()->json([
+                'message' => 'لطفاً حداقل یک دستگاه را برای خروج انتخاب کنید.',
+            ], 422);
+        }
+
+        $challengeToken = $validated['challenge_token'];
+        $userId = $this->sessionManager->getChallengeUserId($challengeToken);
+        if (!$userId) {
+            return response()->json([
+                'code' => 'CHALLENGE_EXPIRED',
+                'message' => 'مهلت انتخاب دستگاه به پایان رسیده است. لطفاً مجدداً اطلاعات ورود را وارد کنید.',
+            ], 410);
+        }
+
+        $user = User::find($userId);
+        if (!$user || !$user->is_active) {
+            $this->sessionManager->consumeChallenge($challengeToken);
+
+            return response()->json([
+                'message' => 'حساب کاربری معتبر یا فعال نیست.',
+            ], 403);
+        }
+
+        if ($user->isCustomerPortalUser()) {
+            if (!SystemFeatures::isEnabled('customer_portal') || !$user->customer || !$user->customer->portal_enabled) {
+                $this->sessionManager->consumeChallenge($challengeToken);
+
+                return response()->json([
+                    'message' => 'دسترسی پنل کاربری شما غیرفعال شده است.',
+                ], 403);
+            }
+        }
+
+        $deleted = $user->tokens()->whereIn('id', $tokenIds)->delete();
+        if ($deleted === 0) {
+            return response()->json([
+                'message' => 'نشست انتخاب‌شده یافت نشد یا قبلاً منقضی شده است.',
+                'sessions' => $this->sessionManager->listUserSessions($user),
+            ], 422);
+        }
+
+        // If user somehow still has >= MAX_ACTIVE_SESSIONS (e.g. >3 legacy tokens), keep challenge alive
+        if ($this->sessionManager->hasReachedSessionLimit($user)) {
+            return response()->json([
+                'code' => 'MAX_SESSIONS_REACHED',
+                'message' => 'نشست انتخاب‌شده حذف شد، اما همچنان تعداد نشست‌های فعال به حد مجاز رسیده است. لطفاً یک دستگاه دیگر را خارج کنید.',
+                'max_sessions' => SessionManager::MAX_ACTIVE_SESSIONS,
+                'challenge_token' => $challengeToken,
+                'sessions' => $this->sessionManager->listUserSessions($user),
+            ], 409);
+        }
+
+        $this->sessionManager->consumeChallenge($challengeToken);
+        $token = $this->sessionManager->issueToken($user, $request)->plainTextToken;
+        $cookie = $this->createAuthCookie($token);
+
+        return response()->json([
+            'message' => 'دستگاه انتخاب‌شده با موفقیت خارج شد و ورود شما انجام گردید.',
+            'user' => $user->serializeForApi(),
+            'token' => $token,
+        ])->withCookie($cookie);
+    }
+
+    /**
+     * List active sessions for the currently authenticated user.
+     */
+    public function mySessions(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $currentToken = $user->currentAccessToken();
+        $currentTokenId = $currentToken instanceof PersonalAccessToken ? (int) $currentToken->id : null;
+
+        return response()->json([
+            'max_sessions' => SessionManager::MAX_ACTIVE_SESSIONS,
+            'sessions' => $this->sessionManager->listUserSessions($user, $currentTokenId),
+        ]);
+    }
+
+    /**
+     * Revoke one of the authenticated user's own sessions.
+     */
+    public function revokeMySession(Request $request, int $tokenId): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $currentToken = $user->currentAccessToken();
+        $currentTokenId = $currentToken instanceof PersonalAccessToken ? (int) $currentToken->id : null;
+
+        $target = $user->tokens()->where('id', $tokenId)->first();
+        if (!$target) {
+            return response()->json([
+                'message' => 'نشست مورد نظر یافت نشد.',
+            ], 404);
+        }
+
+        $isCurrent = $currentTokenId !== null && (int) $target->id === $currentTokenId;
+        $target->delete();
+
+        $response = response()->json([
+            'message' => $isCurrent
+                ? 'نشست فعلی شما خاتمه یافت.'
+                : 'نشست دستگاه انتخاب‌شده با موفقیت حذف گردید.',
+            'revoked_current' => $isCurrent,
+        ]);
+
+        return $isCurrent ? $response->withCookie(cookie()->forget('crm_token', '/')) : $response;
     }
 
     /**
@@ -294,28 +474,22 @@ class AuthController extends Controller
 
         $user->save();
 
-        $rotatedCookie = null;
-        $rotatedToken = null;
+        // Force logout from ALL devices (including current) whenever password changes
         if ($passwordChanged) {
-            $wasRealPersonalToken = $user->currentAccessToken() instanceof \Laravel\Sanctum\PersonalAccessToken;
-            $user->tokens()->delete();
+            $this->sessionManager->revokeAllSessions($user);
 
-            if ($wasRealPersonalToken && $request->hasCookie('crm_token')) {
-                $rotatedToken = $user->createToken('api-token')->plainTextToken;
-                $rotatedCookie = $this->createAuthCookie($rotatedToken);
-            }
+            return response()->json([
+                'message' => 'رمز عبور با موفقیت تغییر یافت. برای امنیت بیشتر از همه دستگاه‌ها خارج شدید؛ لطفاً مجدداً وارد شوید.',
+                'force_logout' => true,
+                'user' => $user->fresh()->serializeForApi(),
+            ])->withCookie(cookie()->forget('crm_token', '/'));
         }
 
-        $responsePayload = [
+        return response()->json([
             'message' => 'پروفایل شما با موفقیت بروزرسانی شد.',
+            'force_logout' => false,
             'user' => $user->fresh()->serializeForApi(),
-        ];
-        if ($rotatedToken) {
-            $responsePayload['token'] = $rotatedToken;
-        }
-
-        $response = response()->json($responsePayload);
-        return $rotatedCookie ? $response->withCookie($rotatedCookie) : $response;
+        ]);
     }
 
     /**

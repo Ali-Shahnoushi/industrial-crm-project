@@ -56,6 +56,7 @@ class User extends Authenticatable
             'sms.send',
             'sms.logs',
             'users.manage',
+            'users.sessions',
             'settings.manage',
         ],
         self::ROLE_MANAGER => [
@@ -77,6 +78,7 @@ class User extends Authenticatable
             'sales.manage',
             'sms.send',
             'sms.logs',
+            'users.sessions',
         ],
         self::ROLE_SALESPERSON => [
             'customers.view',
@@ -335,6 +337,16 @@ class User extends Authenticatable
             ])->values()->all();
         }
 
+        $activeSessionsCount = $this->getAttribute('active_sessions_count');
+        if ($activeSessionsCount === null && Schema::hasTable('personal_access_tokens')) {
+            $activeSessionsCount = $this->tokens()
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })
+                ->where('created_at', '>=', now()->subDays(30))
+                ->count();
+        }
+
         return [
             'id' => $this->id,
             'name' => $this->name,
@@ -355,6 +367,7 @@ class User extends Authenticatable
             'granted_customer_ids' => $grantedCustomerIds,
             'granted_customers' => $grantedCustomersList,
             'permissions' => $this->isCustomerPortalUser() ? [] : $this->getAllPermissions()->pluck('name')->values()->all(),
+            'active_sessions_count' => (int) ($activeSessionsCount ?? 0),
             'created_at' => $this->created_at,
         ];
     }

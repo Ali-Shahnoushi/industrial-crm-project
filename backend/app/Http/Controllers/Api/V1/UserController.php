@@ -5,17 +5,23 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\User;
+use App\Support\SessionManager;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Sanctum\PersonalAccessToken;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
+    public function __construct(protected SessionManager $sessionManager)
+    {
+    }
+
     public const PERMISSION_LABELS = [
         'customers.view' => 'مشاهده مشتریان',
         'customers.create' => 'ایجاد مشتری',
@@ -36,6 +42,7 @@ class UserController extends Controller
         'sms.send' => 'ارسال پیامک الگو',
         'sms.logs' => 'مشاهده سوابق پیامک',
         'users.manage' => 'مدیریت کارمندان، نقش‌ها و دسترسی‌ها',
+        'users.sessions' => 'مشاهده نشست‌های فعال و خروج اجباری کاربران',
         'settings.manage' => 'مدیریت تنظیمات سیستم',
     ];
 
@@ -85,12 +92,23 @@ class UserController extends Controller
 
     public function index(): JsonResponse
     {
-        $this->authorizePermission('users.manage');
-
+        /** @var User|null $callingUser */
         $callingUser = auth()->user();
+        if (!$callingUser || (!$callingUser->hasSafePermission('users.manage') && !$callingUser->hasSafePermission('users.sessions'))) {
+            abort(403, 'شما دسترسی لازم برای مشاهده فهرست کارمندان را ندارید.');
+        }
+
         $query = User::staffOnly()->latest();
 
-        if ($callingUser && !$callingUser->isAdministrator()) {
+        if (Schema::hasTable('personal_access_tokens')) {
+            $query->withCount(['tokens as active_sessions_count' => function ($q) {
+                $q->where(function ($exp) {
+                    $exp->whereNull('expires_at')->orWhere('expires_at', '>', now());
+                })->where('created_at', '>=', now()->subDays(30));
+            }]);
+        }
+
+        if (!$callingUser->isAdministrator()) {
             $query->where(function ($q) {
                 $q->where('user_type', '!=', User::ROLE_ADMINISTRATOR)
                     ->orWhereNull('user_type');
@@ -299,6 +317,7 @@ class UserController extends Controller
         }
 
         $passwordChanged = !empty($validated['password']);
+        $beforeAccessSnapshot = $this->snapshotUserAccess($user);
 
         DB::transaction(function () use ($request, $user, $validated, $callingUser) {
             if (array_key_exists('name', $validated)) {
@@ -353,7 +372,9 @@ class UserController extends Controller
             }
 
             $user->save();
-            $this->syncSpatieRole($user, $user->user_type ?: User::ROLE_MANAGER);
+            if ($request->filled('user_type')) {
+                $this->syncSpatieRole($user, $user->user_type ?: User::ROLE_MANAGER);
+            }
 
             if ($request->has('permissions') || $request->has('sync_permissions')) {
                 $requestedPerms = $validated['permissions'] ?? [];
@@ -389,14 +410,28 @@ class UserController extends Controller
             }
         });
 
-        if (!$user->is_active || $passwordChanged) {
-            $user->tokens()->delete();
+        $freshUser = $user->fresh();
+        $accessChanged = $beforeAccessSnapshot !== $this->snapshotUserAccess($freshUser);
+        $forceLoggedOut = false;
+
+        if (!$freshUser->is_active || $passwordChanged || $accessChanged) {
+            $this->sessionManager->revokeAllSessions($freshUser);
+            $forceLoggedOut = true;
         }
 
-        return response()->json([
-            'message' => 'اطلاعات، نقش و دسترسی‌های کارمند با موفقیت ویرایش شد.',
-            'user' => $user->fresh()->serializeForApi(),
+        $response = response()->json([
+            'message' => $forceLoggedOut
+                ? 'اطلاعات کارمند ویرایش شد و به دلیل تغییر رمز عبور یا سطح دسترسی، نشست‌های فعال ایشان خاتمه یافت.'
+                : 'اطلاعات، نقش و دسترسی‌های کارمند با موفقیت ویرایش شد.',
+            'force_logged_out' => $forceLoggedOut,
+            'user' => $freshUser->serializeForApi(),
         ]);
+
+        if ($forceLoggedOut && (int) $freshUser->id === (int) auth()->id()) {
+            return $response->withCookie(cookie()->forget('crm_token', '/'));
+        }
+
+        return $response;
     }
 
     public function destroy(User $user): JsonResponse
@@ -471,6 +506,8 @@ class UserController extends Controller
             'granted_customer_ids.*' => 'integer|exists:customers,id',
         ]);
 
+        $beforeAccessSnapshot = $this->snapshotUserAccess($user);
+
         DB::transaction(function () use ($request, $user, $validated, $callingUser) {
             if ($request->filled('user_type')) {
                 $requestedType = $validated['user_type'];
@@ -492,7 +529,9 @@ class UserController extends Controller
             }
 
             $user->save();
-            $this->syncSpatieRole($user, $user->user_type ?: User::ROLE_MANAGER);
+            if ($request->filled('user_type')) {
+                $this->syncSpatieRole($user, $user->user_type ?: User::ROLE_MANAGER);
+            }
 
             $requestedPerms = $validated['permissions'];
             if ($callingUser && !$callingUser->isAdministrator()) {
@@ -521,11 +560,151 @@ class UserController extends Controller
             }
         });
 
-        return response()->json([
-            'message' => "نقش، محدوده مشتریان و مجوزهای «{$user->name}» با موفقیت بروزرسانی شد.",
-            'permissions' => $user->getAllPermissions()->pluck('name')->values()->all(),
-            'user' => $user->fresh()->serializeForApi(),
+        $freshUser = $user->fresh();
+        $accessChanged = $beforeAccessSnapshot !== $this->snapshotUserAccess($freshUser);
+        $forceLoggedOut = false;
+
+        if ($accessChanged) {
+            $this->sessionManager->revokeAllSessions($freshUser);
+            $forceLoggedOut = true;
+        }
+
+        $response = response()->json([
+            'message' => $forceLoggedOut
+                ? "نقش و مجوزهای «{$freshUser->name}» بروزرسانی شد و نشست‌های فعال ایشان جهت اعمال دسترسی جدید خاتمه یافت."
+                : "نقش، محدوده مشتریان و مجوزهای «{$freshUser->name}» با موفقیت بروزرسانی شد.",
+            'force_logged_out' => $forceLoggedOut,
+            'permissions' => $freshUser->getAllPermissions()->pluck('name')->values()->all(),
+            'user' => $freshUser->serializeForApi(),
         ]);
+
+        if ($forceLoggedOut && (int) $freshUser->id === (int) auth()->id()) {
+            return $response->withCookie(cookie()->forget('crm_token', '/'));
+        }
+
+        return $response;
+    }
+
+    /**
+     * List active sessions for a specific user (requires `users.sessions` ACL).
+     */
+    public function sessions(Request $request, User $user): JsonResponse
+    {
+        $this->authorizePermission('users.sessions');
+
+        /** @var User|null $callingUser */
+        $callingUser = auth()->user();
+        $this->ensureCanMutateTarget($callingUser, $user);
+
+        $currentToken = $request->user()?->currentAccessToken();
+        $currentTokenId = ($currentToken instanceof PersonalAccessToken && (int) $user->id === (int) $callingUser?->id)
+            ? (int) $currentToken->id
+            : null;
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role_label' => $user->role_label,
+                'user_type' => $user->user_type,
+            ],
+            'max_sessions' => SessionManager::MAX_ACTIVE_SESSIONS,
+            'sessions' => $this->sessionManager->listUserSessions($user, $currentTokenId),
+        ]);
+    }
+
+    /**
+     * Force-logout a single session of a user (requires `users.sessions` ACL).
+     */
+    public function revokeSession(Request $request, User $user, int $tokenId): JsonResponse
+    {
+        $this->authorizePermission('users.sessions');
+
+        /** @var User|null $callingUser */
+        $callingUser = auth()->user();
+        $this->ensureCanMutateTarget($callingUser, $user);
+
+        $token = $user->tokens()->where('id', $tokenId)->first();
+        if (!$token) {
+            return response()->json([
+                'message' => 'نشست انتخاب‌شده یافت نشد یا قبلاً حذف شده است.',
+            ], 404);
+        }
+
+        $currentToken = $request->user()?->currentAccessToken();
+        $revokedCurrent = $currentToken instanceof PersonalAccessToken
+            && (int) $user->id === (int) $callingUser?->id
+            && (int) $currentToken->id === (int) $token->id;
+
+        $token->delete();
+
+        $response = response()->json([
+            'message' => "نشست انتخاب‌شده برای «{$user->name}» با موفقیت خاتمه یافت (خروج اجباری).",
+            'revoked_current' => $revokedCurrent,
+            'active_sessions_count' => $this->sessionManager->activeSessionCount($user),
+        ]);
+
+        return $revokedCurrent ? $response->withCookie(cookie()->forget('crm_token', '/')) : $response;
+    }
+
+    /**
+     * Force-logout ALL active sessions of a user (requires `users.sessions` ACL).
+     */
+    public function revokeAllSessions(Request $request, User $user): JsonResponse
+    {
+        $this->authorizePermission('users.sessions');
+
+        /** @var User|null $callingUser */
+        $callingUser = auth()->user();
+        $this->ensureCanMutateTarget($callingUser, $user);
+
+        $revokedCurrent = (int) $user->id === (int) $callingUser?->id;
+        $revokedCount = $this->sessionManager->revokeAllSessions($user);
+
+        $response = response()->json([
+            'message' => $revokedCount > 0
+                ? "تمامی نشست‌های فعال «{$user->name}» ({$revokedCount} دستگاه) با موفقیت خاتمه یافت."
+                : "هیچ نشست فعالی برای «{$user->name}» وجود نداشت.",
+            'revoked_count' => $revokedCount,
+            'revoked_current' => $revokedCurrent,
+            'active_sessions_count' => 0,
+        ]);
+
+        return $revokedCurrent ? $response->withCookie(cookie()->forget('crm_token', '/')) : $response;
+    }
+
+    /**
+     * Snapshot a user's role, scope, permissions, and customer grants for change detection.
+     *
+     * @return array<string, mixed>
+     */
+    protected function snapshotUserAccess(User $user): array
+    {
+        $directPerms = $user->getDirectPermissions()->pluck('name')->values()->all();
+        sort($directPerms);
+
+        $allPerms = $user->getAllPermissions()->pluck('name')->values()->all();
+        sort($allPerms);
+
+        $staffIds = Schema::hasTable('user_customer_staff_grants')
+            ? $user->grantedStaff()->pluck('users.id')->map(fn ($id) => (int) $id)->values()->all()
+            : [];
+        sort($staffIds);
+
+        $customerIds = Schema::hasTable('user_customer_grants')
+            ? $user->grantedCustomers()->pluck('customers.id')->map(fn ($id) => (int) $id)->values()->all()
+            : [];
+        sort($customerIds);
+
+        return [
+            'user_type' => $user->user_type,
+            'customer_scope' => $user->effectiveCustomerScope(),
+            'direct_permissions' => $directPerms,
+            'permissions' => $allPerms,
+            'granted_staff_ids' => $staffIds,
+            'granted_customer_ids' => $customerIds,
+        ];
     }
 
     public function toggleActive(User $user): JsonResponse
